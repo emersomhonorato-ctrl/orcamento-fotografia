@@ -88,6 +88,23 @@ const salvarServicoNoBanco = async (servico) => {
   }
 };
 
+
+
+const excluirServicoDoBanco = async (id) => {
+  const { supabase } = await import('./supabase');
+
+  const { error } = await supabase
+    .from('servicos')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Erro ao excluir serviço do banco:', error);
+  } else {
+    console.log('Serviço excluído do Supabase');
+  }
+};
+
 const carregarServicosDoBanco = async () => {
   const { supabase } = await import('./supabase');
 
@@ -881,7 +898,7 @@ export default function AgendaFotografosMaster() {
     resetServiceForm();
   }
 
-  function removeService(id) {
+  async function removeService(id) {
     setServices((current) => current.filter((item) => item.id !== id));
   }
 
