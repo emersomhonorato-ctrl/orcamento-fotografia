@@ -21,6 +21,49 @@ const salvarNoBanco = async (orcamento) => {
   }
 };
 
+
+
+const carregarDoBanco = async () => {
+  const { supabase } = await import('./supabase');
+
+  const { data, error } = await supabase
+    .from("orcamentos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao carregar do banco:", error);
+    return [];
+  }
+
+  return (data || []).map((item) => ({
+    id: crypto.randomUUID(),
+    clientId: "",
+    clientName: item.cliente || "",
+    email: "",
+    phone: item.telefone || "",
+    whatsapp: item.telefone || "",
+    eventType: "Orçamento",
+    eventDate: item.data_evento || "",
+    startTime: "",
+    endTime: "",
+    location: "",
+    amount: Number(item.valor || 0),
+    amountPaid: 0,
+    budgetDescription: "",
+    items: [],
+    recordType: "orcamento",
+    status: "Pendente",
+    paymentStatus: "Pendente",
+    reminderSent: false,
+    sameDayReminderSent: false,
+    notes: "",
+    packageName: "",
+    createdAt: item.created_at || new Date().toISOString(),
+    updatedAt: item.created_at || new Date().toISOString(),
+  }));
+};
+
 import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import {
@@ -366,75 +409,51 @@ export default function AgendaFotografosMaster() {
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
+  async function carregarDados() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const dadosBanco = await carregarDoBanco();
 
-      function normalizeData(parsed) {
-        const events = (parsed.events || []).map((e) => {
-          return {
-            ...e,
-            recordType: e.recordType || (e.eventDate ? "evento" : "orcamento"),
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
+      if (dadosBanco.length > 0) {
+        setEvents(dadosBanco);
+      } else {
+        const saved = localStorage.getItem(STORAGE_KEY);
 
-        return {
-          ...parsed,
-          events
-        };
-      }
-      console.log("LENDO localStorage:", saved);
+        if (saved) {
+          let parsed = JSON.parse(saved);
 
-      if (saved) {
-        let parsed = JSON.parse(saved);
+          parsed.events = (parsed.events || []).map((e) => {
+            const isBudget =
+              e.recordType === "orcamento" ||
+              (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
+              (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
 
-        // 🔥 CORREÇÃO AUTOMÁTICA DOS DADOS
-        parsed.events = (parsed.events || []).map((e) => {
-          const isBudget =
-            e.recordType === "orcamento" ||
-            (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
-            (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
+            return {
+              ...e,
+              recordType: isBudget ? "orcamento" : "evento",
+              status: e.status || "Pendente",
+              paymentStatus: e.paymentStatus || "Pendente",
+            };
+          });
 
-          return {
-            ...e,
-            recordType: isBudget ? "orcamento" : "evento",
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-
-
-        setEvents(
-  (Array.isArray(parsed.events) && parsed.events.length > 0)
-    ? parsed.events
-    : [
-        {
-          id: "test1",
-          clientName: "Cliente Teste",
-          recordType: "orcamento",
-          amount: 1000,
-          status: "Pendente",
-          items: [{ name: "Ensaio", price: 1000, qty: 1 }]
+          setEvents(Array.isArray(parsed.events) ? parsed.events : []);
+          setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
+          setServices(
+            Array.isArray(parsed.services) && parsed.services.length > 0
+              ? parsed.services
+              : defaultServices
+          );
+          setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
         }
-      ]
-);
-        setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
-        setServices(
-          Array.isArray(parsed.services) && parsed.services.length > 0
-            ? parsed.services
-            : defaultServices
-        );
-        setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
       }
     } catch (error) {
-      console.error("Erro ao carregar localStorage:", error);
+      console.error("Erro ao carregar dados:", error);
     } finally {
       setHasLoaded(true);
     }
-  }, []);
+  }
+
+  carregarDados();
+}, []);
 
   useEffect(() => {
     if (!hasLoaded) return;
