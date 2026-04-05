@@ -545,7 +545,6 @@ export default function AgendaFotografosMaster() {
       const dataToSave = {
         events,
         clients,
-        services,
         settings,
       };
 
