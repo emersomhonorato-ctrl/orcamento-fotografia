@@ -1,3 +1,23 @@
+import { supabase } from "./supabase"
+
+
+const salvarNoBanco = async (orcamento) => {
+  const { error } = await supabase
+    .from('orcamentos')
+    .insert([{
+      cliente: orcamento.clientName,
+      telefone: orcamento.phone,
+      valor: Number(orcamento.amount || 0),
+      data_evento: orcamento.eventDate || null,
+    }]);
+
+  if (error) {
+    console.error('Erro ao salvar:', error);
+  } else {
+    console.log('🔥 SALVO NO SUPABASE');
+  }
+};
+
 import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import {
@@ -641,7 +661,7 @@ export default function AgendaFotografosMaster() {
     setIsEventModalOpen(true);
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!form.clientName || !form.eventType || (form.recordType !== "orcamento" && !form.eventDate)) {
       alert("Preencha pelo menos cliente e tipo de serviço.");
       return;
@@ -660,6 +680,8 @@ export default function AgendaFotografosMaster() {
       createdAt: form.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    await salvarNoBanco(payload);
 
     setEvents((current) => {
       const exists = current.some((item) => item.id === payload.id);
