@@ -629,6 +629,10 @@ export default function AgendaFotografosMaster() {
   }
 
   function saveEvent() {
+    if (!form.clientName && !form.eventType && !form.items?.length) {
+      console.log("🚫 Evento vazio bloqueado");
+      return;
+    }
     if (!form.clientName || !form.eventType || (form.recordType !== "orcamento" && !form.eventDate)) {
       alert("Preencha pelo menos cliente e tipo de serviço.");
       return;
