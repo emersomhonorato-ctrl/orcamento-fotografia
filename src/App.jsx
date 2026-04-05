@@ -882,11 +882,12 @@ export default function AgendaFotografosMaster() {
     setIsServiceModalOpen(true);
   }
 
-  async async function saveService() {
+  async async async function saveService() {
     if (!serviceForm.name) {
       alert("Informe o nome do trabalho/serviço.");
       return;
     }
+
     const payload = {
       ...serviceForm,
       id: serviceForm.id || crypto.randomUUID(),
@@ -895,16 +896,16 @@ export default function AgendaFotografosMaster() {
 
     await salvarServicoNoBanco(payload);
 
-    await salvarServicoNoBanco(payload);
     setServices((current) => {
       const exists = current.some((item) => item.id === payload.id);
       return exists ? current.map((item) => (item.id === payload.id ? payload : item)) : [...current, payload];
     });
+
     setIsServiceModalOpen(false);
     resetServiceForm();
   }
 
-  async async function removeService(id) {
+  async async async function removeService(id) {
     await excluirServicoDoBanco(id);
     setServices((current) => current.filter((item) => item.id !== id));
   }
