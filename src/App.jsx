@@ -64,6 +64,52 @@ const carregarDoBanco = async () => {
   }));
 };
 
+
+
+const salvarServicoNoBanco = async (servico) => {
+  const { supabase } = await import('./supabase');
+
+  const { error } = await supabase
+    .from('servicos')
+    .upsert([
+      {
+        id: servico.id,
+        name: servico.name,
+        category: servico.category || "",
+        price: Number(servico.price || 0),
+        description: servico.description || "",
+      },
+    ]);
+
+  if (error) {
+    console.error('Erro ao salvar serviço no banco:', error);
+  } else {
+    console.log('Serviço salvo no Supabase');
+  }
+};
+
+const carregarServicosDoBanco = async () => {
+  const { supabase } = await import('./supabase');
+
+  const { data, error } = await supabase
+    .from('servicos')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Erro ao carregar serviços do banco:', error);
+    return [];
+  }
+
+  return (data || []).map((item) => ({
+    id: item.id,
+    name: item.name || "",
+    category: item.category || "",
+    price: Number(item.price || 0),
+    description: item.description || "",
+  }));
+};
+
 import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import {
@@ -417,15 +463,24 @@ export default function AgendaFotografosMaster() {
         let parsed = JSON.parse(saved);
 
         setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
+        setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
+      } else {
+        setSettings(defaultSettings);
+      }
+
+      const servicosBanco = await carregarServicosDoBanco();
+
+      if (servicosBanco.length > 0) {
+        setServices(servicosBanco);
+      } else if (saved) {
+        let parsed = JSON.parse(saved);
         setServices(
           Array.isArray(parsed.services) && parsed.services.length > 0
             ? parsed.services
             : defaultServices
         );
-        setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
       } else {
         setServices(defaultServices);
-        setSettings(defaultSettings);
       }
 
       const dadosBanco = await carregarDoBanco();
@@ -805,7 +860,7 @@ export default function AgendaFotografosMaster() {
     setIsServiceModalOpen(true);
   }
 
-  function saveService() {
+  async function saveService() {
     if (!serviceForm.name) {
       alert("Informe o nome do trabalho/serviço.");
       return;
@@ -815,6 +870,9 @@ export default function AgendaFotografosMaster() {
       id: serviceForm.id || crypto.randomUUID(),
       price: Number(serviceForm.price || 0),
     };
+
+    await salvarServicoNoBanco(payload);
+
     setServices((current) => {
       const exists = current.some((item) => item.id === payload.id);
       return exists ? current.map((item) => (item.id === payload.id ? payload : item)) : [...current, payload];
