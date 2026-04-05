@@ -39,7 +39,7 @@ import { motion } from "framer-motion";
 
 const STORAGE_KEY = "studio_manager_data";
 
-const STATUS_OPTIONS = ["Pendente", "Confirmado", "Concluído", "Cancelado"];
+const STATUS_OPTIONS = ["Pendente", "Em negociação", "Confirmado", "Concluído", "Cancelado"];
 const PAYMENT_OPTIONS = ["Pendente", "Entrada paga", "Pago", "Atrasado"];
 
 const defaultServices = [
@@ -223,6 +223,7 @@ function isConflict(eventoA, eventoB) {
 function StatusBadge({ value }) {
   const map = {
     Pendente: "bg-amber-100 text-amber-800 border-amber-200",
+    "Em negociação": "bg-sky-100 text-sky-800 border-sky-200",
     Confirmado: "bg-blue-100 text-blue-800 border-blue-200",
     Concluído: "bg-emerald-100 text-emerald-800 border-emerald-200",
     Cancelado: "bg-red-100 text-red-800 border-red-200",
@@ -516,17 +517,6 @@ export default function AgendaFotografosMaster() {
     return Array.from(new Map([...fromRegistered, ...eventDerived].map((c) => [c.email || `${c.name}-${c.phone}`, c])).values());
   }, [clients, events]);
 
-  
-  const budgetPipeline = useMemo(() => {
-    const budgets = events.filter((e) => !e.eventDate);
-
-    return {
-      pending: budgets.filter((e) => e.status === "Pendente").length,
-      negotiation: budgets.filter((e) => e.status === "Em negociação").length,
-      canceled: budgets.filter((e) => e.status === "Cancelado").length,
-    };
-  }, [events]);
-
   const metrics = useMemo(() => {
     const budgets = events.filter((e) => {
       return (
@@ -536,7 +526,7 @@ export default function AgendaFotografosMaster() {
     });
 
     const openBudgets = budgets.filter((e) => {
-      return e.status !== "Cancelado" && e.status !== "Aprovado";
+      return e.status === "Pendente" || e.status === "Em negociação";
     });
 
     const approvedEvents = events.filter((e) => {
@@ -1351,24 +1341,7 @@ export default function AgendaFotografosMaster() {
 
               <CardContent>
                 <div className="space-y-3">
-                  <div className="mb-6 grid gap-4 md:grid-cols-3">
-  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-    <p className="text-sm font-semibold text-amber-800">Pendente</p>
-    <p className="mt-2 text-3xl font-extrabold text-amber-900">{budgetPipeline.pending}</p>
-  </div>
-
-  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-    <p className="text-sm font-semibold text-sky-800">Em negociação</p>
-    <p className="mt-2 text-3xl font-extrabold text-sky-900">{budgetPipeline.negotiation}</p>
-  </div>
-
-  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-    <p className="text-sm font-semibold text-red-800">Cancelado</p>
-    <p className="mt-2 text-3xl font-extrabold text-red-900">{budgetPipeline.canceled}</p>
-  </div>
-</div>
-
-{onlyBudgets.length === 0 ? (
+                  {onlyBudgets.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                       Nenhum orçamento cadastrado.
                     </div>

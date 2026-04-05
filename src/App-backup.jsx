@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { motion } from "framer-motion";
 
-const STORAGE_KEY = "studio_manager_data";
+const STORAGE_KEY = "agenda_fotografos_master_v1";
 
 const STATUS_OPTIONS = ["Pendente", "Confirmado", "Concluído", "Cancelado"];
 const PAYMENT_OPTIONS = ["Pendente", "Entrada paga", "Pago", "Atrasado"];
@@ -119,8 +119,6 @@ const defaultForm = {
   amount: "",
   amountPaid: "",
   budgetDescription: "",
-  items: [],
-  recordType: "evento",
   status: "Pendente",
   paymentStatus: "Pendente",
   reminderSent: false,
@@ -138,28 +136,6 @@ const defaultServiceForm = {
   price: "",
   description: "",
 };
-
-function normalizeItems(items = []) {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    id: item.id || crypto.randomUUID(),
-    name: item.name || "",
-    description: item.description || "",
-    price: Number(item.price || 0),
-    qty: Number(item.qty || 1),
-  }));
-}
-
-function getItemsTotal(items = []) {
-  return normalizeItems(items).reduce((acc, item) => acc + item.price * item.qty, 0);
-}
-
-function getLogoFormatFromDataUrl(dataUrl = "") {
-  if (dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")) {
-    return "JPEG";
-  }
-  return "PNG";
-}
 
 function formatCurrency(value) {
   const number = Number(value || 0);
@@ -340,112 +316,39 @@ export default function AgendaFotografosMaster() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
 
-  const [hasLoaded, setHasLoaded] = useState(false);
-
   useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-
-      function normalizeData(parsed) {
-        const events = (parsed.events || []).map((e) => {
-          return {
-            ...e,
-            recordType: e.recordType || (e.eventDate ? "evento" : "orcamento"),
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
-
-        return {
-          ...parsed,
-          events
-        };
-      }
-      console.log("LENDO localStorage:", saved);
-
-      if (saved) {
-        let parsed = JSON.parse(saved);
-
-        // 🔥 CORREÇÃO AUTOMÁTICA DOS DADOS
-        parsed.events = (parsed.events || []).map((e) => {
-          const isBudget =
-            e.recordType === "orcamento" ||
-            (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
-            (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
-
-          return {
-            ...e,
-            recordType: isBudget ? "orcamento" : "evento",
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-
-        setEvents(
-  (Array.isArray(parsed.events) && parsed.events.length > 0)
-    ? parsed.events
-    : [
-        {
-          id: "test1",
-          clientName: "Cliente Teste",
-          recordType: "orcamento",
-          amount: 1000,
-          status: "Pendente",
-          items: [{ name: "Ensaio", price: 1000, qty: 1 }]
-        }
-      ]
-);
-        setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
-        setServices(
-          Array.isArray(parsed.services) && parsed.services.length > 0
-            ? parsed.services
-            : defaultServices
-        );
-        setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
-      }
-    } catch (error) {
-      console.error("Erro ao carregar localStorage:", error);
-    } finally {
-      setHasLoaded(true);
+      const parsed = JSON.parse(saved);
+      setEvents(parsed.events || []);
+      setClients(parsed.clients || []);
+      setServices(parsed.services?.length ? parsed.services : defaultServices);
+      setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
+    } catch {
+      setEvents([]);
+      setClients([]);
+      setServices(defaultServices);
+      setSettings(defaultSettings);
     }
   }, []);
 
   useEffect(() => {
-    if (!hasLoaded) return;
-
-    try {
-      const dataToSave = {
-        events,
-        clients,
-        services,
-        settings,
-      };
-
-      console.log("SALVANDO localStorage:", dataToSave);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    } catch (error) {
-      console.error("Erro ao salvar localStorage:", error);
-    }
-  }, [hasLoaded, events, clients, services, settings]);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ events, clients, services, settings })
+    );
+  }, [events, clients, services, settings]);
 
   const eventTypes = useMemo(() => services.map((service) => service.name), [services]);
 
   const enrichedEvents = useMemo(() => {
-    return events.map((evento) => {
-      const items = normalizeItems(evento.items || []);
-      const computedAmount = items.length > 0 ? getItemsTotal(items) : Number(evento.amount || 0);
-
-      return {
-        ...evento,
-        items,
-        computedAmount,
-        hasConflict: events.some((other) => isConflict(evento, other)),
-        daysLeft: diffInDays(evento.eventDate),
-        balance: computedAmount - Number(evento.amountPaid || 0),
-      };
-    });
+    return events.map((evento) => ({
+      ...evento,
+      hasConflict: events.some((other) => isConflict(evento, other)),
+      daysLeft: diffInDays(evento.eventDate),
+      balance: Number(evento.amount || 0) - Number(evento.amountPaid || 0),
+    }));
   }, [events]);
 
   const filteredEvents = useMemo(() => {
@@ -464,27 +367,7 @@ export default function AgendaFotografosMaster() {
       });
   }, [enrichedEvents, search, statusFilter, typeFilter]);
 
-  const selectedDayEvents = useMemo(
-    () => filteredEvents.filter((evento) => evento.recordType !== "orcamento" && evento.eventDate === selectedDate),
-    [filteredEvents, selectedDate]
-  );
-
-  const onlyEvents = useMemo(
-    () => filteredEvents.filter((evento) => evento.recordType !== "orcamento"),
-    [filteredEvents]
-  );
-
-  const onlyBudgets = useMemo(
-    () => {
-  return events.filter((evento) => {
-    return (
-      !evento.eventDate || 
-      evento.status === "Pendente"
-    );
-  });
-},
-    [filteredEvents]
-  );
+  const selectedDayEvents = useMemo(() => filteredEvents.filter((evento) => evento.eventDate === selectedDate), [filteredEvents, selectedDate]);
 
   const uniqueClientsFromEvents = useMemo(() => {
     const fromRegistered = clients.map((c) => ({
@@ -516,59 +399,19 @@ export default function AgendaFotografosMaster() {
     return Array.from(new Map([...fromRegistered, ...eventDerived].map((c) => [c.email || `${c.name}-${c.phone}`, c])).values());
   }, [clients, events]);
 
-  
-  const budgetPipeline = useMemo(() => {
-    const budgets = events.filter((e) => !e.eventDate);
-
-    return {
-      pending: budgets.filter((e) => e.status === "Pendente").length,
-      negotiation: budgets.filter((e) => e.status === "Em negociação").length,
-      canceled: budgets.filter((e) => e.status === "Cancelado").length,
-    };
-  }, [events]);
-
   const metrics = useMemo(() => {
-    const budgets = events.filter((e) => {
-      return (
-        e.recordType === "orcamento" ||
-        (e.status === "Pendente" && Array.isArray(e.items) && e.items.length > 0)
-      );
-    });
-
-    const openBudgets = budgets.filter((e) => {
-      return e.status !== "Cancelado" && e.status !== "Aprovado";
-    });
-
-    const approvedEvents = events.filter((e) => {
-      return !budgets.some((b) => b.id === e.id);
-    });
-
-    const confirmedOrDone = approvedEvents.filter((e) => {
-      return (
-        e.status === "Confirmado" ||
-        e.status === "Concluído" ||
-        e.status === "Concluido" ||
-        e.status === "Fechado"
-      );
-    });
-
-    const total = approvedEvents.length;
+    const total = enrichedEvents.length;
     const month = new Date().getMonth();
     const year = new Date().getFullYear();
-
-    const monthEvents = approvedEvents.filter((e) => {
+    const monthEvents = enrichedEvents.filter((e) => {
       if (!e.eventDate) return false;
       const dt = new Date(`${e.eventDate}T12:00:00`);
       return dt.getMonth() === month && dt.getFullYear() === year;
     });
 
-    const totalRevenue = approvedEvents.reduce((acc, e) => acc + Number(e.computedAmount || e.amount || 0), 0);
-    const received = approvedEvents.reduce((acc, e) => acc + Number(e.amountPaid || 0), 0);
+    const totalRevenue = enrichedEvents.reduce((acc, e) => acc + Number(e.amount || 0), 0);
+    const received = enrichedEvents.reduce((acc, e) => acc + Number(e.amountPaid || 0), 0);
     const pending = Math.max(totalRevenue - received, 0);
-    const potentialRevenue = openBudgets.reduce((acc, e) => acc + Number(e.computedAmount || e.amount || 0), 0);
-
-    const baseCount = approvedEvents.length + openBudgets.length;
-    const conversionRate = baseCount > 0 ? Math.round((approvedEvents.length / baseCount) * 100) : 0;
 
     return {
       total,
@@ -576,14 +419,10 @@ export default function AgendaFotografosMaster() {
       totalRevenue,
       received,
       pending,
-      openBudgets: openBudgets.length,
-      potentialRevenue,
-      conversionRate,
-      confirmedOrDone: confirmedOrDone.length,
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [events, uniqueClientsFromEvents.length, services.length]);
+  }, [enrichedEvents, uniqueClientsFromEvents.length, services.length]);
 
   function resetEventForm() {
     setForm(defaultForm);
@@ -600,61 +439,37 @@ export default function AgendaFotografosMaster() {
   function openNewEventModal(prefilledDate = "") {
     setForm({
       ...defaultForm,
-      recordType: "evento",
       eventDate: prefilledDate || selectedDate || getTodayLocalISO(),
       eventType: services[0]?.name || "",
       amount: services[0]?.price ? String(services[0].price) : "",
       budgetDescription: services[0]?.description || "",
       packageName: services[0]?.name || "",
-      items: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    setIsEventModalOpen(true);
-  }
-
-  function openNewBudgetModal() {
-    setForm({
-      ...defaultForm,
-      recordType: "orcamento",
-      eventDate: "",
-      eventType: services[0]?.name || "",
-      amount: services[0]?.price ? String(services[0].price) : "",
-      budgetDescription: services[0]?.description || "",
-      packageName: services[0]?.name || "",
-      items: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    setActiveTab("orcamentos");
     setIsEventModalOpen(true);
   }
 
   function editEvent(evento) {
     setForm({
       ...evento,
-      amount: String(evento.computedAmount || evento.amount || ""),
+      amount: String(evento.amount || ""),
       amountPaid: String(evento.amountPaid || ""),
       budgetDescription: evento.budgetDescription || "",
-      items: normalizeItems(evento.items || []),
     });
     setIsEventModalOpen(true);
   }
 
   function saveEvent() {
-    if (!form.clientName || !form.eventType || (form.recordType !== "orcamento" && !form.eventDate)) {
-      alert("Preencha pelo menos cliente e tipo de serviço.");
+    if (!form.clientName || !form.eventDate || !form.eventType) {
+      alert("Preencha pelo menos cliente, data e tipo de serviço.");
       return;
     }
-
-    const items = normalizeItems(form.items || []);
-    const totalFromItems = getItemsTotal(items);
 
     const payload = {
       ...form,
       id: form.id || crypto.randomUUID(),
-      items,
-      amount: Number(totalFromItems > 0 ? totalFromItems : form.amount || 0),
+      amount: Number(form.amount || 0),
       amountPaid: Number(form.amountPaid || 0),
       budgetDescription: form.budgetDescription || "",
       createdAt: form.createdAt || new Date().toISOString(),
@@ -672,30 +487,6 @@ export default function AgendaFotografosMaster() {
 
   function removeEvent(id) {
     setEvents((current) => current.filter((item) => item.id !== id));
-  }
-
-  function approveBudget(evento) {
-    setEvents((current) =>
-      current.map((item) =>
-        item.id === evento.id
-          ? {
-              ...item,
-              recordType: "evento",
-              status: "Confirmado", paymentStatus: "Pendente",
-              eventDate: item.eventDate || getTodayLocalISO(),
-              updatedAt: new Date().toISOString(),
-            }
-          : item
-      )
-    );
-
-    setActiveTab("agenda");
-
-    if (!evento.eventDate) {
-      alert("Orçamento aprovado e enviado para a agenda com a data de hoje. Ajuste a data depois, se quiser.");
-    } else {
-      alert("Orçamento aprovado e enviado para a agenda.");
-    }
   }
 
   function duplicateEvent(evento) {
@@ -799,84 +590,6 @@ export default function AgendaFotografosMaster() {
     }));
   }
 
-  function addEmptyItem() {
-    setForm((prev) => ({
-      ...prev,
-      items: [...(prev.items || []), { id: crypto.randomUUID(), name: "", description: "", price: 0, qty: 1 }],
-    }));
-  }
-
-  function addServiceItem(serviceId) {
-    const service = services.find((item) => item.id === serviceId);
-    if (!service) return;
-
-    setForm((prev) => ({
-      ...prev,
-      items: [
-        ...(prev.items || []),
-        {
-          id: crypto.randomUUID(),
-          name: service.name,
-          description: service.description || "",
-          price: Number(service.price || 0),
-          qty: 1,
-        },
-      ],
-    }));
-  }
-
-  function updateItem(itemId, field, value) {
-    setForm((prev) => ({
-      ...prev,
-      items: (prev.items || []).map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              [field]: field === "price" || field === "qty" ? Number(value || 0) : value,
-            }
-          : item
-      ),
-    }));
-  }
-
-  function removeItem(itemId) {
-    setForm((prev) => ({
-      ...prev,
-      items: (prev.items || []).filter((item) => item.id !== itemId),
-    }));
-  }
-
-  function calculateFormTotal() {
-    return getItemsTotal(form.items || []);
-  }
-
-  function addCurrentServiceToItems() {
-    const service = services.find((item) => item.name === form.eventType);
-    if (!service) {
-      alert("Selecione um trabalho primeiro.");
-      return;
-    }
-
-    setForm((prev) => {
-      const nextItems = [
-        ...(prev.items || []),
-        {
-          id: crypto.randomUUID(),
-          name: service.name,
-          description: service.description || "",
-          price: Number(service.price || 0),
-          qty: 1,
-        },
-      ];
-
-      return {
-        ...prev,
-        items: nextItems,
-        amount: String(getItemsTotal(nextItems)),
-      };
-    });
-  }
-
   function sendEmail(evento) {
     const subject = encodeURIComponent(`Confirmação de agendamento - ${settings.studioName}`);
     const body = encodeURIComponent(buildEmailTemplate(evento, settings));
@@ -911,79 +624,40 @@ export default function AgendaFotografosMaster() {
     const doc = new jsPDF();
     const studioName = settings.studioName || "Estúdio Fotográfico";
     const cliente = evento.clientName || "Não informado";
+    const tipo = evento.eventType || "Não informado";
     const data = evento.eventDate ? formatDateBR(evento.eventDate) : "Não informada";
     const horario = evento.startTime || "A combinar";
     const local = evento.location || "A combinar";
-    const items = normalizeItems(evento.items || []);
-    const primeiroItem = items.length > 0 ? items[0].name : "";
-    const tipo = primeiroItem || evento.eventType || "Não informado";
-    const pacote = items.length > 0
-      ? items.map((item) => item.name).filter(Boolean).join(" + ")
-      : (evento.packageName || evento.eventType || "Não informado");
-    const total = items.length > 0 ? getItemsTotal(items) : Number(evento.computedAmount || evento.amount || 0);
+    const pacote = evento.packageName || evento.eventType || "Não informado";
+    const valor = formatCurrency(evento.amount || 0);
+    const descricao = evento.budgetDescription || evento.notes || "Serviço fotográfico conforme combinado.";
     const validade = Number(settings.budgetValidityDays || 7);
     const pagamento = settings.paymentTerms || "Condição de pagamento a combinar.";
-    const observacoesGerais = evento.notes || "";
 
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const marginX = 20;
-    const contentWidth = 170;
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 38, "F");
 
-    function drawHeader() {
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, pageWidth, 38, "F");
-
-      if (settings.logoDataUrl) {
-        try {
-          doc.addImage(settings.logoDataUrl, getLogoFormatFromDataUrl(settings.logoDataUrl), 15, 7, 22, 22);
-        } catch {}
-      }
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.text(studioName.toUpperCase(), settings.logoDataUrl ? 44 : 20, 18);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      doc.text("ORÇAMENTO FOTOGRÁFICO PREMIUM", settings.logoDataUrl ? 44 : 20, 28);
-
-      doc.setTextColor(15, 23, 42);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("Proposta Comercial", 20, 52);
-
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 56, 190, 56);
+    if (settings.logoDataUrl) {
+      try {
+        doc.addImage(settings.logoDataUrl, "PNG", 15, 7, 22, 22);
+      } catch {}
     }
 
-    function drawFooter() {
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 268, 190, 268);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text(studioName.toUpperCase(), settings.logoDataUrl ? 44 : 20, 18);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text("ORÇAMENTO FOTOGRÁFICO", settings.logoDataUrl ? 44 : 20, 28);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(15, 23, 42);
-      doc.text(studioName, 20, 276);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Proposta Comercial", 20, 52);
 
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(100, 116, 139);
-      doc.text(settings.studioPhone || "", 20, 282);
-      doc.text(settings.studioEmail || "", 78, 282);
-      doc.text(settings.studioInstagram || "", 150, 282);
-    }
-
-    function ensureSpace(y, needed) {
-      if (y + needed > 262) {
-        drawFooter();
-        doc.addPage();
-        drawHeader();
-        return 68;
-      }
-      return y;
-    }
-
-    drawHeader();
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 56, 190, 56);
 
     let y = 68;
     const rows = [
@@ -993,115 +667,52 @@ export default function AgendaFotografosMaster() {
       ["Horário", horario],
       ["Local", local],
       ["Pacote", pacote],
+      ["Valor do investimento", valor],
     ];
 
     rows.forEach(([label, value]) => {
-      y = ensureSpace(y, 10);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      doc.setTextColor(15, 23, 42);
       doc.text(`${label}:`, 20, y);
       doc.setFont("helvetica", "normal");
-      doc.text(String(value), 60, y);
-      y += 8;
+      doc.text(String(value), 64, y);
+      y += 9;
     });
 
     y += 4;
-    y = ensureSpace(y, 18);
     doc.setFillColor(248, 250, 252);
-    doc.roundedRect(20, y, 170, 12, 3, 3, "F");
+    doc.roundedRect(20, y, 170, 34, 4, 4, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Itens do orçamento", 24, y + 8);
-    y += 18;
-
-    const pdfItems = items.length > 0
-      ? items
-      : [{
-          id: "single",
-          name: pacote,
-          price: total,
-          qty: 1,
-          description: evento.budgetDescription || "Serviço fotográfico conforme combinado."
-        }];
-
-    pdfItems.forEach((item) => {
-      const totalItem = Number(item.price || 0) * Number(item.qty || 0);
-      const description = item.description || "";
-      const descLines = description ? doc.splitTextToSize(description, 158) : [];
-      const blockHeight = 20 + (descLines.length > 0 ? descLines.length * 5 + 6 : 0);
-
-      y = ensureSpace(y, blockHeight + 6);
-
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(20, y - 4, 170, blockHeight, 2, 2);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(15, 23, 42);
-      doc.text(item.name || "Item", 24, y + 2);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(`Qtd.: ${item.qty || 0}`, 24, y + 10);
-      doc.text(`Unit.: ${formatCurrency(item.price || 0)}`, 72, y + 10);
-
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total: ${formatCurrency(totalItem)}`, 145, y + 10);
-
-      if (descLines.length > 0) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.text(descLines, 24, y + 18);
-      }
-
-      y += blockHeight + 6;
-    });
-
-    y = ensureSpace(y, 22);
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(20, y, 170, 14, 3, 3, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text(`TOTAL DO ORÇAMENTO: ${formatCurrency(total)}`, 24, y + 9);
-    y += 24;
-
-    y = ensureSpace(y, 24);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Forma de pagamento", 20, y);
-    y += 6;
-
+    doc.text("Descrição do orçamento", 24, y + 8);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const linhasPagamento = doc.splitTextToSize(pagamento, contentWidth);
-    y = ensureSpace(y, linhasPagamento.length * 5 + 8);
-    doc.text(linhasPagamento, 20, y);
-    y += linhasPagamento.length * 5 + 8;
+    const linhasDescricao = doc.splitTextToSize(descricao, 160);
+    doc.text(linhasDescricao, 24, y + 16);
+    y += 44;
 
-    if (observacoesGerais) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      y = ensureSpace(y, 8);
-      doc.text("Observações gerais", 20, y);
-      y += 6;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      const linhasObs = doc.splitTextToSize(observacoesGerais, contentWidth);
-      y = ensureSpace(y, linhasObs.length * 5 + 8);
-      doc.text(linhasObs, 20, y);
-      y += linhasObs.length * 5 + 8;
-    }
-
-    y = ensureSpace(y, 10);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(20, y, 170, 24, 4, 4, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(`Validade deste orçamento: ${validade} dias`, 20, y);
+    doc.text("Forma de pagamento", 24, y + 8);
+    doc.setFont("helvetica", "normal");
+    const linhasPagamento = doc.splitTextToSize(pagamento, 160);
+    doc.text(linhasPagamento, 24, y + 16);
+    y += 34;
 
-    drawFooter();
+    doc.setFont("helvetica", "bold");
+    doc.text(`Validade deste orçamento: ${validade} dias`, 20, y);
+    y += 10;
+    doc.setFont("helvetica", "normal");
+    doc.text("Agradecemos a oportunidade. Será um prazer registrar esse momento.", 20, y);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 270, 190, 270);
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(settings.studioName || "", 20, 278);
+    doc.text(settings.studioPhone || "", 20, 284);
+    doc.text(settings.studioEmail || "", 80, 278);
+    doc.text(settings.studioInstagram || "", 80, 284);
+    doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")}`, 145, 281);
 
     const nomeArquivo = `orcamento-${cliente.toLowerCase().replace(/\s+/g, "-")}.pdf`;
     doc.save(nomeArquivo);
@@ -1172,15 +783,13 @@ export default function AgendaFotografosMaster() {
           </div>
         </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          <MetricCard title="Eventos fechados" value={metrics.total} subtitle="Na agenda" icon={CalendarDays} />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <MetricCard title="Total de eventos" value={metrics.total} subtitle="Agendamentos cadastrados" icon={CalendarDays} />
           <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle="Mês atual" icon={Clock3} />
-          <MetricCard title="Confirmados" value={metrics.confirmedOrDone} subtitle="Confirmado ou concluído" icon={CheckCircle2} />
-          <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Só trabalhos fechados" icon={Wallet} />
+          <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Soma dos contratos" icon={Wallet} />
           <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="Valores pagos" icon={CheckCircle2} />
-          <MetricCard title="Saldo pendente" value={formatCurrency(metrics.pending)} subtitle="A receber" icon={AlertTriangle} />
-          <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="Aguardando aprovação" icon={FileText} />
-          <MetricCard title="Receita potencial" value={formatCurrency(metrics.potentialRevenue)} subtitle={`Conversão ${metrics.conversionRate || 0}%`} icon={Briefcase} />
+          <MetricCard title="Clientes" value={metrics.totalClients} subtitle="Base cadastrada" icon={Users} />
+          <MetricCard title="Trabalhos" value={metrics.totalServices} subtitle="Serviços pré-definidos" icon={Briefcase} />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
@@ -1282,13 +891,13 @@ export default function AgendaFotografosMaster() {
                         {eventTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Button onClick={() => openNewBudgetModal()} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo evento</Button>
+                    <Button onClick={() => openNewEventModal()} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo evento</Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {onlyEvents.map((evento) => (
+                  {filteredEvents.map((evento) => (
                     <div key={evento.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="grid gap-4 xl:grid-cols-[1.2fr,1fr,auto] xl:items-center">
                         <div>
@@ -1334,116 +943,38 @@ export default function AgendaFotografosMaster() {
               <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <CardTitle className="text-lg">Central de Orçamentos</CardTitle>
-                  <p className="text-sm text-slate-500">Monte propostas, aprove e envie para a agenda.</p>
+                  <p className="text-sm text-slate-500">PDF com logo, forma de pagamento e visual mais bonito.</p>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    Orçamentos: <span className="font-bold text-slate-900">{onlyBudgets.length}</span>
-                  </div>
-
-                  <Button onClick={() => openNewBudgetModal()} className="rounded-2xl">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Novo Orçamento
-                  </Button>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Orçamentos com valor: <span className="font-bold text-slate-900">{filteredEvents.filter((e) => Number(e.amount || 0) > 0).length}</span>
                 </div>
               </CardHeader>
-
               <CardContent>
                 <div className="space-y-3">
-                  <div className="mb-6 grid gap-4 md:grid-cols-3">
-  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-    <p className="text-sm font-semibold text-amber-800">Pendente</p>
-    <p className="mt-2 text-3xl font-extrabold text-amber-900">{budgetPipeline.pending}</p>
-  </div>
-
-  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-    <p className="text-sm font-semibold text-sky-800">Em negociação</p>
-    <p className="mt-2 text-3xl font-extrabold text-sky-900">{budgetPipeline.negotiation}</p>
-  </div>
-
-  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-    <p className="text-sm font-semibold text-red-800">Cancelado</p>
-    <p className="mt-2 text-3xl font-extrabold text-red-900">{budgetPipeline.canceled}</p>
-  </div>
-</div>
-
-{onlyBudgets.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-                      Nenhum orçamento cadastrado.
-                    </div>
-                  ) : (
-                    onlyBudgets.map((evento) => (
-                      <div key={evento.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="grid gap-4 lg:grid-cols-[1.3fr,auto] lg:items-center">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-lg font-bold">{evento.clientName}</h3>
-                              <StatusBadge value={evento.paymentStatus} />
-                            </div>
-
-                            <p className="mt-2 text-sm text-slate-600">
-                              {evento.eventType || "Orçamento"} • {evento.packageName || "Pacote não informado"}
-                            </p>
-
-                            <div className="mt-3 grid gap-2 text-sm text-slate-500 md:grid-cols-2">
-                              <p className="flex items-center gap-2"><Wallet className="h-4 w-4" /> {formatCurrency(evento.computedAmount || evento.amount)}</p>
-                              <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {evento.location || "Local não informado"}</p>
-                              <p className="flex items-center gap-2"><Mail className="h-4 w-4" /> {evento.email || "Sem e-mail"}</p>
-                              <p className="flex items-center gap-2"><FileText className="h-4 w-4" /> Itens: {(evento.items || []).length}</p>
-                            </div>
-
-                            {evento.budgetDescription ? (
-                              <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
-                                {evento.budgetDescription}
-                              </p>
-                            ) : null}
+                  {filteredEvents.filter((e) => Number(e.amount || 0) > 0).map((evento) => (
+                    <div key={evento.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="grid gap-4 lg:grid-cols-[1.3fr,auto] lg:items-center">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-bold">{evento.clientName}</h3>
+                            <StatusBadge value={evento.paymentStatus} />
                           </div>
-
-                          <div className="flex flex-wrap gap-2 lg:justify-end">
-                            <Button
-                              variant="outline"
-                              className="rounded-2xl"
-                              onClick={() => editEvent(evento)}
-                            >
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Editar
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              className="rounded-2xl"
-                              onClick={() => approveBudget(evento)}
-                            >
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Aprovar orçamento
-                            </Button>
-
-                            <Button
-                              className="rounded-2xl"
-                              onClick={() => gerarPDF(evento)}
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              Gerar PDF
-                            </Button>
-
-                            <Button
-                              variant="destructive"
-                              className="rounded-2xl"
-                              onClick={() => {
-                                if (window.confirm("Deseja apagar este orçamento?")) {
-                                  removeEvent(evento.id);
-                                }
-                              }}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Apagar
-                            </Button>
+                          <p className="mt-2 text-sm text-slate-600">{evento.eventType} • {formatDateTimeLabel(evento.eventDate, evento.startTime)}</p>
+                          <div className="mt-3 grid gap-2 text-sm text-slate-500 md:grid-cols-2">
+                            <p className="flex items-center gap-2"><Wallet className="h-4 w-4" /> {formatCurrency(evento.amount)}</p>
+                            <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> {evento.location || "Local não informado"}</p>
+                            <p className="flex items-center gap-2"><Mail className="h-4 w-4" /> {evento.email || "Sem e-mail"}</p>
+                            <p className="flex items-center gap-2"><FileText className="h-4 w-4" /> {evento.packageName || "Pacote não informado"}</p>
                           </div>
+                          {evento.budgetDescription ? <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">{evento.budgetDescription}</p> : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(evento)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+                          <Button className="rounded-2xl" onClick={() => gerarPDF(evento)}><FileText className="mr-2 h-4 w-4" />Gerar PDF</Button>
                         </div>
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1605,28 +1136,13 @@ export default function AgendaFotografosMaster() {
             </div>
             <div className="space-y-2">
               <Label>Tipo de trabalho</Label>
-              <Select value={form.eventType || ""} onValueChange={applyServiceToEvent}>
-                <SelectTrigger className="rounded-2xl">
-                  <SelectValue placeholder="Selecionar trabalho" />
-                </SelectTrigger>
+              <Select value={form.eventType || "__none__"} onValueChange={(value) => applyServiceToEvent(value === "__none__" ? "" : value)}>
+                <SelectTrigger className="rounded-2xl"><SelectValue placeholder="Selecionar trabalho" /></SelectTrigger>
                 <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.name}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="__none__">Selecionar trabalho</SelectItem>
+                  {services.map((service) => <SelectItem key={service.id} value={service.name}>{service.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-2 rounded-2xl"
-                onClick={addCurrentServiceToItems}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar trabalho ao orçamento
-              </Button>
             </div>
 
             <div className="space-y-2 md:col-span-2">

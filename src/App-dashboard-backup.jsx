@@ -345,58 +345,11 @@ export default function AgendaFotografosMaster() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-
-      function normalizeData(parsed) {
-        const events = (parsed.events || []).map((e) => {
-          return {
-            ...e,
-            recordType: e.recordType || (e.eventDate ? "evento" : "orcamento"),
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
-
-        return {
-          ...parsed,
-          events
-        };
-      }
       console.log("LENDO localStorage:", saved);
 
       if (saved) {
-        let parsed = JSON.parse(saved);
-
-        // 🔥 CORREÇÃO AUTOMÁTICA DOS DADOS
-        parsed.events = (parsed.events || []).map((e) => {
-          const isBudget =
-            e.recordType === "orcamento" ||
-            (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
-            (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
-
-          return {
-            ...e,
-            recordType: isBudget ? "orcamento" : "evento",
-            status: e.status || "Pendente",
-            paymentStatus: e.paymentStatus || "Pendente",
-          };
-        });
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-
-        setEvents(
-  (Array.isArray(parsed.events) && parsed.events.length > 0)
-    ? parsed.events
-    : [
-        {
-          id: "test1",
-          clientName: "Cliente Teste",
-          recordType: "orcamento",
-          amount: 1000,
-          status: "Pendente",
-          items: [{ name: "Ensaio", price: 1000, qty: 1 }]
-        }
-      ]
-);
+        const parsed = JSON.parse(saved);
+        setEvents(Array.isArray(parsed.events) ? parsed.events : []);
         setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
         setServices(
           Array.isArray(parsed.services) && parsed.services.length > 0
@@ -475,14 +428,7 @@ export default function AgendaFotografosMaster() {
   );
 
   const onlyBudgets = useMemo(
-    () => {
-  return events.filter((evento) => {
-    return (
-      !evento.eventDate || 
-      evento.status === "Pendente"
-    );
-  });
-},
+    () => filteredEvents.filter((evento) => evento.recordType === "orcamento"),
     [filteredEvents]
   );
 
@@ -516,42 +462,8 @@ export default function AgendaFotografosMaster() {
     return Array.from(new Map([...fromRegistered, ...eventDerived].map((c) => [c.email || `${c.name}-${c.phone}`, c])).values());
   }, [clients, events]);
 
-  
-  const budgetPipeline = useMemo(() => {
-    const budgets = events.filter((e) => !e.eventDate);
-
-    return {
-      pending: budgets.filter((e) => e.status === "Pendente").length,
-      negotiation: budgets.filter((e) => e.status === "Em negociação").length,
-      canceled: budgets.filter((e) => e.status === "Cancelado").length,
-    };
-  }, [events]);
-
   const metrics = useMemo(() => {
-    const budgets = events.filter((e) => {
-      return (
-        e.recordType === "orcamento" ||
-        (e.status === "Pendente" && Array.isArray(e.items) && e.items.length > 0)
-      );
-    });
-
-    const openBudgets = budgets.filter((e) => {
-      return e.status !== "Cancelado" && e.status !== "Aprovado";
-    });
-
-    const approvedEvents = events.filter((e) => {
-      return !budgets.some((b) => b.id === e.id);
-    });
-
-    const confirmedOrDone = approvedEvents.filter((e) => {
-      return (
-        e.status === "Confirmado" ||
-        e.status === "Concluído" ||
-        e.status === "Concluido" ||
-        e.status === "Fechado"
-      );
-    });
-
+    const approvedEvents = enrichedEvents.filter((e) => e.recordType !== "orcamento");
     const total = approvedEvents.length;
     const month = new Date().getMonth();
     const year = new Date().getFullYear();
@@ -565,10 +477,6 @@ export default function AgendaFotografosMaster() {
     const totalRevenue = approvedEvents.reduce((acc, e) => acc + Number(e.computedAmount || e.amount || 0), 0);
     const received = approvedEvents.reduce((acc, e) => acc + Number(e.amountPaid || 0), 0);
     const pending = Math.max(totalRevenue - received, 0);
-    const potentialRevenue = openBudgets.reduce((acc, e) => acc + Number(e.computedAmount || e.amount || 0), 0);
-
-    const baseCount = approvedEvents.length + openBudgets.length;
-    const conversionRate = baseCount > 0 ? Math.round((approvedEvents.length / baseCount) * 100) : 0;
 
     return {
       total,
@@ -576,14 +484,10 @@ export default function AgendaFotografosMaster() {
       totalRevenue,
       received,
       pending,
-      openBudgets: openBudgets.length,
-      potentialRevenue,
-      conversionRate,
-      confirmedOrDone: confirmedOrDone.length,
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [events, uniqueClientsFromEvents.length, services.length]);
+  }, [enrichedEvents, uniqueClientsFromEvents.length, services.length]);
 
   function resetEventForm() {
     setForm(defaultForm);
@@ -681,7 +585,7 @@ export default function AgendaFotografosMaster() {
           ? {
               ...item,
               recordType: "evento",
-              status: "Confirmado", paymentStatus: "Pendente",
+              status: "Confirmado",
               eventDate: item.eventDate || getTodayLocalISO(),
               updatedAt: new Date().toISOString(),
             }
@@ -1172,15 +1076,13 @@ export default function AgendaFotografosMaster() {
           </div>
         </motion.div>
 
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          <MetricCard title="Eventos fechados" value={metrics.total} subtitle="Na agenda" icon={CalendarDays} />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <MetricCard title="Total de eventos" value={metrics.total} subtitle="Agendamentos cadastrados" icon={CalendarDays} />
           <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle="Mês atual" icon={Clock3} />
-          <MetricCard title="Confirmados" value={metrics.confirmedOrDone} subtitle="Confirmado ou concluído" icon={CheckCircle2} />
-          <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Só trabalhos fechados" icon={Wallet} />
+          <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Soma dos contratos" icon={Wallet} />
           <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="Valores pagos" icon={CheckCircle2} />
-          <MetricCard title="Saldo pendente" value={formatCurrency(metrics.pending)} subtitle="A receber" icon={AlertTriangle} />
-          <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="Aguardando aprovação" icon={FileText} />
-          <MetricCard title="Receita potencial" value={formatCurrency(metrics.potentialRevenue)} subtitle={`Conversão ${metrics.conversionRate || 0}%`} icon={Briefcase} />
+          <MetricCard title="Clientes" value={metrics.totalClients} subtitle="Base cadastrada" icon={Users} />
+          <MetricCard title="Trabalhos" value={metrics.totalServices} subtitle="Serviços pré-definidos" icon={Briefcase} />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
@@ -1351,24 +1253,7 @@ export default function AgendaFotografosMaster() {
 
               <CardContent>
                 <div className="space-y-3">
-                  <div className="mb-6 grid gap-4 md:grid-cols-3">
-  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-    <p className="text-sm font-semibold text-amber-800">Pendente</p>
-    <p className="mt-2 text-3xl font-extrabold text-amber-900">{budgetPipeline.pending}</p>
-  </div>
-
-  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-    <p className="text-sm font-semibold text-sky-800">Em negociação</p>
-    <p className="mt-2 text-3xl font-extrabold text-sky-900">{budgetPipeline.negotiation}</p>
-  </div>
-
-  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-    <p className="text-sm font-semibold text-red-800">Cancelado</p>
-    <p className="mt-2 text-3xl font-extrabold text-red-900">{budgetPipeline.canceled}</p>
-  </div>
-</div>
-
-{onlyBudgets.length === 0 ? (
+                  {onlyBudgets.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                       Nenhum orçamento cadastrado.
                     </div>
