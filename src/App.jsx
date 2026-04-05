@@ -643,6 +643,7 @@ export default function AgendaFotografosMaster() {
   }
 
   async function saveEvent() {
+    console.log('🔥 SAVE EVENT FOI CHAMADO');
     if (!form.clientName || !form.eventType || (form.recordType !== "orcamento" && !form.eventDate)) {
       alert("Preencha pelo menos cliente e tipo de serviço.");
       return;
