@@ -497,7 +497,12 @@ export default function AgendaFotografosMaster() {
             : defaultServices
         );
       } else {
+        const servicos = await carregarServicosDoBanco();
+      if (servicos.length > 0) {
+        setServices(servicos);
+      } else {
         setServices(defaultServices);
+      }
       }
 
       const dadosBanco = await carregarDoBanco();
@@ -877,7 +882,7 @@ export default function AgendaFotografosMaster() {
     setIsServiceModalOpen(true);
   }
 
-  async function saveService() {
+  async async function saveService() {
     if (!serviceForm.name) {
       alert("Informe o nome do trabalho/serviço.");
       return;
@@ -890,6 +895,7 @@ export default function AgendaFotografosMaster() {
 
     await salvarServicoNoBanco(payload);
 
+    await salvarServicoNoBanco(payload);
     setServices((current) => {
       const exists = current.some((item) => item.id === payload.id);
       return exists ? current.map((item) => (item.id === payload.id ? payload : item)) : [...current, payload];
@@ -898,7 +904,8 @@ export default function AgendaFotografosMaster() {
     resetServiceForm();
   }
 
-  async function removeService(id) {
+  async async function removeService(id) {
+    await excluirServicoDoBanco(id);
     setServices((current) => current.filter((item) => item.id !== id));
   }
 
