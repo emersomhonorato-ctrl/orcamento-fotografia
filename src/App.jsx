@@ -493,7 +493,7 @@ export default function AgendaFotografosMaster() {
         let parsed = JSON.parse(saved);
         setServices(
           Array.isArray(// REMOVIDO services local) && // REMOVIDO services local.length > 0
-            ? defaultServices
+            
             : defaultServices
         );
       } else {
