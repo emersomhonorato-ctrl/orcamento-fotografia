@@ -383,6 +383,7 @@ export default function AgendaFotografosMaster() {
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
 
+
         setEvents(
   (Array.isArray(parsed.events) && parsed.events.length > 0)
     ? parsed.events
@@ -641,7 +642,7 @@ export default function AgendaFotografosMaster() {
     setIsEventModalOpen(true);
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!form.clientName || !form.eventType || (form.recordType !== "orcamento" && !form.eventDate)) {
       alert("Preencha pelo menos cliente e tipo de serviço.");
       return;
@@ -660,6 +661,8 @@ export default function AgendaFotografosMaster() {
       createdAt: form.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    await salvarNoBanco(payload);
 
     setEvents((current) => {
       const exists = current.some((item) => item.id === payload.id);
@@ -1740,4 +1743,3 @@ export default function AgendaFotografosMaster() {
     </div>
   );
 }
-
