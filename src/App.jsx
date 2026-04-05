@@ -455,7 +455,7 @@ function CalendarMini({ events, selectedDate, onSelectDate }) {
 export default function AgendaFotografosMaster() {
   const [events, setEvents] = useState([]);
   const [clients, setClients] = useState([]);
-  const [services, setServices] = useState(defaultServices);
+  const [ setServices] = useState(defaultServices);
   const [settings, setSettings] = useState(defaultSettings);
   const [form, setForm] = useState(defaultForm);
   const [clientForm, setClientForm] = useState(emptyClient);
@@ -547,12 +547,12 @@ export default function AgendaFotografosMaster() {
         settings,
       };
 
-      console.log("SALVANDO localStorage:", dataToSave);
+      
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
       console.error("Erro ao salvar localStorage:", error);
     }
-  }, [hasLoaded, events, clients, services, settings]);
+  }, [hasLoaded, events, clients,  settings]);
 
   const eventTypes = useMemo(() => services.map((service) => service.name), [services]);
 
@@ -1241,7 +1241,7 @@ export default function AgendaFotografosMaster() {
   }
 
   function exportBackup() {
-    const blob = new Blob([JSON.stringify({ events, clients, services, settings }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ events, clients,  settings }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
