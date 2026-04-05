@@ -343,6 +343,7 @@ export default function AgendaFotografosMaster() {
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
+  localStorage.removeItem("studio_manager_data");
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
 
