@@ -1,3 +1,26 @@
+
+
+const salvarNoBanco = async (orcamento) => {
+  const { supabase } = await import('./supabase');
+
+  const { error } = await supabase
+    .from('orcamentos')
+    .insert([
+      {
+        cliente: orcamento.clientName,
+        telefone: orcamento.phone,
+        valor: Number(orcamento.amount || 0),
+        data_evento: orcamento.eventDate || null,
+      },
+    ]);
+
+  if (error) {
+    console.error('Erro ao salvar no banco:', error);
+  } else {
+    console.log('🔥 SALVO NO SUPABASE');
+  }
+};
+
 import React, { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import {
