@@ -411,39 +411,45 @@ export default function AgendaFotografosMaster() {
   useEffect(() => {
   async function carregarDados() {
     try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+
+      if (saved) {
+        let parsed = JSON.parse(saved);
+
+        setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
+        setServices(
+          Array.isArray(parsed.services) && parsed.services.length > 0
+            ? parsed.services
+            : defaultServices
+        );
+        setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
+      } else {
+        setServices(defaultServices);
+        setSettings(defaultSettings);
+      }
+
       const dadosBanco = await carregarDoBanco();
 
       if (dadosBanco.length > 0) {
         setEvents(dadosBanco);
-      } else {
-        const saved = localStorage.getItem(STORAGE_KEY);
+      } else if (saved) {
+        let parsed = JSON.parse(saved);
 
-        if (saved) {
-          let parsed = JSON.parse(saved);
+        parsed.events = (parsed.events || []).map((e) => {
+          const isBudget =
+            e.recordType === "orcamento" ||
+            (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
+            (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
 
-          parsed.events = (parsed.events || []).map((e) => {
-            const isBudget =
-              e.recordType === "orcamento" ||
-              (!e.eventDate && Number(e.computedAmount || e.amount || 0) > 0) ||
-              (Array.isArray(e.items) && e.items.length > 0 && !e.eventDate);
+          return {
+            ...e,
+            recordType: isBudget ? "orcamento" : "evento",
+            status: e.status || "Pendente",
+            paymentStatus: e.paymentStatus || "Pendente",
+          };
+        });
 
-            return {
-              ...e,
-              recordType: isBudget ? "orcamento" : "evento",
-              status: e.status || "Pendente",
-              paymentStatus: e.paymentStatus || "Pendente",
-            };
-          });
-
-          setEvents(Array.isArray(parsed.events) ? parsed.events : []);
-          setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
-          setServices(
-            Array.isArray(parsed.services) && parsed.services.length > 0
-              ? parsed.services
-              : defaultServices
-          );
-          setSettings({ ...defaultSettings, ...(parsed.settings || {}) });
-        }
+        setEvents(Array.isArray(parsed.events) ? parsed.events : []);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
