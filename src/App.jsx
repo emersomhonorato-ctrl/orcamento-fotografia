@@ -492,7 +492,6 @@ export default function AgendaFotografosMaster() {
       } else {
         let parsed = JSON.parse(saved);
         setServices(
-          Array.isArray(// REMOVIDO services local) && // REMOVIDO services local.length > 0
             
             : defaultServices
         );
@@ -1260,7 +1259,6 @@ export default function AgendaFotografosMaster() {
         const parsed = JSON.parse(event.target?.result);
         if (parsed.events) setEvents(parsed.events);
         if (parsed.clients) setClients(parsed.clients);
-        if (// REMOVIDO services local) setServices(// REMOVIDO services local);
         if (parsed.settings) setSettings({ ...defaultSettings, ...parsed.settings });
         alert("Backup importado com sucesso.");
       } catch {
