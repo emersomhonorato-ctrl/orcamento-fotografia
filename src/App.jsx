@@ -389,10 +389,7 @@ export default function AgendaFotografosMaster() {
     : [
         {
           id: "test1",
-          clientName: "Cliente Teste",
-          recordType: "orcamento",
-          amount: 1000,
-          status: "Pendente",
+          clientName: "Cliente Teste",          status: "Pendente",
           items: [{ name: "Ensaio", price: 1000, qty: 1 }]
         }
       ]
