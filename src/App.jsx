@@ -489,11 +489,11 @@ export default function AgendaFotografosMaster() {
 
       if (servicosBanco.length > 0) {
         setServices(servicosBanco);
-      } else if (saved) {
+      } else {
         let parsed = JSON.parse(saved);
         setServices(
-          Array.isArray(parsed.services) && parsed.services.length > 0
-            ? parsed.services
+          Array.isArray(// REMOVIDO services local) && // REMOVIDO services local.length > 0
+            ? // REMOVIDO services local
             : defaultServices
         );
       } else {
@@ -1253,7 +1253,7 @@ export default function AgendaFotografosMaster() {
         const parsed = JSON.parse(event.target?.result);
         if (parsed.events) setEvents(parsed.events);
         if (parsed.clients) setClients(parsed.clients);
-        if (parsed.services) setServices(parsed.services);
+        if (// REMOVIDO services local) setServices(// REMOVIDO services local);
         if (parsed.settings) setSettings({ ...defaultSettings, ...parsed.settings });
         alert("Backup importado com sucesso.");
       } catch {
