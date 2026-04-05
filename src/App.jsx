@@ -383,20 +383,7 @@ export default function AgendaFotografosMaster() {
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
 
-        setEvents(
-  (Array.isArray(parsed.events) && parsed.events.length > 0)
-    ? parsed.events
-    : [
-        {
-          id: "test1",
-          clientName: "Cliente Teste",
-          recordType: "orcamento",
-          amount: 1000,
-          status: "Pendente",
-          items: [{ name: "Ensaio", price: 1000, qty: 1 }]
-        }
-      ]
-);
+        setEvents(Array.isArray(parsed.events) ? parsed.events : []);
         setClients(Array.isArray(parsed.clients) ? parsed.clients : []);
         setServices(
           Array.isArray(parsed.services) && parsed.services.length > 0
