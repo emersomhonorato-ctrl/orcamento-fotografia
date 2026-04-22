@@ -302,20 +302,20 @@ function getBudgetScheduleDisplayValue(value, pendingCount) {
 function buildBudgetNarrativeLines(budgetData) {
   return budgetData.displayWorkLines
     .filter((line) => String(line || "").trim())
-    .slice(0, 8);
+    .slice(0, 12);
 }
 
 function buildBudgetTechnicalScopeLines(doc, budgetData) {
   const bulletLines = extractBulletLines(budgetData.serviceSnapshot.itemDescription);
   if (bulletLines.length) {
-    return bulletLines.slice(0, 4);
+    return bulletLines.slice(0, 8);
   }
 
   const sentenceChunks = String(budgetData.serviceSnapshot.itemDescription || "")
     .split(/(?<=[.!?])\s+/)
     .map((chunk) => chunk.trim())
     .filter(Boolean)
-    .slice(0, 4)
+    .slice(0, 8)
     .map((chunk) => chunk.replace(/[.;:]$/, ""));
 
   if (sentenceChunks.length) {
@@ -808,7 +808,7 @@ function prepareBudgetPdfData(record, settings = {}) {
   const normalizedEventType = String(eventType || "").replace(/\s+/g, " ").trim().toLowerCase();
   const shouldShowPackageCard = normalizedPackageName && normalizedPackageName !== normalizedEventType;
   const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 168);
-  const firstPageWorkLineLimit = fullWorkLines.length > 10 ? 10 : fullWorkLines.length;
+  const firstPageWorkLineLimit = fullWorkLines.length > 16 ? 16 : fullWorkLines.length;
   const displayWorkLines = fullWorkLines.slice(0, firstPageWorkLineLimit);
   const remainingWorkLines = fullWorkLines.slice(firstPageWorkLineLimit);
   const deliveryEntries = [
@@ -927,7 +927,7 @@ function drawBudgetSimpleClientSection(doc, cursor, budgetData) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(7.7);
     doc.setTextColor(100, 116, 139);
-    doc.text("Data, horario e local serao confirmados no alinhamento final.", 16, cursor.value - 1.2);
+    doc.text("Data, horário e local serão confirmados no alinhamento final.", 16, cursor.value - 1.2);
     cursor.value += 8;
     return;
   }
@@ -991,6 +991,19 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
     });
 
     cursor.value += deliveryHeight + 11.5;
+
+    if (cursor.value < 240) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.2);
+      doc.setTextColor(148, 163, 184);
+      doc.text(
+        "Condições comerciais e investimento organizados na próxima página.",
+        105,
+        cursor.value + 8,
+        { align: "center" },
+      );
+      cursor.value += 16;
+    }
   }
 
   const metaCards = [
