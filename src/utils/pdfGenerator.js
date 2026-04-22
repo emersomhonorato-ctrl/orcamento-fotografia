@@ -43,11 +43,13 @@ function setPdfSmall(doc) {
 }
 
 function drawFooter(doc, settings) {
+  doc.setFillColor(248, 248, 246);
+  doc.rect(0, 278, 210, 12, "F");
   doc.setDrawColor(226, 232, 240);
   doc.line(16, 281, 194, 281);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
   doc.text(settings.pdfFooter || "Obrigado pela oportunidade.", 105, 287, { align: "center" });
 }
 
@@ -59,13 +61,13 @@ function ensureSpace(doc, cursor, amount, settings) {
 }
 
 function drawSectionTitle(doc, cursor, title) {
-  doc.setDrawColor(203, 213, 225);
+  doc.setDrawColor(226, 232, 240);
   doc.line(16, cursor.value + 2, 194, cursor.value + 2);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.7);
-  doc.setTextColor(71, 85, 105);
-  doc.text(String(title).toUpperCase(), 16, cursor.value);
-  cursor.value += 8.5;
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text(String(title).toUpperCase().split("").join(" "), 16, cursor.value);
+  cursor.value += 10.5;
 }
 
 function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
@@ -76,13 +78,13 @@ function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
     valueSize = PDF_TYPO.bodySize,
     valueColor = [15, 23, 42],
     labelColor = [100, 116, 139],
-    radius = 3,
+    radius = 5,
   } = options;
 
   doc.setFillColor(...fill);
   doc.roundedRect(x, y, w, h, radius, radius, "F");
   doc.setFillColor(...accent);
-  doc.roundedRect(x, y, 1.6, h, 1, 1, "F");
+  doc.roundedRect(x, y, 2.2, h, 1.2, 1.2, "F");
 
   const isCompactCard = h <= 11.5;
   const isMediumCard = h > 11.5 && h < 14.5;
@@ -113,13 +115,13 @@ function drawDocumentHeader(doc, settings, subtitle) {
     .join("   •   ");
 
   doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, 210, 38, "F");
+  doc.rect(0, 0, 210, 46, "F");
   doc.setDrawColor(148, 163, 184);
-  doc.line(16, 32, 194, 32);
+  doc.line(16, 40, 194, 40);
 
   if (settings.logoDataUrl) {
     try {
-      doc.addImage(settings.logoDataUrl, logoFormat, 16, 7, 24, 24);
+      doc.addImage(settings.logoDataUrl, logoFormat, 16, 9, 28, 28);
     } catch {
       // ignore invalid image and continue with the PDF
     }
@@ -127,16 +129,16 @@ function drawDocumentHeader(doc, settings, subtitle) {
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.text(studioName.toUpperCase(), settings.logoDataUrl ? 46 : 16, 16.5);
+  doc.setFontSize(22);
+  doc.text(studioName.toUpperCase(), settings.logoDataUrl ? 50 : 16, 19);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
   doc.setTextColor(191, 201, 214);
-  doc.text(subtitle, settings.logoDataUrl ? 46 : 16, 24);
+  doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
 
   if (headerContacts) {
     doc.setFontSize(8.5);
-    doc.text(headerContacts, settings.logoDataUrl ? 46 : 16, 29.5);
+    doc.text(headerContacts, settings.logoDataUrl ? 50 : 16, 35);
   }
 
   return studioName;
@@ -150,21 +152,22 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
     minHeight = 22,
     leadLineCount = 0,
   } = options;
-  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(lines || ""), 164);
+  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(lines || ""), 168);
+  const resolvedMinHeight = Math.max(24, minHeight);
   const leadLines = Math.max(0, Math.min(leadLineCount, contentLines.length));
   const trailingLines = Math.max(0, contentLines.length - leadLines);
   const leadHeight = leadLines * 4.8;
   const trailingHeight = trailingLines * 4.2;
-  const cardHeight = Math.max(minHeight, leadHeight + trailingHeight + 10);
+  const cardHeight = Math.max(resolvedMinHeight, leadHeight + trailingHeight + 12.6);
 
   doc.setFillColor(...fill);
-  doc.roundedRect(16, cursor.value, 178, cardHeight, 4, 4, "F");
+  doc.roundedRect(16, cursor.value, 178, cardHeight, 6, 6, "F");
   doc.setFillColor(...accent);
-  doc.roundedRect(16, cursor.value, 2.1, cardHeight, 1.2, 1.2, "F");
+  doc.roundedRect(16, cursor.value, 2.6, cardHeight, 1.4, 1.4, "F");
 
   setPdfLabel(doc);
-  doc.text(title, 20, cursor.value + 5.3);
-  let textY = cursor.value + 10.5;
+  doc.text(title, 20, cursor.value + 6.5);
+  let textY = cursor.value + 12;
 
   if (leadLines) {
     doc.setFont("helvetica", "bold");
@@ -181,7 +184,7 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
     doc.text(contentLines.slice(leadLines), 20, textY);
   }
 
-  cursor.value += cardHeight + 2.5;
+  cursor.value += cardHeight + 5.5;
 }
 
 function drawBudgetTechnicalScopeCard(doc, cursor, title, items, options = {}) {
@@ -233,17 +236,18 @@ function drawBudgetTechnicalScopeCard(doc, cursor, title, items, options = {}) {
     });
   });
 
-  cursor.value += cardHeight + 2.5;
+  cursor.value += cardHeight + 6.5;
 }
 
 function estimateBudgetEditorialCardHeight(lines, options = {}) {
   const { minHeight = 22, leadLineCount = 0 } = options;
   const contentLines = Array.isArray(lines) ? lines : [];
+  const resolvedMinHeight = Math.max(24, minHeight);
   const leadLines = Math.max(0, Math.min(leadLineCount, contentLines.length));
   const trailingLines = Math.max(0, contentLines.length - leadLines);
   const leadHeight = leadLines * 5.45;
   const trailingHeight = trailingLines * 4.95;
-  return Math.max(minHeight, leadHeight + trailingHeight + 14.5) + 4;
+  return Math.max(resolvedMinHeight, leadHeight + trailingHeight + 14.5) + 4;
 }
 
 function splitTextIntoBudgetParagraphLines(doc, text, width) {
@@ -326,7 +330,7 @@ function buildBudgetTechnicalScopeLines(doc, budgetData) {
 
 function estimateBudgetSimpleCommercialBlocksHeight(doc, sections) {
   return sections.reduce((total, section) => {
-    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 164).slice(0, 6);
+    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 168).slice(0, 6);
     return total + estimateBudgetEditorialCardHeight(lines, {
       minHeight: 18,
       leadLineCount: Math.min(1, lines.length),
@@ -673,9 +677,9 @@ function ensureContractPageSpace(doc, cursor, amount, settings) {
   drawFooter(doc, settings);
   doc.addPage();
   drawDocumentHeader(doc, settings, "CONTRATO DE PRESTACAO DE SERVICOS");
-  cursor.value = 48;
+  cursor.value = 56;
   drawContractPaperFrame(doc, cursor);
-  cursor.value = 58;
+  cursor.value = 66;
 }
 
 function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
@@ -805,7 +809,7 @@ function prepareBudgetPdfData(record, settings = {}) {
   const normalizedPackageName = String(packageName || "").replace(/\s+/g, " ").trim().toLowerCase();
   const normalizedEventType = String(eventType || "").replace(/\s+/g, " ").trim().toLowerCase();
   const shouldShowPackageCard = normalizedPackageName && normalizedPackageName !== normalizedEventType;
-  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 164);
+  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 168);
   const firstPageWorkLineLimit = fullWorkLines.length > 10 ? 10 : fullWorkLines.length;
   const displayWorkLines = fullWorkLines.slice(0, firstPageWorkLineLimit);
   const remainingWorkLines = fullWorkLines.slice(firstPageWorkLineLimit);
@@ -890,12 +894,12 @@ function drawBudgetSimpleClientSection(doc, cursor, budgetData) {
   drawSectionTitle(doc, cursor, "Dados do cliente");
   const schedulePendingCount = [budgetData.eventDate, budgetData.eventTime, budgetData.location].filter(isBudgetPendingValue).length;
 
-  drawBudgetInfoCard(doc, 16, cursor.value, 178, 16, "Cliente", budgetData.clientName, {
+  drawBudgetInfoCard(doc, 16, cursor.value, 178, 18, "Cliente", budgetData.clientName, {
     fill: [246, 248, 252],
     accent: [214, 180, 95],
     valueStrong: true,
   });
-  cursor.value += 18.5;
+  cursor.value += 22.5;
 
   drawBudgetInfoCard(doc, 16, cursor.value, 86, 13, "Serviço", budgetData.eventType, {
     fill: [249, 250, 252],
@@ -926,11 +930,11 @@ function drawBudgetSimpleClientSection(doc, cursor, budgetData) {
     doc.setFontSize(7.7);
     doc.setTextColor(100, 116, 139);
     doc.text("Data, horario e local serao confirmados no alinhamento final.", 16, cursor.value - 1.2);
-    cursor.value += 6;
+    cursor.value += 8;
     return;
   }
 
-  cursor.value += 3;
+  cursor.value += 8;
 }
 
 function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
@@ -988,7 +992,7 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
       });
     });
 
-    cursor.value += deliveryHeight + 7.5;
+    cursor.value += deliveryHeight + 11.5;
   }
 
   const metaCards = [
@@ -1054,7 +1058,7 @@ function drawBudgetCommercialHighlight(doc, cursor, budgetData, settings) {
   doc.setTextColor(15, 23, 42);
   doc.text(formatCurrency(budgetData.total), 188, cursor.value + 15.2, { align: "right" });
 
-  cursor.value += 27;
+  cursor.value += 31;
 }
 
 function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
@@ -1111,20 +1115,22 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     });
   }
 
+  doc.setDrawColor(214, 180, 95);
+  doc.line(130, cursor.value + 4, 192, cursor.value + 4);
   doc.setFillColor(15, 23, 42);
-  doc.roundedRect(130, cursor.value + 5.5, 60, 19.5, 4, 4, "F");
+  doc.roundedRect(130, cursor.value + 5.5, 60, 24, 4, 4, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.2);
-  doc.setTextColor(191, 201, 214);
+  doc.setFontSize(8);
+  doc.setTextColor(214, 180, 95);
   doc.text("INVESTIMENTO", 160, cursor.value + 10.8, { align: "center" });
-  doc.setFontSize(14.4);
+  doc.setFontSize(17);
   doc.setTextColor(255, 255, 255);
-  doc.text(formatCurrency(budgetData.total), 160, cursor.value + 19.2, { align: "center" });
+  doc.text(formatCurrency(budgetData.total), 160, cursor.value + 21.8, { align: "center" });
 
-  cursor.value += 35.5;
+  cursor.value += 40;
 
   sections.forEach((section, index) => {
-    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 164).slice(0, 6);
+    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 168).slice(0, 6);
     drawBudgetEditorialCard(doc, cursor, section.title, lines, {
       fill: index % 2 === 0 ? [248, 249, 252] : [250, 250, 251],
       accent: index % 2 === 0 ? [214, 180, 95] : [191, 201, 214],
@@ -1498,7 +1504,7 @@ export function generateBudgetPDF(record, settings = {}) {
   const cursor = { value: 18 };
   drawDocumentHeader(doc, settings, "PROPOSTA COMERCIAL");
 
-  cursor.value = 48;
+  cursor.value = 56;
   drawBudgetSimpleClientSection(doc, cursor, budgetData);
   drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings);
   drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings);
@@ -1521,7 +1527,7 @@ export function generateEventPDF(record, settings = {}) {
   const notes = String(record.notes || "").trim();
   const deliveryTerms = String(record.contractDeliveryTerms || "").trim();
   const paymentTerms = String(record.contractPaymentMethod || settings.paymentTerms || "").trim();
-  const cursor = { value: 48 };
+  const cursor = { value: 56 };
   const eventSummary = [
     eventDate,
     startTime !== "A combinar" ? `${startTime}${endTime !== "A combinar" ? ` às ${endTime}` : ""}` : null,
@@ -1670,7 +1676,7 @@ export function generateContractPDF(record, settings = {}, previewText = "") {
   const contractCity = settings.contractCity || settings.studioCity || "Cidade não informada";
   const contractForum = settings.contractForum || contractCity;
   const contractText = String(previewText || "").trim() || "Defina um texto base de contrato para gerar este documento.";
-  const cursor = { value: 48 };
+  const cursor = { value: 56 };
   const signatureClosingHeight = settings.signatureDataUrl ? 80 : 66;
 
   drawContractPaperFrame(doc, cursor);
@@ -1711,7 +1717,7 @@ export function generateReceiptPDF(record, settings = {}) {
   const studioName = drawDocumentHeader(doc, settings, "RECIBO DE PAGAMENTO");
   const clientName = record.clientName || "Cliente não informado";
   const previewText = buildReceiptPreview(record, settings);
-  const cursor = { value: 48 };
+  const cursor = { value: 56 };
 
   drawSectionTitle(doc, cursor, "Dados do pagamento");
 
