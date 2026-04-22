@@ -57,7 +57,6 @@ function ensureSpace(doc, cursor, amount, settings) {
   if (cursor.value + amount <= 279) return;
   doc.addPage();
   cursor.value = 18;
-  drawFooter(doc, settings);
 }
 
 function drawSectionTitle(doc, cursor, title) {
@@ -313,7 +312,7 @@ function buildBudgetTechnicalScopeLines(doc, budgetData) {
   }
 
   const sentenceChunks = String(budgetData.serviceSnapshot.itemDescription || "")
-    .split(/(?<=[.!?])\s+|,\s+/)
+    .split(/(?<=[.!?])\s+/)
     .map((chunk) => chunk.trim())
     .filter(Boolean)
     .slice(0, 4)
@@ -674,7 +673,6 @@ function drawContractPaperFrame(doc, cursor) {
 
 function ensureContractPageSpace(doc, cursor, amount, settings) {
   if (cursor.value + amount <= 262) return;
-  drawFooter(doc, settings);
   doc.addPage();
   drawDocumentHeader(doc, settings, "CONTRATO DE PRESTACAO DE SERVICOS");
   cursor.value = 56;
@@ -1025,12 +1023,10 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
 }
 
 function drawBudgetCommercialHighlight(doc, cursor, budgetData, settings) {
-  ensureSpace(doc, cursor, 29, settings);
-
   doc.setFillColor(248, 248, 246);
-  doc.roundedRect(16, cursor.value, 178, 24, 4, 4, "F");
+  doc.roundedRect(16, cursor.value, 178, 20, 4, 4, "F");
   doc.setFillColor(214, 180, 95);
-  doc.roundedRect(16, cursor.value, 2.2, 24, 1.2, 1.2, "F");
+  doc.roundedRect(16, cursor.value, 2.2, 20, 1.2, 1.2, "F");
 
   setPdfLabel(doc);
   doc.text("Fechamento comercial", 20, cursor.value + 5.5);
@@ -1058,7 +1054,12 @@ function drawBudgetCommercialHighlight(doc, cursor, budgetData, settings) {
   doc.setTextColor(15, 23, 42);
   doc.text(formatCurrency(budgetData.total), 188, cursor.value + 15.2, { align: "right" });
 
-  cursor.value += 31;
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.8);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Condições completas na próxima página.", 20, cursor.value + 20.5);
+
+  cursor.value += 25;
 }
 
 function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
@@ -1078,11 +1079,12 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     budgetData.serviceSnapshot.receiptReference ? { title: "Referência de recibo", value: budgetData.serviceSnapshot.receiptReference } : null,
   ].filter(Boolean);
   const reservedHeight = 8.5 + 37 + estimateBudgetSimpleCommercialBlocksHeight(doc, sections);
-  if (cursor.value + reservedHeight > 279) {
-    drawBudgetCommercialHighlight(doc, cursor, budgetData, settings);
+  if (cursor.value + reservedHeight > 268) {
+    if (cursor.value + 25 <= 279) {
+      drawBudgetCommercialHighlight(doc, cursor, budgetData, settings);
+    }
     doc.addPage();
     cursor.value = 18;
-    drawFooter(doc, settings);
   }
 
   drawSectionTitle(doc, cursor, "Informações comerciais");
@@ -1272,7 +1274,6 @@ function drawBudgetItemsSection(doc, cursor, budgetData, settings, options = {})
     drawBudgetTransitionSummary(doc, cursor, budgetData.total, budgetData.validityDays, settings);
     doc.addPage();
     cursor.value = 18;
-    drawFooter(doc, settings);
   }
 
   drawSectionTitle(doc, cursor, "Itens do orçamento");
@@ -1486,7 +1487,6 @@ function _renderBudgetSingleItemPremiumFlow(doc, cursor, budgetData, settings, s
     drawBudgetSingleItemPremiumSummary(doc, cursor, budgetData, settings);
     doc.addPage();
     cursor.value = 18;
-    drawFooter(doc, settings);
   }
 
   drawBudgetItemsSection(doc, cursor, budgetData, settings, {
@@ -1508,7 +1508,11 @@ export function generateBudgetPDF(record, settings = {}) {
   drawBudgetSimpleClientSection(doc, cursor, budgetData);
   drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings);
   drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings);
-  drawFooter(doc, settings);
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(doc, settings);
+  }
   doc.save(`orcamento-${sanitizeFilePart(budgetData.clientName, "cliente")}.pdf`);
 }
 
@@ -1665,7 +1669,11 @@ export function generateEventPDF(record, settings = {}) {
   cursor.value += 6;
 
   drawCompanySignatureBlock(doc, cursor, studioName, settings);
-  drawFooter(doc, settings);
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(doc, settings);
+  }
   doc.save(`agenda-${sanitizeFilePart(clientName, "cliente")}.pdf`);
 }
 
@@ -1708,7 +1716,11 @@ export function generateContractPDF(record, settings = {}, previewText = "") {
   cursor.value += 8;
 
   drawContractSignatureBlock(doc, cursor, clientName, studioName, settings);
-  drawFooter(doc, settings);
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(doc, settings);
+  }
   doc.save(`contrato-${sanitizeFilePart(clientName, "cliente")}.pdf`);
 }
 
@@ -1790,6 +1802,10 @@ export function generateReceiptPDF(record, settings = {}) {
   }
 
   drawCompanySignatureBlock(doc, cursor, studioName, settings);
-  drawFooter(doc, settings);
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    drawFooter(doc, settings);
+  }
   doc.save(`recibo-${sanitizeFilePart(clientName, "cliente")}.pdf`);
 }
