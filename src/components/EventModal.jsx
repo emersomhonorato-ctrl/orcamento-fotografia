@@ -1,12 +1,13 @@
 import { Save, X } from "lucide-react";
+import BudgetItemsEditor from "@/components/BudgetItemsEditor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { STATUS_OPTIONS, PAYMENT_OPTIONS, BUDGET_STATUS_OPTIONS } from "@/data/defaults";
-import BudgetItemsEditor from "@/components/BudgetItemsEditor";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/utils/formatters";
 
 export default function EventModal({
   open,
@@ -14,7 +15,12 @@ export default function EventModal({
   form,
   setForm,
   clients,
+  matchedClient,
   services,
+  currentStatusOptions,
+  paymentOptions,
+  formItemsTotal,
+  displayFormTotal,
   onApplyClient,
   onApplyService,
   onAddEmptyItem,
@@ -25,22 +31,36 @@ export default function EventModal({
   onSave,
   onCancel,
 }) {
+  const title = form.id
+    ? form.recordType === "orcamento"
+      ? "Editar orçamento"
+      : "Editar agendamento"
+    : form.recordType === "orcamento"
+      ? "Novo orçamento"
+      : "Novo agendamento";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[28px] sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">
-            {form.id ? "Editar agendamento" : "Novo agendamento"}
-          </DialogTitle>
+          <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
         </DialogHeader>
-
         <div className="grid gap-4 py-2 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label>Tipo de registro</Label>
+            <Select value={form.recordType} onValueChange={(value) => setForm((current) => ({ ...current, recordType: value }))}>
+              <SelectTrigger className="rounded-2xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="evento">Agendamento</SelectItem>
+                <SelectItem value="orcamento">Orçamento</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label>Cliente cadastrado</Label>
-            <Select
-              value={form.clientId || "__none__"}
-              onValueChange={(value) => onApplyClient(value === "__none__" ? "" : value)}
-            >
+            <Select value={form.clientId || "__none__"} onValueChange={(value) => onApplyClient(value === "__none__" ? "" : value)}>
               <SelectTrigger className="rounded-2xl">
                 <SelectValue placeholder="Selecionar cliente" />
               </SelectTrigger>
@@ -53,14 +73,21 @@ export default function EventModal({
                 ))}
               </SelectContent>
             </Select>
+            {matchedClient ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="border-emerald-200 bg-white text-emerald-700 hover:bg-white">Cliente reconhecido</Badge>
+                  <span className="font-medium">{matchedClient.name}</span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-emerald-700">
+                  O sistema encontrou um cadastro compatível por e-mail, telefone ou WhatsApp e vai vinculá-lo ao salvar.
+                </p>
+              </div>
+            ) : null}
           </div>
-
           <div className="space-y-2">
             <Label>Tipo de trabalho</Label>
-            <Select
-              value={form.eventType || "__none__"}
-              onValueChange={(value) => onApplyService(value === "__none__" ? "" : value)}
-            >
+            <Select value={form.eventType || "__none__"} onValueChange={(value) => onApplyService(value === "__none__" ? "" : value)}>
               <SelectTrigger className="rounded-2xl">
                 <SelectValue placeholder="Selecionar trabalho" />
               </SelectTrigger>
@@ -79,105 +106,179 @@ export default function EventModal({
             <Label>Nome do cliente</Label>
             <Input
               value={form.clientName}
-              onChange={(e) => setForm((prev) => ({ ...prev, clientName: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, clientName: event.target.value }))}
+              className="rounded-2xl"
+            />
+            {!form.clientId && matchedClient ? (
+              <p className="text-xs text-slate-500">
+                Esse preenchimento corresponde ao cliente já cadastrado: <strong>{matchedClient.name}</strong>.
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label>CPF</Label>
+            <Input
+              value={form.clientCpf}
+              onChange={(event) => setForm((current) => ({ ...current, clientCpf: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2">
             <Label>E-mail</Label>
             <Input
               type="email"
               value={form.email}
-              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2">
             <Label>Telefone</Label>
             <Input
               value={form.phone}
-              onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2">
             <Label>WhatsApp</Label>
             <Input
               value={form.whatsapp}
-              onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
-          <div className="space-y-2">
-            <Label>Data</Label>
-            <Input
-              type="date"
-              value={form.eventDate}
-              onChange={(e) => setForm((prev) => ({ ...prev, eventDate: e.target.value }))}
-              className="rounded-2xl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Hora inicial</Label>
-            <Input
-              type="time"
-              value={form.startTime}
-              onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
-              className="rounded-2xl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Hora final</Label>
-            <Input
-              type="time"
-              value={form.endTime}
-              onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))}
-              className="rounded-2xl"
-            />
-          </div>
-
           <div className="space-y-2 md:col-span-2">
-            <Label>Local</Label>
+            <Label>Endereço</Label>
             <Input
-              value={form.location}
-              onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+              value={form.clientAddress}
+              onChange={(event) => setForm((current) => ({ ...current, clientAddress: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
+          {form.recordType === "orcamento" ? (
+            <>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Data prevista</Label>
+                <Input
+                  type="date"
+                  value={form.eventDate}
+                  onChange={(event) => setForm((current) => ({ ...current, eventDate: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Local</Label>
+                <Input
+                  value={form.location}
+                  onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label>Data</Label>
+                <Input
+                  type="date"
+                  value={form.eventDate}
+                  onChange={(event) => setForm((current) => ({ ...current, eventDate: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora inicial</Label>
+                <Input
+                  type="time"
+                  value={form.startTime}
+                  onChange={(event) => setForm((current) => ({ ...current, startTime: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora final</Label>
+                <Input
+                  type="time"
+                  value={form.endTime}
+                  onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Local</Label>
+                <Input
+                  value={form.location}
+                  onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                  className="rounded-2xl"
+                />
+              </div>
+            </>
+          )}
           <div className="space-y-2">
             <Label>Pacote</Label>
             <Input
               value={form.packageName}
-              onChange={(e) => setForm((prev) => ({ ...prev, packageName: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, packageName: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
+          <div className="space-y-2">
+            <Label>Fotos entregues online</Label>
+            <Input
+              type="number"
+              min="0"
+              value={form.onlinePhotosCount}
+              onChange={(event) => setForm((current) => ({ ...current, onlinePhotosCount: event.target.value }))}
+              className="rounded-2xl"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Fotos reveladas</Label>
+            <Input
+              type="number"
+              min="0"
+              value={form.editedPhotosCount}
+              onChange={(event) => setForm((current) => ({ ...current, editedPhotosCount: event.target.value }))}
+              className="rounded-2xl"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Tamanho da foto</Label>
+            <Input
+              value={form.photoSize}
+              onChange={(event) => setForm((current) => ({ ...current, photoSize: event.target.value }))}
+              className="rounded-2xl"
+              placeholder="Ex.: 10x15, 15x21"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Valor total</Label>
+            <Input
+              type="number"
+              value={displayFormTotal}
+              onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
+              className="rounded-2xl"
+              disabled={formItemsTotal > 0}
+            />
+          </div>
           <div className="space-y-2">
             <Label>Valor pago</Label>
             <Input
               type="number"
               value={form.amountPaid}
-              onChange={(e) => setForm((prev) => ({ ...prev, amountPaid: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, amountPaid: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2">
-            <Label>Status do evento</Label>
-            <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}>
+            <Label>{form.recordType === "orcamento" ? "Status do orçamento" : "Status do evento"}</Label>
+            <Select value={form.status} onValueChange={(value) => setForm((current) => ({ ...current, status: value }))}>
               <SelectTrigger className="rounded-2xl">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((item) => (
+                {currentStatusOptions.map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
                   </SelectItem>
@@ -185,18 +286,14 @@ export default function EventModal({
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-2">
             <Label>Status do pagamento</Label>
-            <Select
-              value={form.paymentStatus}
-              onValueChange={(value) => setForm((prev) => ({ ...prev, paymentStatus: value }))}
-            >
+            <Select value={form.paymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, paymentStatus: value }))}>
               <SelectTrigger className="rounded-2xl">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PAYMENT_OPTIONS.map((item) => (
+                {paymentOptions.map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
                   </SelectItem>
@@ -204,56 +301,100 @@ export default function EventModal({
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-2 md:col-span-2">
-                      <div className="space-y-2">
-            <Label>Número do orçamento</Label>
+          {form.recordType === "orcamento" ? (
+            <div className="space-y-2">
+              <Label>Validade do orçamento (dias)</Label>
+              <Input
+                type="number"
+                min="1"
+                value={form.budgetValidityDays || ""}
+                onChange={(event) => setForm((current) => ({ ...current, budgetValidityDays: event.target.value }))}
+                className="rounded-2xl"
+              />
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <Label>Prazo recomendado (dias)</Label>
             <Input
-              value={form.budgetNumber || ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, budgetNumber: e.target.value }))}
+              type="number"
+              min="1"
+              value={form.recommendedDeliveryDays || ""}
+              onChange={(event) => setForm((current) => ({ ...current, recommendedDeliveryDays: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2">
-            <Label>Status do orçamento</Label>
-            <Select
-              value={form.budgetStatus || "Rascunho"}
-              onValueChange={(value) => setForm((prev) => ({ ...prev, budgetStatus: value }))}
-            >
-              <SelectTrigger className="rounded-2xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BUDGET_STATUS_OPTIONS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label>Validade do orçamento</Label>
+            <Label>Data do recebimento</Label>
             <Input
               type="date"
-              value={form.budgetValidUntil || ""}
-              onChange={(e) => setForm((prev) => ({ ...prev, budgetValidUntil: e.target.value }))}
+              value={form.receiptDate}
+              onChange={(event) => setForm((current) => ({ ...current, receiptDate: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-            <Label>Descrição geral do orçamento</Label>
+          <div className="space-y-2">
+            <Label>Método de recebimento</Label>
+            <Input
+              value={form.receiptMethod || ""}
+              onChange={(event) => setForm((current) => ({ ...current, receiptMethod: event.target.value }))}
+              className="rounded-2xl"
+              placeholder="Ex.: Pix, cartão, dinheiro"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Referência do recibo</Label>
+            <Input
+              value={form.receiptReference}
+              onChange={(event) => setForm((current) => ({ ...current, receiptReference: event.target.value }))}
+              className="rounded-2xl"
+              placeholder="Ex.: Entrada referente ao ensaio"
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Descrição do orçamento</Label>
             <Textarea
               rows={4}
               value={form.budgetDescription}
-              onChange={(e) => setForm((prev) => ({ ...prev, budgetDescription: e.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, budgetDescription: event.target.value }))}
+              className="rounded-2xl"
+            />
+            {form.onlinePhotosCount || form.editedPhotosCount || form.photoSize ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <p className="font-medium text-slate-800">Entregas previstas</p>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+                  {form.onlinePhotosCount ? <span>Fotos entregues online: {form.onlinePhotosCount}</span> : null}
+                  {form.editedPhotosCount ? <span>Fotos reveladas: {form.editedPhotosCount}</span> : null}
+                  {form.photoSize ? <span>Tamanho das fotos: {form.photoSize}</span> : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Observações</Label>
+            <Textarea
+              rows={5}
+              value={form.notes}
+              onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
               className="rounded-2xl"
             />
           </div>
-
           <div className="space-y-2 md:col-span-2">
-            <Label>Itens do orçamento</Label>
+            <Label>Observações do contrato</Label>
+            <Textarea
+              rows={4}
+              value={form.contractNotes || ""}
+              onChange={(event) => setForm((current) => ({ ...current, contractNotes: event.target.value }))}
+              className="rounded-2xl"
+              placeholder="Esse texto aparece como observação comercial/jurídica no contrato."
+            />
+          </div>
+          <div className="space-y-3 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-base">Itens do orçamento</Label>
+              <Badge variant="outline" className="rounded-full">
+                {formatCurrency(displayFormTotal)}
+              </Badge>
+            </div>
             <BudgetItemsEditor
               items={form.items || []}
               services={services}
@@ -264,18 +405,7 @@ export default function EventModal({
               onDuplicateItem={onDuplicateItem}
             />
           </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label>Observações</Label>
-            <Textarea
-              rows={5}
-              value={form.notes}
-              onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-              className="rounded-2xl"
-            />
-          </div>
         </div>
-
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
           <Button variant="outline" onClick={onCancel} className="rounded-2xl">
             <X className="mr-2 h-4 w-4" />
@@ -283,7 +413,7 @@ export default function EventModal({
           </Button>
           <Button onClick={onSave} className="rounded-2xl">
             <Save className="mr-2 h-4 w-4" />
-            Salvar agendamento
+            Salvar
           </Button>
         </DialogFooter>
       </DialogContent>
