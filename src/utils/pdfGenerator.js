@@ -42,15 +42,34 @@ function setPdfSmall(doc) {
   doc.setTextColor(71, 85, 105);
 }
 
+function drawSectionIcon(doc, x, y, type) {
+  doc.setDrawColor(214, 180, 95);
+  doc.setLineWidth(0.6);
+
+  if (type === "client") {
+    doc.circle(x + 2, y - 1.5, 1.8, "S");
+    doc.line(x - 0.5, y + 3.5, x + 4.5, y + 3.5);
+  } else if (type === "service") {
+    doc.roundedRect(x - 0.5, y - 2.5, 5, 5, 0.8, 0.8, "S");
+    doc.line(x + 0.5, y, x + 3.5, y);
+    doc.line(x + 0.5, y + 1.4, x + 2.5, y + 1.4);
+  } else if (type === "commercial") {
+    doc.circle(x + 2, y, 2.2, "S");
+    doc.setFontSize(5.5);
+    doc.setTextColor(214, 180, 95);
+    doc.text("$", x + 1.4, y + 1, { align: "left" });
+  }
+
+  doc.setLineWidth(0.2);
+}
+
 function drawFooter(doc, settings) {
   doc.setFillColor(248, 248, 246);
   doc.rect(0, 278, 210, 12, "F");
-  doc.setDrawColor(226, 232, 240);
-  doc.line(16, 281, 194, 281);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
-  doc.text(settings.pdfFooter || "Obrigado pela oportunidade.", 105, 287, { align: "center" });
+  doc.setFontSize(8);
+  doc.setTextColor(166, 176, 192);
+  doc.text((settings.pdfFooter || "Obrigado pela oportunidade.").split("").join(" "), 105, 287, { align: "center" });
 }
 
 function ensureSpace(doc, cursor, amount, settings) {
@@ -59,20 +78,21 @@ function ensureSpace(doc, cursor, amount, settings) {
   cursor.value = 18;
 }
 
-function drawSectionTitle(doc, cursor, title) {
-  doc.setDrawColor(226, 232, 240);
-  doc.line(16, cursor.value + 2, 194, cursor.value + 2);
+function drawSectionTitle(doc, cursor, title, iconType = null) {
+  if (iconType) {
+    drawSectionIcon(doc, 16, cursor.value, iconType);
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
-  doc.text(String(title).toUpperCase().split("").join(" "), 16, cursor.value);
-  cursor.value += 10.5;
+  doc.text(String(title).toUpperCase(), iconType ? 24 : 16, cursor.value);
+  cursor.value += 10;
 }
 
 function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
   const {
-    fill = [243, 246, 250],
-    accent = [214, 180, 95],
+    fill = [250, 250, 251],
+    accent = [203, 213, 225],
     valueStrong = false,
     valueSize = PDF_TYPO.bodySize,
     valueColor = [15, 23, 42],
@@ -83,7 +103,7 @@ function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
   doc.setFillColor(...fill);
   doc.roundedRect(x, y, w, h, radius, radius, "F");
   doc.setFillColor(...accent);
-  doc.roundedRect(x, y, 2.2, h, 1.2, 1.2, "F");
+  doc.roundedRect(x, y, 1.2, h, 1.2, 1.2, "F");
 
   const isCompactCard = h <= 11.5;
   const isMediumCard = h > 11.5 && h < 14.5;
@@ -104,6 +124,7 @@ function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
 function drawDocumentHeader(doc, settings, subtitle) {
   const logoFormat = getLogoFormatFromDataUrl(settings.logoDataUrl);
   const studioName = settings.studioName || "Emerson Honorato Retratos";
+  const spacedSubtitle = String(subtitle || "").split("").join(" ");
   const headerContacts = [
     settings.studioPhone,
     settings.studioEmail,
@@ -113,10 +134,8 @@ function drawDocumentHeader(doc, settings, subtitle) {
     .filter(Boolean)
     .join("   •   ");
 
-  doc.setFillColor(15, 23, 42);
+  doc.setFillColor(23, 27, 38);
   doc.rect(0, 0, 210, 46, "F");
-  doc.setDrawColor(148, 163, 184);
-  doc.line(16, 40, 194, 40);
 
   if (settings.logoDataUrl) {
     try {
@@ -128,12 +147,12 @@ function drawDocumentHeader(doc, settings, subtitle) {
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
-  doc.text(studioName.toUpperCase(), settings.logoDataUrl ? 50 : 16, 19);
+  doc.setFontSize(17);
+  doc.text(studioName, settings.logoDataUrl ? 50 : 16, 19);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
-  doc.setTextColor(191, 201, 214);
-  doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
+  doc.setTextColor(166, 176, 192);
+  doc.text(spacedSubtitle, settings.logoDataUrl ? 50 : 16, 28);
 
   if (headerContacts) {
     doc.setFontSize(8.5);
@@ -145,7 +164,7 @@ function drawDocumentHeader(doc, settings, subtitle) {
 
 function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
   const {
-    fill = [248, 249, 252],
+    fill = [252, 252, 253],
     accent = [214, 180, 95],
     bodyColor = [30, 41, 59],
     minHeight = 22,
@@ -162,7 +181,7 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
   doc.setFillColor(...fill);
   doc.roundedRect(16, cursor.value, 178, cardHeight, 6, 6, "F");
   doc.setFillColor(...accent);
-  doc.roundedRect(16, cursor.value, 2.6, cardHeight, 1.4, 1.4, "F");
+  doc.roundedRect(16, cursor.value, 1.4, cardHeight, 1.4, 1.4, "F");
 
   setPdfLabel(doc);
   doc.text(title, 20, cursor.value + 6.5);
@@ -889,7 +908,7 @@ function _drawBudgetClientSection(doc, cursor, budgetData) {
 }
 
 function drawBudgetSimpleClientSection(doc, cursor, budgetData) {
-  drawSectionTitle(doc, cursor, "Dados do cliente");
+  drawSectionTitle(doc, cursor, "Dados do cliente", "client");
   const schedulePendingCount = [budgetData.eventDate, budgetData.eventTime, budgetData.location].filter(isBudgetPendingValue).length;
 
   drawBudgetInfoCard(doc, 16, cursor.value, 178, 18, "Cliente", budgetData.clientName, {
@@ -928,15 +947,15 @@ function drawBudgetSimpleClientSection(doc, cursor, budgetData) {
     doc.setFontSize(7.7);
     doc.setTextColor(100, 116, 139);
     doc.text("Data, horário e local serão confirmados no alinhamento final.", 16, cursor.value - 1.2);
-    cursor.value += 8;
+    cursor.value += 12;
     return;
   }
 
-  cursor.value += 8;
+  cursor.value += 12;
 }
 
 function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
-  drawSectionTitle(doc, cursor, "Resumo do serviço");
+  drawSectionTitle(doc, cursor, "Resumo do serviço", "service");
 
   if (budgetData.shouldShowPackageCard) {
     drawBudgetInfoCard(doc, 16, cursor.value, 178, 14.5, "Pacote", budgetData.packageName, {
@@ -1033,6 +1052,8 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
     });
     cursor.value += 17;
   }
+
+  cursor.value += 4;
 }
 
 function drawBudgetCommercialHighlight(doc, cursor, budgetData, settings) {
@@ -1092,7 +1113,7 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     cursor.value = 18;
   }
 
-  drawSectionTitle(doc, cursor, "Informações comerciais");
+  drawSectionTitle(doc, cursor, "Informações comerciais", "commercial");
   ensureSpace(doc, cursor, 37 + extraCommercialBlocks * 15, settings);
 
   doc.setFillColor(248, 248, 246);
@@ -1124,13 +1145,13 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
 
   doc.setDrawColor(214, 180, 95);
   doc.line(130, cursor.value + 4, 192, cursor.value + 4);
-  doc.setFillColor(15, 23, 42);
+  doc.setFillColor(23, 27, 38);
   doc.roundedRect(130, cursor.value + 5.5, 60, 24, 4, 4, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(214, 180, 95);
   doc.text("INVESTIMENTO", 160, cursor.value + 10.8, { align: "center" });
-  doc.setFontSize(17);
+  doc.setFontSize(15.5);
   doc.setTextColor(255, 255, 255);
   doc.text(formatCurrency(budgetData.total), 160, cursor.value + 21.8, { align: "center" });
 
