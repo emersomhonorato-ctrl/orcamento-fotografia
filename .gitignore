@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+backups
+.env
+public/assets/
+public/Assinatura copiar.png
+index.static-backup.html
+src-preview.html
