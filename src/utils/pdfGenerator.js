@@ -151,7 +151,7 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
     minHeight = 22,
     leadLineCount = 0,
   } = options;
-  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(lines || ""), 168);
+  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(lines || ""), 166);
   const resolvedMinHeight = Math.max(24, minHeight);
   const leadLines = Math.max(0, Math.min(leadLineCount, contentLines.length));
   const trailingLines = Math.max(0, contentLines.length - leadLines);
@@ -807,7 +807,7 @@ function prepareBudgetPdfData(record, settings = {}) {
   const normalizedPackageName = String(packageName || "").replace(/\s+/g, " ").trim().toLowerCase();
   const normalizedEventType = String(eventType || "").replace(/\s+/g, " ").trim().toLowerCase();
   const shouldShowPackageCard = normalizedPackageName && normalizedPackageName !== normalizedEventType;
-  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 168);
+  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 166);
   const firstPageWorkLineLimit = fullWorkLines.length > 16 ? 16 : fullWorkLines.length;
   const displayWorkLines = fullWorkLines.slice(0, firstPageWorkLineLimit);
   const remainingWorkLines = fullWorkLines.slice(firstPageWorkLineLimit);
@@ -1067,11 +1067,6 @@ function drawBudgetCommercialHighlight(doc, cursor, budgetData, settings) {
   doc.setTextColor(15, 23, 42);
   doc.text(formatCurrency(budgetData.total), 188, cursor.value + 15.2, { align: "right" });
 
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(7.8);
-  doc.setTextColor(148, 163, 184);
-  doc.text("Condições completas na próxima página.", 20, cursor.value + 20.5);
-
   cursor.value += 25;
 }
 
@@ -1093,9 +1088,6 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
   ].filter(Boolean);
   const reservedHeight = 8.5 + 37 + estimateBudgetSimpleCommercialBlocksHeight(doc, sections);
   if (cursor.value + reservedHeight > 268) {
-    if (cursor.value + 25 <= 279) {
-      drawBudgetCommercialHighlight(doc, cursor, budgetData, settings);
-    }
     doc.addPage();
     cursor.value = 18;
   }
