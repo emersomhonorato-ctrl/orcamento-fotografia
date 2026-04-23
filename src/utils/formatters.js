@@ -93,3 +93,130 @@ Qualquer dúvida, estamos à disposição.
 
 ${settings.emailSignature}`;
 }
+
+export function buildCommunicationMessage(record, settings = {}, kind = "confirmacao") {
+  const studioName = settings.studioName || "Emerson Honorato Retratos";
+  const serviceName = record.eventType || record.packageName || "seu atendimento";
+  const eventDate = record.eventDate ? formatDateBR(record.eventDate) : "a combinar";
+  const eventTime = record.startTime || "a combinar";
+  const location = record.location || "a combinar";
+  const amount = formatCurrency(record.computedAmount || record.amount || 0);
+  const amountPaid = formatCurrency(record.amountPaid || 0);
+  const balance = formatCurrency(Math.max(Number(record.computedAmount || record.amount || 0) - Number(record.amountPaid || 0), 0));
+  const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
+  const paymentTerms = record.contractPaymentMethod || settings.paymentTerms || "Forma de pagamento a combinar.";
+  const deliveryTerms = record.contractDeliveryTerms || "Entrega a combinar.";
+  const greeting = `Olá, ${record.clientName || "cliente"}!`;
+  const signature = settings.emailSignature || studioName;
+
+  if (kind === "proposta") {
+    return `${greeting}
+
+Preparei sua proposta para ${serviceName}.
+
+Data prevista: ${eventDate}
+Local: ${location}
+Investimento: ${amount}
+Validade da proposta: ${validityDays} dias
+
+Se quiser, posso seguir com a reserva da data e emissão do contrato.
+
+${signature}`;
+  }
+
+  if (kind === "contrato") {
+    return `${greeting}
+
+Seu contrato para ${serviceName} já está pronto.
+
+Data: ${eventDate}
+Local: ${location}
+Investimento: ${amount}
+
+Assim que me confirmar, seguimos com os próximos passos.
+
+${signature}`;
+  }
+
+  if (kind === "cobranca") {
+    return `${greeting}
+
+Passando para alinhar o pagamento referente a ${serviceName}.
+
+Valor total: ${amount}
+Valor já recebido: ${amountPaid}
+Saldo atual: ${balance}
+
+Condição combinada:
+${paymentTerms}
+
+Fico à disposição para te enviar os dados de pagamento.
+
+${signature}`;
+  }
+
+  if (kind === "entrega") {
+    return `${greeting}
+
+Seu material de ${serviceName} está em fase final de entrega.
+
+Data do atendimento: ${eventDate}
+Forma de entrega: ${deliveryTerms}
+
+Se precisar de qualquer ajuste final, me avise por aqui.
+
+${signature}`;
+  }
+
+  if (kind === "lembrete_hoje") {
+    return `${greeting}
+
+Passando para confirmar que seu ${serviceName} é hoje.
+
+Horário: ${eventTime}
+Local: ${location}
+
+Se precisar me sinalizar qualquer detalhe, fico à disposição.
+
+${signature}`;
+  }
+
+  if (kind === "lembrete") {
+    return `${greeting}
+
+Passando para lembrar do seu ${serviceName}.
+
+Data: ${eventDate}
+Horário: ${eventTime}
+Local: ${location}
+
+Qualquer ajuste ou dúvida, me chama por aqui.
+
+${signature}`;
+  }
+
+  return `${greeting}
+
+Estou entrando em contato sobre ${serviceName}.
+
+Data: ${eventDate}
+Horário: ${eventTime}
+Local: ${location}
+Investimento: ${amount}
+
+${signature}`;
+}
+
+export function buildCommunicationSubject(record, settings = {}, kind = "confirmacao") {
+  const studioName = settings.studioName || "Emerson Honorato Retratos";
+  const serviceName = record.eventType || record.packageName || "seu atendimento";
+
+  if (kind === "proposta") return `Proposta comercial - ${serviceName} | ${studioName}`;
+  if (kind === "contrato") return `Contrato pronto - ${serviceName} | ${studioName}`;
+  if (kind === "cobranca") return `Pagamento pendente - ${serviceName} | ${studioName}`;
+  if (kind === "entrega") return `Entrega do material - ${serviceName} | ${studioName}`;
+  if (kind === "lembrete_hoje") return `Lembrete de hoje - ${serviceName} | ${studioName}`;
+  if (kind === "lembrete") return `Lembrete do agendamento - ${serviceName} | ${studioName}`;
+
+  return `Atualização do atendimento - ${serviceName} | ${studioName}`;
+}

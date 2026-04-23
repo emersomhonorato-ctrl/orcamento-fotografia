@@ -1,69 +1,11 @@
-import { Plus, Trash2, Copy } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, getItemsTotal } from "@/utils/formatters";
-function applyClientToBudget(clientId) {
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) return;
 
-  setBudgetForm((prev) => ({
-    ...prev,
-    clientId: client.id,
-    clientName: client.name || "",
-    email: client.email || "",
-    phone: client.phone || "",
-    whatsapp: client.whatsapp || "",
-  }));
-}
-function addServiceToBudget(serviceId) {
-  const service = services.find((item) => item.id === serviceId);
-  if (!service) return;
-
-  const newItem = {
-    id: crypto.randomUUID(),
-    type: "Serviço",
-    name: service.name,
-    description: service.description || "",
-    quantity: 1,
-    unitPrice: Number(service.price || 0),
-  };
-
-  setBudgetForm((prev) => ({
-    ...prev,
-    items: [...(prev.items || []), newItem],
-  }));
-}
-function saveBudget() {
-  if (!budgetForm.clientName) {
-    alert("Selecione ou informe o cliente.");
-    return;
-  }
-
-  const total = (budgetForm.items || []).reduce(
-    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
-    0
-  );
-
-  const payload = {
-    ...budgetForm,
-    id: budgetForm.id || crypto.randomUUID(),
-    total,
-    updatedAt: new Date().toISOString(),
-    createdAt: budgetForm.createdAt || new Date().toISOString(),
-  };
-
-  setBudgets((prev) => {
-    const exists = prev.some((item) => item.id === payload.id);
-    return exists
-      ? prev.map((item) => (item.id === payload.id ? payload : item))
-      : [...prev, payload];
-  });
-
-  setBudgetModalOpen(false);
-}
 export default function BudgetItemsEditor({
   items,
   services,
