@@ -50,14 +50,12 @@ function drawSectionIcon(doc, x, y, type) {
     doc.circle(x + 2, y - 1.5, 1.8, "S");
     doc.line(x - 0.5, y + 3.5, x + 4.5, y + 3.5);
   } else if (type === "service") {
-    doc.roundedRect(x - 0.5, y - 2.5, 5, 5, 0.8, 0.8, "S");
-    doc.line(x + 0.5, y, x + 3.5, y);
-    doc.line(x + 0.5, y + 1.4, x + 2.5, y + 1.4);
+    doc.roundedRect(x - 0.8, y - 2, 6, 4.2, 0.8, 0.8, "S");
+    doc.circle(x + 2.2, y + 0.1, 1.2, "S");
   } else if (type === "commercial") {
-    doc.circle(x + 2, y, 2.2, "S");
-    doc.setFontSize(5.5);
-    doc.setTextColor(214, 180, 95);
-    doc.text("$", x + 1.4, y + 1, { align: "left" });
+    doc.circle(x + 2, y - 1, 2, "S");
+    doc.line(x + 2, y - 2.8, x + 2, y + 0.8);
+    doc.line(x + 0.6, y - 1.8, x + 3.4, y - 1.8);
   }
 
   doc.setLineWidth(0.2);
@@ -69,7 +67,7 @@ function drawFooter(doc, settings) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(166, 176, 192);
-  doc.text((settings.pdfFooter || "Obrigado pela oportunidade.").split("").join(" "), 105, 287, { align: "center" });
+  doc.text(settings.pdfFooter || "Obrigado pela oportunidade.", 105, 287, { align: "center" });
 }
 
 function ensureSpace(doc, cursor, amount, settings) {
@@ -124,7 +122,6 @@ function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
 function drawDocumentHeader(doc, settings, subtitle) {
   const logoFormat = getLogoFormatFromDataUrl(settings.logoDataUrl);
   const studioName = settings.studioName || "Emerson Honorato Retratos";
-  const spacedSubtitle = String(subtitle || "").split("").join(" ");
   const headerContacts = [
     settings.studioPhone,
     settings.studioEmail,
@@ -152,7 +149,13 @@ function drawDocumentHeader(doc, settings, subtitle) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
   doc.setTextColor(166, 176, 192);
-  doc.text(spacedSubtitle, settings.logoDataUrl ? 50 : 16, 28);
+  if (typeof doc.setCharSpace === "function") {
+    doc.setCharSpace(0.8);
+    doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
+    doc.setCharSpace(0);
+  } else {
+    doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
+  }
 
   if (headerContacts) {
     doc.setFontSize(8.5);
@@ -207,7 +210,7 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
 
 function drawBudgetTechnicalScopeCard(doc, cursor, title, items, options = {}) {
   const {
-    fill = [250, 250, 251],
+    fill = [246, 247, 249],
     accent = [191, 201, 214],
     textColor = [51, 65, 85],
   } = options;
@@ -1000,7 +1003,7 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
     budgetData.deliveryEntries.forEach((entry, index) => {
       const cardX = 16 + index * (cardWidth + cardGap);
       drawBudgetInfoCard(doc, cardX, cursor.value + 4.4, cardWidth, deliveryHeight, entry.label, entry.value, {
-        fill: index === 0 ? [255, 251, 240] : [255, 255, 255],
+        fill: index === 0 ? [255, 251, 240] : [248, 249, 251],
         accent: index === 0 ? [214, 180, 95] : [191, 201, 214],
         valueStrong: true,
         valueSize: 9.3,
