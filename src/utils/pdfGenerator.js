@@ -173,9 +173,9 @@ function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
     minHeight = 22,
     leadLineCount = 0,
   } = options;
-  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(lines || ""), 166);
+  const contentLines = Array.isArray(lines) ? lines : doc.splitTextToSize(String(fixSentenceSpacing(lines) || ""), 174);
   const resolvedMinHeight = Math.max(24, minHeight);
-  const leadLines = Math.max(0, Math.min(leadLineCount, contentLines.length));
+  const leadLines = getBudgetResolvedLeadLineCount(contentLines, leadLineCount);
   const trailingLines = Math.max(0, contentLines.length - leadLines);
   const leadHeight = leadLines * 4.8;
   const trailingHeight = trailingLines * 4.2;
@@ -233,38 +233,104 @@ function drawBudgetTechnicalScopeCard(doc, cursor, title, items, options = {}) {
   const contentHeight = Math.max(...columnHeights, 10);
   const cardHeight = Math.max(17, contentHeight + 8.6);
 
-  doc.setFillColor(...fill);
-  doc.roundedRect(16, cursor.value, 178, cardHeight, 4, 4, "F");
-  doc.setFillColor(...accent);
-  doc.roundedRect(16, cursor.value, 2.1, cardHeight, 1.2, 1.2, "F");
+  const drawCardFrame = (heading, y, height) => {
+    doc.setFillColor(...fill);
+    doc.roundedRect(16, y, 178, height, 4, 4, "F");
+    doc.setFillColor(...accent);
+    doc.roundedRect(16, y, 2.1, height, 1.2, 1.2, "F");
+    setPdfLabel(doc);
+    doc.text(heading, 20, y + 5.2);
+  };
 
-  setPdfLabel(doc);
-  doc.text(title, 20, cursor.value + 5.2);
+  const drawColumns = (heading) => {
+    drawCardFrame(heading, cursor.value, cardHeight);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.35);
+    doc.setTextColor(...textColor);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.35);
-  doc.setTextColor(...textColor);
+    const columnX = useTwoColumns ? [20, 108] : [20];
+    columns.forEach((column, columnIndex) => {
+      let y = cursor.value + 9.9;
+      column.forEach((wrapped) => {
+        doc.setFont("helvetica", "bold");
+        doc.text("•", columnX[columnIndex], y);
+        doc.setFont("helvetica", "normal");
+        doc.text(wrapped, columnX[columnIndex] + 4, y);
+        y += wrapped.length * 3.55 + 1.4;
+      });
+    });
 
-  const columnX = useTwoColumns ? [20, 108] : [20];
-  columns.forEach((column, columnIndex) => {
+    cursor.value += cardHeight + 6.5;
+  };
+
+  const pageTop = 18;
+  const pageBottom = 265;
+
+  if (cursor.value + cardHeight <= pageBottom) {
+    drawColumns(title);
+    return;
+  }
+
+  if (cardHeight <= pageBottom - pageTop) {
+    doc.addPage();
+    cursor.value = pageTop;
+    drawColumns(title);
+    return;
+  }
+
+  const wrappedItems = normalizedItems.map((item) => doc.splitTextToSize(item, 158.5));
+  let currentItems = [];
+  let currentHeight = 8.6;
+  let heading = title;
+
+  if (cursor.value + 17 > pageBottom) {
+    doc.addPage();
+    cursor.value = pageTop;
+  }
+
+  const flushScopePage = () => {
+    const height = Math.max(17, currentHeight);
+    drawCardFrame(heading, cursor.value, height);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.35);
+    doc.setTextColor(...textColor);
+
     let y = cursor.value + 9.9;
-    column.forEach((wrapped) => {
+    currentItems.forEach((wrapped) => {
       doc.setFont("helvetica", "bold");
-      doc.text("•", columnX[columnIndex], y);
+      doc.text("•", 20, y);
       doc.setFont("helvetica", "normal");
-      doc.text(wrapped, columnX[columnIndex] + 4, y);
+      doc.text(wrapped, 24, y);
       y += wrapped.length * 3.55 + 1.4;
     });
+
+    cursor.value += height + 6.5;
+    currentItems = [];
+    currentHeight = 8.6;
+  };
+
+  wrappedItems.forEach((wrapped) => {
+    const bulletHeight = wrapped.length * 3.55 + 1.4;
+    if (cursor.value + currentHeight + bulletHeight > pageBottom && currentItems.length) {
+      flushScopePage();
+      doc.addPage();
+      cursor.value = pageTop;
+      heading = `${title} (continuação)`;
+    }
+    currentItems.push(wrapped);
+    currentHeight += bulletHeight;
   });
 
-  cursor.value += cardHeight + 6.5;
+  if (currentItems.length) {
+    flushScopePage();
+  }
 }
 
 function estimateBudgetEditorialCardHeight(lines, options = {}) {
   const { minHeight = 22, leadLineCount = 0 } = options;
   const contentLines = Array.isArray(lines) ? lines : [];
   const resolvedMinHeight = Math.max(24, minHeight);
-  const leadLines = Math.max(0, Math.min(leadLineCount, contentLines.length));
+  const leadLines = getBudgetResolvedLeadLineCount(contentLines, leadLineCount);
   const trailingLines = Math.max(0, contentLines.length - leadLines);
   const leadHeight = leadLines * 5.45;
   const trailingHeight = trailingLines * 4.95;
@@ -272,7 +338,7 @@ function estimateBudgetEditorialCardHeight(lines, options = {}) {
 }
 
 function splitTextIntoBudgetParagraphLines(doc, text, width) {
-  return String(text || "")
+  return String(fixSentenceSpacing(text) || "")
     .replace(/\r\n/g, "\n")
     .split("\n")
     .flatMap((paragraph, index, arr) => {
@@ -286,7 +352,7 @@ function splitTextIntoBudgetParagraphLines(doc, text, width) {
 }
 
 function extractBulletLines(text) {
-  return String(text || "")
+  return String(fixSentenceSpacing(text) || "")
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.trim())
@@ -330,14 +396,13 @@ function buildBudgetNarrativeLines(budgetData) {
 function buildBudgetTechnicalScopeLines(doc, budgetData) {
   const bulletLines = extractBulletLines(budgetData.serviceSnapshot.itemDescription);
   if (bulletLines.length) {
-    return bulletLines.slice(0, 8);
+    return bulletLines;
   }
 
-  const sentenceChunks = String(budgetData.serviceSnapshot.itemDescription || "")
+  const sentenceChunks = String(fixSentenceSpacing(budgetData.serviceSnapshot.itemDescription) || "")
     .split(/(?<=[.!?])\s+/)
     .map((chunk) => chunk.trim())
     .filter(Boolean)
-    .slice(0, 8)
     .map((chunk) => chunk.replace(/[.;:]$/, ""));
 
   if (sentenceChunks.length) {
@@ -345,8 +410,7 @@ function buildBudgetTechnicalScopeLines(doc, budgetData) {
   }
 
   return splitTextIntoBudgetParagraphLines(doc, budgetData.serviceSnapshot.itemDescription, 164)
-    .filter((line) => String(line || "").trim())
-    .slice(0, 3);
+    .filter((line) => String(line || "").trim());
 }
 
 function estimateBudgetSimpleCommercialBlocksHeight(doc, sections) {
@@ -367,7 +431,8 @@ function buildBudgetItemDescriptionLines(
   options = {},
 ) {
   const { workDescriptionIsStructured = false, compact = false } = options;
-  const normalizedItemDescription = String(itemDescription || "")
+  const cleanedItemDescription = fixSentenceSpacing(itemDescription);
+  const normalizedItemDescription = String(cleanedItemDescription || "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -376,11 +441,11 @@ function buildBudgetItemDescriptionLines(
     return [];
   }
 
-  const bulletLines = extractBulletLines(itemDescription);
+  const bulletLines = extractBulletLines(cleanedItemDescription);
 
   const technicalLinesSource = bulletLines.length
     ? bulletLines.slice(0, compact ? 4 : workDescriptionIsStructured ? 3 : 5)
-    : String(itemDescription || "")
+    : String(cleanedItemDescription || "")
         .split(/(?<=[.!?])\s+/)
         .map((line) => line.trim())
         .filter(Boolean)
@@ -792,7 +857,7 @@ function sanitizeFilePart(value, fallback) {
 function buildReceiptPreview(record, settings = {}) {
   const receiptDate = record.receiptDate ? formatDateBR(record.receiptDate) : formatDateBR(getTodayLocalISO());
   const receiptMethod = record.receiptMethod || "A combinar";
-  const receiptReference = record.receiptReference || "Sem observações adicionais.";
+  const receiptReference = fixSentenceSpacing(record.receiptReference) || "Sem observações adicionais.";
   const studioName = settings.studioName || "Emerson Honorato Retratos";
   const studioDocument = settings.studioDocument || "-";
 
@@ -808,6 +873,26 @@ function buildReceiptPreview(record, settings = {}) {
   ].join("\n");
 }
 
+function fixSentenceSpacing(text) {
+  if (!text) return text;
+  return String(text).replace(/([.!?])([A-ZÀ-Ú])/g, "$1 $2");
+}
+
+function getBudgetResolvedLeadLineCount(lines, requestedLineCount) {
+  let lineCount = Math.max(0, Math.min(requestedLineCount, lines.length));
+
+  while (lineCount < lines.length) {
+    const leadText = lines.slice(0, lineCount).join(" ");
+    const openParentheses = (leadText.match(/\(/g) || []).length;
+    const closeParentheses = (leadText.match(/\)/g) || []).length;
+
+    if (openParentheses <= closeParentheses) break;
+    lineCount += 1;
+  }
+
+  return lineCount;
+}
+
 function prepareBudgetPdfData(record, settings = {}) {
   const clientName = record.clientName || "Cliente não informado";
   const eventType = record.eventType || "Serviço não informado";
@@ -818,18 +903,21 @@ function prepareBudgetPdfData(record, settings = {}) {
   const photoSize = String(record.photoSize || "").trim();
   const onlinePhotosCount = Number(record.onlinePhotosCount || 0);
   const printedPhotosCount = Number(record.editedPhotosCount || 0);
-  const items = normalizeItems(record.items || []);
+  const items = normalizeItems(record.items || []).map((item) => ({
+    ...item,
+    description: fixSentenceSpacing(item.description || ""),
+  }));
   const total = items.length > 0 ? getItemsTotal(items) : Number(record.amount || 0);
   const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
   const paymentTerms = settings.paymentTerms || "Condição de pagamento a combinar.";
-  const notes = record.notes || "";
-  const workDescription = (record.budgetDescription || "").trim() || "Cobertura e entrega conforme combinado.";
+  const notes = fixSentenceSpacing(record.notes || "");
+  const workDescription = (fixSentenceSpacing(record.budgetDescription) || "").trim() || "Cobertura e entrega conforme combinado.";
   const normalizedWorkDescription = workDescription.replace(/\s+/g, " ").trim().toLowerCase();
   const workDescriptionIsStructured = extractBulletLines(workDescription).length >= 2;
   const normalizedPackageName = String(packageName || "").replace(/\s+/g, " ").trim().toLowerCase();
   const normalizedEventType = String(eventType || "").replace(/\s+/g, " ").trim().toLowerCase();
   const shouldShowPackageCard = normalizedPackageName && normalizedPackageName !== normalizedEventType;
-  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 166);
+  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 174);
   const firstPageWorkLineLimit = fullWorkLines.length > 16 ? 16 : fullWorkLines.length;
   const displayWorkLines = fullWorkLines.slice(0, firstPageWorkLineLimit);
   const remainingWorkLines = fullWorkLines.slice(firstPageWorkLineLimit);
@@ -843,14 +931,14 @@ function prepareBudgetPdfData(record, settings = {}) {
       : [{ id: "single", name: packageName, description: "", quantity: 1, unitPrice: total }];
   const serviceSnapshot = {
     category: String(record.category || "").trim(),
-    itemDescription: String(record.serviceItemsSnapshot || "").trim(),
-    workDescription: String(record.serviceDescriptionSnapshot || record.budgetDescription || "").trim(),
-    paymentTerms: String(record.contractPaymentMethod || settings.paymentTerms || "").trim(),
-    deliveryTerms: String(record.contractDeliveryTerms || "").trim(),
-    commercialNotes: String(record.notes || "").trim(),
-    contractNotes: String(record.contractNotes || "").trim(),
+    itemDescription: String(fixSentenceSpacing(record.serviceItemsSnapshot) || "").trim(),
+    workDescription: String(fixSentenceSpacing(record.serviceDescriptionSnapshot || record.budgetDescription) || "").trim(),
+    paymentTerms: String(fixSentenceSpacing(record.contractPaymentMethod || settings.paymentTerms) || "").trim(),
+    deliveryTerms: String(fixSentenceSpacing(record.contractDeliveryTerms) || "").trim(),
+    commercialNotes: String(fixSentenceSpacing(record.notes) || "").trim(),
+    contractNotes: String(fixSentenceSpacing(record.contractNotes) || "").trim(),
     receiptMethod: String(record.receiptMethod || "").trim(),
-    receiptReference: String(record.receiptReference || "").trim(),
+    receiptReference: String(fixSentenceSpacing(record.receiptReference) || "").trim(),
     budgetValidityDays: validityDays,
     recommendedDeliveryDays: Number(record.recommendedDeliveryDays || 0),
   };
@@ -1111,7 +1199,7 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     budgetData.serviceSnapshot.receiptReference ? { title: "Referência de recibo", value: budgetData.serviceSnapshot.receiptReference } : null,
   ].filter(Boolean);
   const reservedHeight = 8.5 + 37 + estimateBudgetSimpleCommercialBlocksHeight(doc, sections);
-  if (cursor.value + reservedHeight > 268) {
+  if (cursor.value + reservedHeight > 275) {
     doc.addPage();
     cursor.value = 18;
   }
@@ -1556,10 +1644,10 @@ export function generateEventPDF(record, settings = {}) {
   const location = record.location || "Local a combinar";
   const amount = Number(record.computedAmount || record.amount || 0);
   const amountPaid = Number(record.amountPaid || 0);
-  const serviceSummary = String(record.serviceDescriptionSnapshot || record.budgetDescription || "").trim();
-  const notes = String(record.notes || "").trim();
-  const deliveryTerms = String(record.contractDeliveryTerms || "").trim();
-  const paymentTerms = String(record.contractPaymentMethod || settings.paymentTerms || "").trim();
+  const serviceSummary = String(fixSentenceSpacing(record.serviceDescriptionSnapshot || record.budgetDescription) || "").trim();
+  const notes = String(fixSentenceSpacing(record.notes) || "").trim();
+  const deliveryTerms = String(fixSentenceSpacing(record.contractDeliveryTerms) || "").trim();
+  const paymentTerms = String(fixSentenceSpacing(record.contractPaymentMethod || settings.paymentTerms) || "").trim();
   const cursor = { value: 56 };
   const eventSummary = [
     eventDate,
