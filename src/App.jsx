@@ -407,8 +407,23 @@ export default function App() {
   );
 
   const nextUpcomingEvent = useMemo(() => {
-    return filteredEvents[0] || null;
-  }, [filteredEvents]);
+    const today = new Date(`${getTodayLocalISO()}T00:00:00`);
+
+    return onlyEvents
+      .filter((record) => {
+        if (!record.eventDate || record.status === "Cancelado") return false;
+
+        const eventDate = new Date(`${record.eventDate}T00:00:00`);
+        if (Number.isNaN(eventDate.getTime())) return false;
+
+        return eventDate >= today;
+      })
+      .sort((a, b) => {
+        const aDate = combineDateTime(a.eventDate, a.startTime || "00:00")?.getTime() || 0;
+        const bDate = combineDateTime(b.eventDate, b.startTime || "00:00")?.getTime() || 0;
+        return aDate - bDate;
+      })[0] || null;
+  }, [onlyEvents]);
 
   const selectedDayRevenue = useMemo(
     () => selectedDayEvents.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0),
@@ -1784,8 +1799,8 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="mt-6 rounded-[28px] border border-dashed border-rose-200 bg-white/70 p-8 text-center text-slate-500">
-                      <p className="font-medium text-slate-700">Nenhum compromisso agendado ainda</p>
-                      <p className="mt-2 text-sm">Crie seu primeiro evento para começar a visualizar o painel executivo do estúdio.</p>
+                      <p className="font-medium text-slate-700">Nenhum compromisso futuro agendado</p>
+                      <p className="mt-2 text-sm">Agende uma nova data para visualizar o próximo compromisso do estúdio.</p>
                       <Button onClick={() => openNewEventModal(selectedDate)} className="mt-4 rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]">
                         <Plus className="mr-2 h-4 w-4" />
                         Novo agendamento
