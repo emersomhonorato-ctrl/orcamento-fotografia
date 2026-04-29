@@ -29,3 +29,5 @@ public/assets/
 public/Assinatura copiar.png
 index.static-backup.html
 src-preview.html
+.codex-staging/
+/tmp/orcamento-*

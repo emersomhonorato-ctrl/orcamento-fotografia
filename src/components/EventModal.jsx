@@ -41,7 +41,7 @@ export default function EventModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[28px] sm:max-w-5xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[28px] sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
         </DialogHeader>
@@ -406,7 +406,7 @@ export default function EventModal({
             />
           </div>
         </div>
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="sticky bottom-0 -mx-6 flex flex-col gap-2 border-t bg-white px-6 pt-4 pb-2 sm:flex-row sm:justify-between">
           <Button variant="outline" onClick={onCancel} className="rounded-2xl">
             <X className="mr-2 h-4 w-4" />
             Cancelar
