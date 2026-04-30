@@ -33,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import CalendarMini from "@/components/CalendarMini";
 import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
 import ServiceModal from "@/components/ServiceModal";
@@ -117,93 +118,6 @@ function MetricCard({ title, value, subtitle, icon }) {
             <p className={`mt-5 whitespace-nowrap font-semibold leading-none tracking-tight text-slate-900 ${valueClassName}`}>{value}</p>
             {subtitle ? <p className="mt-4 max-w-[15ch] text-[13px] leading-6 text-slate-500">{subtitle}</p> : null}
           </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CalendarMini({ events, selectedDate, onSelectDate }) {
-  const today = getTodayLocalISO();
-  const baseDate = useMemo(() => {
-    return selectedDate ? new Date(`${selectedDate}T12:00:00`) : new Date(`${today}T12:00:00`);
-  }, [selectedDate, today]);
-
-  const month = baseDate.getMonth();
-  const year = baseDate.getFullYear();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startWeekDay = firstDay.getDay();
-  const totalDays = lastDay.getDate();
-
-  const days = [];
-  for (let i = 0; i < startWeekDay; i += 1) days.push(null);
-  for (let day = 1; day <= totalDays; day += 1) days.push(day);
-
-  const eventCountByDate = useMemo(() => {
-    const next = new Map();
-    events.forEach((event) => {
-      if (!event.eventDate || event.recordType !== "evento") return;
-      next.set(event.eventDate, (next.get(event.eventDate) || 0) + 1);
-    });
-    return next;
-  }, [events]);
-
-  const monthName = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(baseDate);
-
-  function isoForDay(day) {
-    const monthValue = String(month + 1).padStart(2, "0");
-    const dayValue = String(day).padStart(2, "0");
-    return `${year}-${monthValue}-${dayValue}`;
-  }
-
-  return (
-    <Card className="studio-panel rounded-3xl border-0 shadow-sm backdrop-blur">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg capitalize">
-          <CalendarDays className="h-5 w-5" />
-          {monthName}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500">
-          {["D", "S", "T", "Q", "Q", "S", "S"].map((dayLabel, index) => (
-            <div key={`${dayLabel}-${index}`}>{dayLabel}</div>
-          ))}
-        </div>
-        <div className="mt-2 grid grid-cols-7 gap-2">
-          {days.map((day, index) => {
-            if (!day) return <div key={`empty-${index}`} className="h-10 rounded-xl" />;
-
-            const iso = isoForDay(day);
-            const count = eventCountByDate.get(iso) || 0;
-            const active = selectedDate === iso;
-            const isToday = iso === today;
-
-            return (
-              <button
-                key={iso}
-                type="button"
-                onClick={() => onSelectDate(iso)}
-                className={`relative h-10 rounded-xl border text-sm font-medium transition hover:scale-[1.02] ${
-                  active
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : isToday
-                      ? "border-slate-300 bg-slate-100 text-slate-900"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {day}
-                {count > 0 ? (
-                  <span
-                    className={`absolute bottom-1 right-1 inline-flex h-2.5 w-2.5 rounded-full ${
-                      active ? "bg-white" : "bg-slate-900"
-                    }`}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
         </div>
       </CardContent>
     </Card>
