@@ -660,10 +660,10 @@ function _drawBudgetTailPage(doc, cursor, budgetData, settings, studioName, opti
 }
 
 function drawCompanySignatureBlock(doc, cursor, companyLabel, settings, options = {}) {
-  const { compact = false } = options;
+  const { compact = false, caption = "" } = options;
   const hasSignatureImage = Boolean(settings.signatureDataUrl);
   const imageHeight = compact ? 14 : 18;
-  const blockReserve = hasSignatureImage ? (compact ? 32 : 40) : compact ? 22 : 28;
+  const blockReserve = (hasSignatureImage ? (compact ? 32 : 40) : compact ? 22 : 28) + (caption ? 4 : 0);
   ensureSpace(doc, cursor, blockReserve, settings);
   cursor.value += compact ? 4 : 6;
 
@@ -675,6 +675,13 @@ function drawCompanySignatureBlock(doc, cursor, companyLabel, settings, options 
     } catch {
       // Se a imagem falhar, seguimos com a assinatura em texto sem quebrar o PDF.
     }
+  }
+
+  if (caption) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(caption, 105, cursor.value - 2, { align: "center" });
   }
 
   doc.setDrawColor(148, 163, 184);
@@ -727,6 +734,28 @@ function toTitleCase(str) {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatCPF(cpf) {
+  if (!cpf) return "";
+  const digits = String(cpf).replace(/\D/g, "");
+  if (digits.length !== 11) return cpf;
+  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+function formatCNPJ(cnpj) {
+  if (!cnpj) return "";
+  const digits = String(cnpj).replace(/\D/g, "");
+  if (digits.length !== 14) return cnpj;
+  return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+}
+
+function formatTaxId(value) {
+  if (!value) return "";
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length === 11) return formatCPF(digits);
+  if (digits.length === 14) return formatCNPJ(digits);
+  return value;
 }
 
 function toContractCityTitleCase(value, fallback = "Criciúma") {
@@ -1023,18 +1052,19 @@ function buildReceiptPreview(record, settings = {}) {
   const receiptDate = record.receiptDate ? formatDateBR(record.receiptDate) : formatDateBR(getTodayLocalISO());
   const receiptMethod = record.receiptMethod || "A combinar";
   const receiptReference = fixSentenceSpacing(record.receiptReference) || "Sem observações adicionais.";
+  const receiptReferenceText = /[.!?]$/.test(receiptReference) ? receiptReference : `${receiptReference}.`;
   const studioName = settings.studioName || "Emerson Honorato Retratos";
   const studioDocument = settings.studioDocument || "-";
 
   return [
-    `Recebi de ${record.clientName || "-"}, CPF ${record.clientCpf || "-"}, o valor de ${formatCurrency(record.amountPaid || 0)}, referente ao serviço ${record.eventType || record.packageName || "-"}` +
+    `Recebi de ${record.clientName || "-"}, CPF ${formatTaxId(record.clientCpf) || "-"}, o valor de ${formatCurrency(record.amountPaid || 0)}, referente ao serviço ${record.eventType || record.packageName || "-"}` +
       `${record.eventDate ? ` previsto/realizado em ${formatDateBR(record.eventDate)}` : ""}.`,
     `Data do recebimento: ${receiptDate}.`,
     `Forma de pagamento: ${receiptMethod}.`,
-    `Referência: ${receiptReference}.`,
+    `Referência: ${receiptReferenceText}`,
     "",
     `${studioName}`,
-    `CNPJ: ${studioDocument}`,
+    `CNPJ: ${formatTaxId(studioDocument) || "-"}`,
   ].join("\n");
 }
 
@@ -2030,7 +2060,7 @@ export function generateReceiptPDF(record, settings = {}) {
   doc.setTextColor(100, 116, 139);
   doc.text("Cliente", 20, cursor.value + 6);
   doc.text("Valor recebido", 81, cursor.value + 6);
-  doc.text("Saldo", 142, cursor.value + 6);
+  doc.text("Saldo restante", 142, cursor.value + 6);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
@@ -2075,21 +2105,7 @@ export function generateReceiptPDF(record, settings = {}) {
   doc.text(previewLines, 20, cursor.value + 8);
   cursor.value += previewHeight + 8;
 
-  if (record.receiptReference) {
-    ensureSpace(doc, cursor, 30, settings);
-    drawSectionTitle(doc, cursor, "Referencia");
-    const referenceLines = doc.splitTextToSize(record.receiptReference, 170);
-    const referenceHeight = Math.max(18, referenceLines.length * 5 + 8);
-    doc.setFillColor(243, 246, 250);
-    doc.roundedRect(16, cursor.value, 178, referenceHeight, 3, 3, "F");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text(referenceLines, 20, cursor.value + 8);
-    cursor.value += referenceHeight + 8;
-  }
-
-  drawCompanySignatureBlock(doc, cursor, studioName, settings);
+  drawCompanySignatureBlock(doc, cursor, studioName, settings, { caption: "Assinatura do recebedor" });
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
