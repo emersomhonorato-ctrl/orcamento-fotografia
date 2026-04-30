@@ -361,6 +361,23 @@ function extractBulletLines(text) {
     .filter(Boolean);
 }
 
+function removeBudgetBulletLines(text) {
+  return String(fixSentenceSpacing(text) || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => !/^[-•]/.test(line.trim()))
+    .join("\n")
+    .trim();
+}
+
+function buildBudgetSentenceScopeItems(text) {
+  return String(fixSentenceSpacing(text) || "")
+    .split(/(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/[.;:]$/, ""));
+}
+
 function drawBudgetFieldValue(doc, text, x, y, width) {
   const normalized = String(text || "").trim().toLowerCase();
   const isPending = normalized === "a definir";
@@ -1098,10 +1115,21 @@ function prepareBudgetPdfData(record, settings = {}) {
   const photoSize = String(record.photoSize || "").trim();
   const onlinePhotosCount = Number(record.onlinePhotosCount || 0);
   const printedPhotosCount = Number(record.editedPhotosCount || 0);
-  const items = normalizeItems(record.items || []).map((item) => ({
-    ...item,
-    description: fixSentenceSpacing(item.description || ""),
-  }));
+  const rawItems = Array.isArray(record.items) ? record.items : [];
+  const items = normalizeItems(record.items || []).map((item, index) => {
+    const source = rawItems[index] && typeof rawItems[index] === "object" ? rawItems[index] : {};
+    const scopeItems = Array.isArray(source.scopeItems)
+      ? source.scopeItems.map((scopeItem) => String(fixSentenceSpacing(scopeItem) || "").trim()).filter(Boolean)
+      : [];
+
+    return {
+      ...item,
+      description: String(fixSentenceSpacing(source.description || item.description || "") || "").trim(),
+      itemDescription: String(fixSentenceSpacing(source.itemDescription || source.serviceItemsSnapshot || "") || "").trim(),
+      workDescription: String(fixSentenceSpacing(source.workDescription || source.serviceDescription || source.serviceDescriptionSnapshot || "") || "").trim(),
+      scopeItems,
+    };
+  });
   const total = items.length > 0 ? getItemsTotal(items) : Number(record.amount || 0);
   const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
   const paymentTerms = settings.paymentTerms || "Condição de pagamento a combinar.";
@@ -1658,6 +1686,66 @@ function drawBudgetItemsSection(doc, cursor, budgetData, settings, options = {})
   return needsNextPageForBudgetItems;
 }
 
+function buildBudgetMultiItemDescriptionLines(doc, item, width = 164) {
+  const workDescription = String(item.workDescription || "").trim();
+  const description = removeBudgetBulletLines(item.description || "");
+  const descriptionSource = workDescription || description;
+
+  return splitTextIntoBudgetParagraphLines(doc, descriptionSource, width)
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+}
+
+function buildBudgetMultiItemScopeItems(item) {
+  if (Array.isArray(item.scopeItems) && item.scopeItems.length) {
+    return item.scopeItems;
+  }
+
+  const itemDescription = String(item.itemDescription || "").trim();
+  const description = String(item.description || "").trim();
+  const workDescription = String(item.workDescription || "").trim();
+  const candidates = [itemDescription, description, workDescription].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const bulletLines = extractBulletLines(candidate);
+    if (bulletLines.length) return bulletLines;
+  }
+
+  if (itemDescription) {
+    return buildBudgetSentenceScopeItems(itemDescription);
+  }
+
+  return [];
+}
+
+function drawBudgetMultiItemTotalsRow(doc, cursor, quantity, unitPrice, subtotal, settings) {
+  ensureSpace(doc, cursor, 16, settings);
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(20, cursor.value, 170, 13, 4, 4, "F");
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(20, cursor.value, 170, 13, 4, 4, "S");
+
+  const details = [
+    { label: "Qtd", value: String(quantity), x: 28, align: "left" },
+    { label: "Unitário", value: formatCurrency(unitPrice), x: 104, align: "right" },
+    { label: "Total", value: formatCurrency(subtotal), x: 184, align: "right", bold: true },
+  ];
+
+  details.forEach((detail) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.2);
+    doc.setTextColor(100, 116, 139);
+    doc.text(detail.label, detail.x, cursor.value + 5, { align: detail.align });
+    doc.setFont("helvetica", detail.bold ? "bold" : "normal");
+    doc.setFontSize(detail.bold ? 9 : 8.4);
+    doc.setTextColor(detail.bold ? 15 : 55, detail.bold ? 23 : 65, detail.bold ? 42 : 81);
+    doc.text(detail.value, detail.x, cursor.value + 10, { align: detail.align });
+  });
+
+  cursor.value += 17;
+}
+
 function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
   drawSectionTitle(doc, cursor, "Itens do orçamento", "service");
 
@@ -1666,11 +1754,15 @@ function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
     const quantity = Number(item.quantity || 1);
     const unitPrice = Number(item.unitPrice || 0);
     const subtotal = quantity * unitPrice;
-    const titleLines = doc.splitTextToSize(itemName, 100);
-    const descriptionLines = item.description
-      ? splitTextIntoBudgetParagraphLines(doc, item.description, 100).slice(0, 2)
-      : [];
-    const cardHeight = Math.max(32, 13 + titleLines.length * 4.8 + descriptionLines.length * 4.1);
+    const titleLines = doc.splitTextToSize(itemName, 158);
+    const descriptionLines = buildBudgetMultiItemDescriptionLines(doc, item);
+    const scopeItems = buildBudgetMultiItemScopeItems(item);
+    const cardHeight = Math.max(24, 13 + titleLines.length * 4.8);
+
+    if (cursor.value > 240) {
+      doc.addPage();
+      cursor.value = 18;
+    }
 
     ensureSpace(doc, cursor, cardHeight + 6, settings);
 
@@ -1689,37 +1781,38 @@ function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
     setPdfBodyStrong(doc);
     doc.text(titleLines, 22, cursor.value + 13);
 
+    cursor.value += cardHeight + 5.5;
+
     if (descriptionLines.length) {
-      doc.setDrawColor(232, 236, 242);
-      doc.line(22, cursor.value + 14.8 + titleLines.length * 4.8, 118, cursor.value + 14.8 + titleLines.length * 4.8);
-      setPdfSmall(doc);
-      doc.setFontSize(8.3);
-      doc.setTextColor(88, 102, 124);
-      doc.text(descriptionLines, 22, cursor.value + 18.8 + titleLines.length * 4.8);
+      ensureSpace(doc, cursor, estimateBudgetEditorialCardHeight(descriptionLines, {
+        minHeight: 18,
+        leadLineCount: Math.min(1, descriptionLines.length),
+      }), settings);
+      drawBudgetEditorialCard(doc, cursor, "Descrição do serviço", descriptionLines, {
+        fill: [252, 252, 253],
+        accent: [214, 180, 95],
+        bodyColor: [30, 41, 59],
+        minHeight: 18,
+        leadLineCount: Math.min(1, descriptionLines.length),
+      });
     }
 
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(132, cursor.value + 5, 58, cardHeight - 10, 4, 4, "F");
+    if (scopeItems.length) {
+      drawBudgetTechnicalScopeCard(doc, cursor, "Escopo", scopeItems, {
+        fill: [246, 247, 249],
+        accent: [191, 201, 214],
+        textColor: [51, 65, 85],
+      });
+    }
 
-    const details = [
-      { label: "Qtd", value: String(quantity), bold: false },
-      { label: "Unitário", value: formatCurrency(unitPrice), bold: false },
-      { label: "Total", value: formatCurrency(subtotal), bold: true },
-    ];
+    drawBudgetMultiItemTotalsRow(doc, cursor, quantity, unitPrice, subtotal, settings);
 
-    details.forEach((detail, detailIndex) => {
-      const rowY = cursor.value + 10 + detailIndex * 6.4;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.setTextColor(100, 116, 139);
-      doc.text(detail.label, 136, rowY);
-      doc.setFont("helvetica", detail.bold ? "bold" : "normal");
-      doc.setFontSize(detail.bold ? 8.7 : 8.1);
-      doc.setTextColor(detail.bold ? 15 : 55, detail.bold ? 23 : 65, detail.bold ? 42 : 81);
-      doc.text(detail.value, 187, rowY, { align: "right" });
-    });
-
-    cursor.value += cardHeight + 5.5;
+    if (index < budgetData.renderedItems.length - 1) {
+      ensureSpace(doc, cursor, 6, settings);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(20, cursor.value, 190, cursor.value);
+      cursor.value += 6;
+    }
   });
 
   ensureSpace(doc, cursor, 23, settings);
