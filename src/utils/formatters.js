@@ -58,9 +58,13 @@ export function normalizeItems(items = []) {
 
   return items.map((item) => ({
     id: item.id || crypto.randomUUID(),
+    serviceId: item.serviceId || "",
     type: item.type || "Serviço",
     name: item.name || "",
     description: item.description || "",
+    itemDescription: item.itemDescription || "",
+    workDescription: item.workDescription || "",
+    scopeItems: Array.isArray(item.scopeItems) ? item.scopeItems : [],
     quantity: Number(item.quantity || 1),
     unitPrice: Number(item.unitPrice || 0),
   }));
