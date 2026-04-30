@@ -1450,7 +1450,7 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     budgetData.serviceSnapshot.receiptReference ? { title: "Referência de recibo", value: budgetData.serviceSnapshot.receiptReference } : null,
   ].filter(Boolean);
   const reservedHeight = 8.5 + 37 + estimateBudgetSimpleCommercialBlocksHeight(doc, sections);
-  if (cursor.value + reservedHeight > 275) {
+  if (cursor.value + reservedHeight > 282) {
     doc.addPage();
     cursor.value = 18;
   }
@@ -1485,10 +1485,12 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
     });
   }
 
-  doc.setDrawColor(214, 180, 95);
-  doc.line(130, cursor.value + 4, 192, cursor.value + 4);
   doc.setFillColor(23, 27, 38);
   doc.roundedRect(130, cursor.value + 5.5, 60, 24, 4, 4, "F");
+  doc.setDrawColor(214, 180, 95);
+  doc.setLineWidth(0.5);
+  doc.line(134, cursor.value + 3.5, 188, cursor.value + 3.5);
+  doc.setLineWidth(0.2);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(214, 180, 95);
@@ -1845,19 +1847,21 @@ function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
     }
   });
 
-  ensureSpace(doc, cursor, 23, settings);
+  ensureSpace(doc, cursor, 24, settings);
+  doc.setFillColor(23, 27, 38);
+  doc.roundedRect(116, cursor.value, 78, 18, 4, 4, "F");
   doc.setDrawColor(214, 180, 95);
-  doc.line(112, cursor.value + 3, 194, cursor.value + 3);
-  drawBudgetInfoCard(doc, 112, cursor.value + 4.5, 82, 16, "Total geral", formatCurrency(budgetData.total), {
-    fill: [23, 27, 38],
-    accent: [214, 180, 95],
-    valueStrong: true,
-    valueSize: 12,
-    valueColor: [255, 255, 255],
-    labelColor: [214, 180, 95],
-    radius: 4,
-  });
-  cursor.value += 25;
+  doc.setLineWidth(0.5);
+  doc.line(120, cursor.value - 2, 190, cursor.value - 2);
+  doc.setLineWidth(0.2);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(214, 180, 95);
+  doc.text("TOTAL GERAL", 155, cursor.value + 5, { align: "center" });
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text(formatCurrency(budgetData.total), 155, cursor.value + 13.5, { align: "center" });
+  cursor.value += 22;
 }
 
 function _shouldPushBudgetClosureToNextPage(cursor) {
