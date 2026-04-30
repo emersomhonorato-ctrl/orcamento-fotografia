@@ -378,6 +378,29 @@ function buildBudgetSentenceScopeItems(text) {
     .map((line) => line.replace(/[.;:]$/, ""));
 }
 
+function normalizeBudgetServiceCatalog(record, settings) {
+  const serviceCatalog =
+    (Array.isArray(record.serviceCatalog) && record.serviceCatalog) ||
+    (Array.isArray(record.services) && record.services) ||
+    (Array.isArray(settings.serviceCatalog) && settings.serviceCatalog) ||
+    (Array.isArray(settings.services) && settings.services) ||
+    [];
+
+  return serviceCatalog.filter((service) => service && typeof service === "object");
+}
+
+function findBudgetServiceForItem(item, services) {
+  if (!item || !Array.isArray(services) || !services.length) return null;
+  const serviceId = String(item.serviceId || item.service_id || "").trim();
+  const serviceName = String(item.name || item.serviceName || item.eventType || item.packageName || "").trim().toLowerCase();
+
+  return services.find((service) => {
+    const idMatches = serviceId && String(service.id || "").trim() === serviceId;
+    const nameMatches = serviceName && String(service.name || "").trim().toLowerCase() === serviceName;
+    return idMatches || nameMatches;
+  }) || null;
+}
+
 function drawBudgetFieldValue(doc, text, x, y, width) {
   const normalized = String(text || "").trim().toLowerCase();
   const isPending = normalized === "a definir";
@@ -1116,17 +1139,22 @@ function prepareBudgetPdfData(record, settings = {}) {
   const onlinePhotosCount = Number(record.onlinePhotosCount || 0);
   const printedPhotosCount = Number(record.editedPhotosCount || 0);
   const rawItems = Array.isArray(record.items) ? record.items : [];
+  const serviceCatalog = normalizeBudgetServiceCatalog(record, settings);
   const items = normalizeItems(record.items || []).map((item, index) => {
     const source = rawItems[index] && typeof rawItems[index] === "object" ? rawItems[index] : {};
+    const service = findBudgetServiceForItem(source, serviceCatalog);
     const scopeItems = Array.isArray(source.scopeItems)
       ? source.scopeItems.map((scopeItem) => String(fixSentenceSpacing(scopeItem) || "").trim()).filter(Boolean)
+      : Array.isArray(service?.scopeItems)
+        ? service.scopeItems.map((scopeItem) => String(fixSentenceSpacing(scopeItem) || "").trim()).filter(Boolean)
       : [];
 
     return {
       ...item,
-      description: String(fixSentenceSpacing(source.description || item.description || "") || "").trim(),
-      itemDescription: String(fixSentenceSpacing(source.itemDescription || source.serviceItemsSnapshot || "") || "").trim(),
-      workDescription: String(fixSentenceSpacing(source.workDescription || source.serviceDescription || source.serviceDescriptionSnapshot || "") || "").trim(),
+      serviceId: source.serviceId || service?.id || item.serviceId || "",
+      description: String(fixSentenceSpacing(source.description || item.description || service?.itemDescription || service?.workDescription || "") || "").trim(),
+      itemDescription: String(fixSentenceSpacing(source.itemDescription || source.serviceItemsSnapshot || item.itemDescription || service?.itemDescription || "") || "").trim(),
+      workDescription: String(fixSentenceSpacing(source.workDescription || source.serviceDescription || source.serviceDescriptionSnapshot || item.workDescription || service?.workDescription || "") || "").trim(),
       scopeItems,
     };
   });
@@ -1689,7 +1717,8 @@ function drawBudgetItemsSection(doc, cursor, budgetData, settings, options = {})
 function buildBudgetMultiItemDescriptionLines(doc, item, width = 164) {
   const workDescription = String(item.workDescription || "").trim();
   const description = removeBudgetBulletLines(item.description || "");
-  const descriptionSource = workDescription || description;
+  const hasStructuredDescription = extractBulletLines(item.description || "").length > 0;
+  const descriptionSource = hasStructuredDescription ? description : workDescription || description;
 
   return splitTextIntoBudgetParagraphLines(doc, descriptionSource, width)
     .map((line) => String(line || "").trim())
@@ -1759,7 +1788,8 @@ function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
     const scopeItems = buildBudgetMultiItemScopeItems(item);
     const cardHeight = Math.max(24, 13 + titleLines.length * 4.8);
 
-    if (cursor.value > 240) {
+    const minItemHeight = 50;
+    if (cursor.value + minItemHeight > 280) {
       doc.addPage();
       cursor.value = 18;
     }

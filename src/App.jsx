@@ -749,9 +749,13 @@ export default function App() {
 
     return {
       id: crypto.randomUUID(),
+      serviceId: service.id || "",
       type: "Serviço",
       name: service.name || "",
       description: service.itemDescription || service.workDescription || "",
+      itemDescription: service.itemDescription || "",
+      workDescription: service.workDescription || "",
+      scopeItems: Array.isArray(service.scopeItems) ? service.scopeItems : [],
       quantity: 1,
       unitPrice: Number(service.price || 0),
     };
@@ -955,9 +959,35 @@ export default function App() {
 
   function getRecordForBudgetPDF(record) {
     const service = services.find((item) => item.name === record.eventType || item.name === record.packageName);
+    const enrichedItems = Array.isArray(record.items)
+      ? record.items.map((budgetItem) => {
+          const matchedService = services.find((item) =>
+            (budgetItem.serviceId && item.id === budgetItem.serviceId) ||
+            item.name === budgetItem.name ||
+            item.name === budgetItem.serviceName ||
+            item.name === budgetItem.eventType ||
+            item.name === budgetItem.packageName,
+          );
+
+          return {
+            ...budgetItem,
+            serviceId: budgetItem.serviceId || matchedService?.id || "",
+            description: budgetItem.description || matchedService?.itemDescription || matchedService?.workDescription || "",
+            itemDescription: budgetItem.itemDescription || matchedService?.itemDescription || "",
+            workDescription: budgetItem.workDescription || matchedService?.workDescription || "",
+            scopeItems: Array.isArray(budgetItem.scopeItems) && budgetItem.scopeItems.length
+              ? budgetItem.scopeItems
+              : Array.isArray(matchedService?.scopeItems)
+                ? matchedService.scopeItems
+                : [],
+          };
+        })
+      : record.items;
 
     return {
       ...record,
+      items: enrichedItems,
+      serviceCatalog: services,
       onlinePhotosCount: record.onlinePhotosCount || service?.onlinePhotosCount || 0,
       editedPhotosCount: record.editedPhotosCount || service?.editedPhotosCount || 0,
       photoSize: record.photoSize || service?.photoSize || "",
@@ -1211,9 +1241,13 @@ export default function App() {
         ...(current.items || []),
         {
           id: crypto.randomUUID(),
+          serviceId: service.id || "",
           type: "Serviço",
           name: service.name,
           description: service.itemDescription || "",
+          itemDescription: service.itemDescription || "",
+          workDescription: service.workDescription || "",
+          scopeItems: Array.isArray(service.scopeItems) ? service.scopeItems : [],
           quantity: 1,
           unitPrice: Number(service.price || 0),
         },
