@@ -1588,7 +1588,7 @@ function drawBudgetItemsSection(doc, cursor, budgetData, settings, options = {})
     cursor.value = 18;
   }
 
-  drawSectionTitle(doc, cursor, "Itens do orçamento");
+  drawSectionTitle(doc, cursor, "Itens do orçamento", "service");
 
   doc.setFillColor(249, 250, 251);
   doc.roundedRect(16, cursor.value, 178, 13, 4, 4, "F");
@@ -1656,6 +1656,85 @@ function drawBudgetItemsSection(doc, cursor, budgetData, settings, options = {})
   });
 
   return needsNextPageForBudgetItems;
+}
+
+function drawBudgetMultiItemsSection(doc, cursor, budgetData, settings) {
+  drawSectionTitle(doc, cursor, "Itens do orçamento", "service");
+
+  budgetData.renderedItems.forEach((item, index) => {
+    const itemName = item.name || "Item";
+    const quantity = Number(item.quantity || 1);
+    const unitPrice = Number(item.unitPrice || 0);
+    const subtotal = quantity * unitPrice;
+    const titleLines = doc.splitTextToSize(itemName, 100);
+    const descriptionLines = item.description
+      ? splitTextIntoBudgetParagraphLines(doc, item.description, 100).slice(0, 2)
+      : [];
+    const cardHeight = Math.max(32, 13 + titleLines.length * 4.8 + descriptionLines.length * 4.1);
+
+    ensureSpace(doc, cursor, cardHeight + 6, settings);
+
+    doc.setFillColor(index % 2 === 0 ? 250 : 247, index % 2 === 0 ? 250 : 248, index % 2 === 0 ? 252 : 250);
+    doc.roundedRect(16, cursor.value, 178, cardHeight, 5, 5, "F");
+    doc.setDrawColor(229, 233, 240);
+    doc.roundedRect(16, cursor.value, 178, cardHeight, 5, 5, "S");
+    doc.setFillColor(index % 2 === 0 ? 214 : 191, index % 2 === 0 ? 180 : 201, index % 2 === 0 ? 95 : 214);
+    doc.roundedRect(16, cursor.value, 2.4, cardHeight, 1.2, 1.2, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.4);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`ITEM ${String(index + 1).padStart(2, "0")}`, 22, cursor.value + 7);
+
+    setPdfBodyStrong(doc);
+    doc.text(titleLines, 22, cursor.value + 13);
+
+    if (descriptionLines.length) {
+      doc.setDrawColor(232, 236, 242);
+      doc.line(22, cursor.value + 14.8 + titleLines.length * 4.8, 118, cursor.value + 14.8 + titleLines.length * 4.8);
+      setPdfSmall(doc);
+      doc.setFontSize(8.3);
+      doc.setTextColor(88, 102, 124);
+      doc.text(descriptionLines, 22, cursor.value + 18.8 + titleLines.length * 4.8);
+    }
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(132, cursor.value + 5, 58, cardHeight - 10, 4, 4, "F");
+
+    const details = [
+      { label: "Qtd", value: String(quantity), bold: false },
+      { label: "Unitário", value: formatCurrency(unitPrice), bold: false },
+      { label: "Total", value: formatCurrency(subtotal), bold: true },
+    ];
+
+    details.forEach((detail, detailIndex) => {
+      const rowY = cursor.value + 10 + detailIndex * 6.4;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text(detail.label, 136, rowY);
+      doc.setFont("helvetica", detail.bold ? "bold" : "normal");
+      doc.setFontSize(detail.bold ? 8.7 : 8.1);
+      doc.setTextColor(detail.bold ? 15 : 55, detail.bold ? 23 : 65, detail.bold ? 42 : 81);
+      doc.text(detail.value, 187, rowY, { align: "right" });
+    });
+
+    cursor.value += cardHeight + 5.5;
+  });
+
+  ensureSpace(doc, cursor, 23, settings);
+  doc.setDrawColor(214, 180, 95);
+  doc.line(112, cursor.value + 3, 194, cursor.value + 3);
+  drawBudgetInfoCard(doc, 112, cursor.value + 4.5, 82, 16, "Total geral", formatCurrency(budgetData.total), {
+    fill: [23, 27, 38],
+    accent: [214, 180, 95],
+    valueStrong: true,
+    valueSize: 12,
+    valueColor: [255, 255, 255],
+    labelColor: [214, 180, 95],
+    radius: 4,
+  });
+  cursor.value += 25;
 }
 
 function _shouldPushBudgetClosureToNextPage(cursor) {
@@ -1818,7 +1897,11 @@ export function generateBudgetPDF(record, settings = {}) {
 
   cursor.value = 56;
   drawBudgetSimpleClientSection(doc, cursor, budgetData);
-  drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings);
+  if (budgetData.renderedItems.length <= 1) {
+    drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings);
+  } else {
+    drawBudgetMultiItemsSection(doc, cursor, budgetData, settings);
+  }
   drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings);
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
