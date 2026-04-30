@@ -711,10 +711,149 @@ function drawCompanySignaturePinned(doc, y, companyLabel, settings, options = {}
   doc.text(companyLabel, 105, cursorY, { align: "center" });
 }
 
+function normalizeContractCompareText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function toTitleCase(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function toContractCityTitleCase(value, fallback = "Criciúma") {
+  const normalized = normalizeContractCompareText(value);
+  if (!normalized || ["a combinar", "a definir", normalizeContractCompareText("Cidade não informada")].includes(normalized)) {
+    return fallback;
+  }
+  if (normalized === normalizeContractCompareText("Criciúma")) return "Criciúma";
+  return toTitleCase(value);
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceContractTextValue(text, source, replacement) {
+  const sourceText = String(source || "").trim();
+  if (!sourceText || sourceText === replacement) return text;
+  return text.replace(new RegExp(escapeRegExp(sourceText), "g"), replacement);
+}
+
+function getContractPhotoCountText(record) {
+  const photoCount = [
+    record.onlinePhotosCount,
+    record.editedPhotosCount,
+    record.printedPhotosCount,
+    record.digitalPhotosCount,
+  ].find((value) => Number(value) > 0);
+
+  return photoCount ? `aproximadamente ${Number(photoCount)}` : null;
+}
+
+function isContractPhotoDeliveryParagraph(line) {
+  const normalized = normalizeContractCompareText(line);
+  return normalized.startsWith("paragrafo unico:")
+    && normalized.includes("quantidade de fotos entregues")
+    && normalized.includes("imagens finais");
+}
+
+function isContractClosingDateLine(line) {
+  const normalized = normalizeContractCompareText(line);
+  return /^[a-z\s]+,\s*\d{2}\/\d{2}\/\d{4}\.?$/.test(normalized);
+}
+
+function normalizeContractTextForPdf(text, record, settings, contractCity, contractForum) {
+  const photoCountText = getContractPhotoCountText(record);
+  const photoDeliveryParagraph = photoCountText
+    ? `Parágrafo único: A quantidade de fotos entregues para escolha, pode variar conforme dinâmica do evento, condições do local, duração efetiva da cobertura e critérios técnicos do fotógrafo, sendo prevista a entrega de ${photoCountText} imagens finais.`
+    : null;
+  const rawCityValues = [
+    settings.contractCity,
+    settings.studioCity,
+    "Cidade não informada",
+    "cidade não informada",
+  ].filter(Boolean);
+
+  let normalizedText = String(fixSentenceSpacing(text) || "")
+    .replace(/CONTRATO DE PRESTA[CÇ][AÃ]O DE SERVI[CÇ]OS FOTOGR[AÁ]FICOS/g, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS")
+    .replace(/CONTRATO DE PRESTA[CÇ][AÃ]O DE SERVI[CÇ]OS/g, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS")
+    .replace(
+      /Instrumento particular entre as partes, com condi[cç][oõ]es comerciais e jur[ií]dicas registradas\./g,
+      "Instrumento particular entre as partes, com condições comerciais e jurídicas registradas.",
+    )
+    .replace(/\bcrici[uú]ma\b/gi, "Criciúma");
+
+  rawCityValues.forEach((value) => {
+    normalizedText = replaceContractTextValue(normalizedText, value, contractCity);
+  });
+
+  if (settings.contractForum) {
+    normalizedText = replaceContractTextValue(normalizedText, settings.contractForum, contractForum);
+  }
+
+  const lines = normalizedText.replace(/\r\n/g, "\n").split("\n");
+  const signatureIndex = lines.findIndex((line) => normalizeContractCompareText(line) === "assinaturas");
+  const bodyLines = signatureIndex >= 0 ? lines.slice(0, signatureIndex) : lines;
+
+  if (signatureIndex >= 0) {
+    while (bodyLines.length > 0 && !bodyLines[bodyLines.length - 1].trim()) {
+      bodyLines.pop();
+    }
+
+    if (isContractClosingDateLine(bodyLines[bodyLines.length - 1])) {
+      bodyLines.pop();
+    }
+  }
+
+  return bodyLines
+    .map((line) => {
+      if (isContractPhotoDeliveryParagraph(line)) return photoDeliveryParagraph;
+      return line;
+    })
+    .filter((line) => line !== null)
+    .join("\n")
+    .trim();
+}
+
+function isContractDocumentTitle(text) {
+  const normalized = normalizeContractCompareText(text);
+  return normalized === normalizeContractCompareText("CONTRATO DE PRESTAÇÃO DE SERVIÇOS")
+    || normalized === normalizeContractCompareText("CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS");
+}
+
+function isContractSectionHeading(text) {
+  const normalized = normalizeContractCompareText(text).replace(/:$/, "");
+  return normalized === "contratante"
+    || normalized === "contratado"
+    || normalized === "assinaturas"
+    || /^clausula\s+\d+/.test(normalized);
+}
+
+function isContractListIntro(text) {
+  const normalized = normalizeContractCompareText(text);
+  return normalized.includes("se compromete a:")
+    || normalized.includes("nao se responsabiliza por:")
+    || normalized.includes("somente sera considerada reservada apos:");
+}
+
+function getContractExplicitBulletText(text) {
+  const match = String(text || "").trim().match(/^[-•]\s*(.+)$/);
+  return match ? match[1].trim() : "";
+}
+
 function drawContractSignatureBlock(doc, cursor, clientLabel, companyLabel, settings) {
   const hasSignatureImage = Boolean(settings.signatureDataUrl);
-  ensureContractPageSpace(doc, cursor, hasSignatureImage ? 50 : 38, settings);
-  cursor.value += 8;
+  ensureContractPageSpace(doc, cursor, hasSignatureImage ? 38 : 28, settings, { bottom: 276 });
+  cursor.value += 4;
 
   const leftCenter = 62;
   const rightCenter = 148;
@@ -724,8 +863,8 @@ function drawContractSignatureBlock(doc, cursor, clientLabel, companyLabel, sett
   if (hasSignatureImage) {
     const signatureFormat = getLogoFormatFromDataUrl(settings.signatureDataUrl);
     try {
-      doc.addImage(settings.signatureDataUrl, signatureFormat, 116, cursor.value - 2, 64, 16);
-      cursor.value += 16;
+      doc.addImage(settings.signatureDataUrl, signatureFormat, 116, cursor.value - 2, 64, 14);
+      cursor.value += 14;
     } catch {
       // Se a imagem falhar, mantemos o bloco textual sem interromper o PDF.
     }
@@ -734,17 +873,17 @@ function drawContractSignatureBlock(doc, cursor, clientLabel, companyLabel, sett
   doc.setDrawColor(148, 163, 184);
   doc.line(leftCenter - lineStartOffset, cursor.value, leftCenter + lineStartOffset, cursor.value);
   doc.line(rightCenter - lineStartOffset, cursor.value, rightCenter + lineStartOffset, cursor.value);
-  cursor.value += 7;
+  cursor.value += 5;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.setTextColor(100, 116, 139);
   doc.text("CONTRATANTE", leftCenter, cursor.value, { align: "center" });
   doc.text("CONTRATADO", rightCenter, cursor.value, { align: "center" });
-  cursor.value += 5.5;
+  cursor.value += 4.5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.1);
+  doc.setFontSize(8.8);
   doc.setTextColor(71, 85, 105);
   doc.text(clientLabel, leftCenter, cursor.value, { align: "center" });
   doc.text(companyLabel, rightCenter, cursor.value, { align: "center" });
@@ -758,10 +897,11 @@ function drawContractPaperFrame(doc, cursor) {
   doc.line(22, cursor.value + 7, 188, cursor.value + 7);
 }
 
-function ensureContractPageSpace(doc, cursor, amount, settings) {
-  if (cursor.value + amount <= 262) return;
+function ensureContractPageSpace(doc, cursor, amount, settings, options = {}) {
+  const { bottom = 262 } = options;
+  if (cursor.value + amount <= bottom) return;
   doc.addPage();
-  drawDocumentHeader(doc, settings, "CONTRATO DE PRESTACAO DE SERVICOS");
+  drawDocumentHeader(doc, settings, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS");
   cursor.value = 56;
   drawContractPaperFrame(doc, cursor);
   cursor.value = 66;
@@ -777,12 +917,12 @@ function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
 
   const width = (tone === "body" || tone === "intro" ? 150 : 156) - indent;
   const lines = doc.splitTextToSize(content, width);
-  const lineHeight = tone === "heading" ? 6.2 : tone === "bullet" ? 5.2 : tone === "intro" ? 5.8 : 5.5;
+  const lineHeight = tone === "heading" ? 5.8 : tone === "bullet" ? 4.9 : tone === "intro" ? 5.5 : 5.2;
   ensureContractPageSpace(doc, cursor, lines.length * lineHeight + 8, settings);
 
   if (tone === "heading") {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.4);
+    doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
   } else if (tone === "bullet") {
     doc.setFont("times", "normal");
@@ -803,39 +943,64 @@ function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
   }
 
   doc.text(lines, 28 + indent, cursor.value);
-  cursor.value += lines.length * lineHeight + (tone === "heading" ? 3 : 2);
+  cursor.value += lines.length * lineHeight + (tone === "heading" ? 2.6 : 1.8);
 }
 
 function renderContractBody(doc, cursor, contractText, settings) {
   const rawLines = String(contractText || "").replace(/\r\n/g, "\n").split("\n");
-  let seenFirstBody = false;
+  let inBulletList = false;
+  let hasRenderedListItem = false;
 
   rawLines.forEach((line) => {
     const trimmed = line.trim();
 
     if (!trimmed) {
-      cursor.value += 3;
+      if (inBulletList && !hasRenderedListItem) {
+        cursor.value += 1.5;
+        return;
+      }
+
+      if (inBulletList && hasRenderedListItem) {
+        inBulletList = false;
+        hasRenderedListItem = false;
+      }
+
+      cursor.value += 2.4;
       return;
     }
 
-    if (/^\d+\.\s/.test(trimmed) || trimmed === "ASSINATURAS") {
+    if (isContractDocumentTitle(trimmed)) {
+      return;
+    }
+
+    if (isContractSectionHeading(trimmed) || /^\d+\.\s/.test(trimmed)) {
+      inBulletList = false;
+      hasRenderedListItem = false;
       drawContractParagraph(doc, cursor, trimmed, { tone: "heading" }, settings);
+      return;
+    }
+
+    const explicitBulletText = getContractExplicitBulletText(trimmed);
+    if (explicitBulletText) {
+      drawContractParagraph(doc, cursor, explicitBulletText, { tone: "bullet", indent: 8 }, settings);
+      return;
+    }
+
+    if (isContractListIntro(trimmed)) {
+      inBulletList = true;
+      hasRenderedListItem = false;
+      drawContractParagraph(doc, cursor, trimmed, { tone: "body" }, settings);
+      return;
+    }
+
+    if (inBulletList) {
+      hasRenderedListItem = true;
+      drawContractParagraph(doc, cursor, trimmed, { tone: "bullet", indent: 8 }, settings);
       return;
     }
 
     if (trimmed.endsWith(":") && trimmed.length <= 42) {
       drawContractParagraph(doc, cursor, trimmed, { tone: "heading" }, settings);
-      return;
-    }
-
-    if (!seenFirstBody) {
-      seenFirstBody = true;
-      drawContractParagraph(doc, cursor, trimmed, { tone: "intro" }, settings);
-      return;
-    }
-
-    if (trimmed.length <= 68 && !/[.!?]$/.test(trimmed) && !/[,:;]$/.test(trimmed)) {
-      drawContractParagraph(doc, cursor, trimmed, { tone: "bullet", indent: 8 }, settings);
       return;
     }
 
@@ -1666,7 +1831,7 @@ export function generateEventPDF(record, settings = {}) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
-  doc.text("Documento de apoio com dados principais do compromisso e condicoes registradas.", 20, cursor.value + 21);
+  doc.text("Documento de apoio com dados principais do compromisso e condições registradas.", 20, cursor.value + 21);
   if (eventSummary) {
     doc.setFontSize(8);
     doc.text(doc.splitTextToSize(eventSummary, 166), 20, cursor.value + 26);
@@ -1796,41 +1961,47 @@ export function generateEventPDF(record, settings = {}) {
 
 export function generateContractPDF(record, settings = {}, previewText = "") {
   const doc = new jsPDF();
-  const studioName = drawDocumentHeader(doc, settings, "CONTRATO DE PRESTACAO DE SERVICOS");
+  const studioName = drawDocumentHeader(doc, settings, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS");
   const clientName = record.clientName || "Cliente não informado";
-  const contractCity = settings.contractCity || settings.studioCity || "Cidade não informada";
-  const contractForum = settings.contractForum || contractCity;
-  const contractText = String(previewText || "").trim() || "Defina um texto base de contrato para gerar este documento.";
+  const contractCity = toContractCityTitleCase(settings.contractCity || settings.studioCity || settings.contractForum);
+  const contractForum = toContractCityTitleCase(settings.contractForum || contractCity, contractCity);
+  const contractText = normalizeContractTextForPdf(
+    String(previewText || "").trim() || "Defina um texto base de contrato para gerar este documento.",
+    record,
+    settings,
+    contractCity,
+    contractForum,
+  );
   const cursor = { value: 56 };
-  const signatureClosingHeight = settings.signatureDataUrl ? 80 : 66;
+  const signatureClosingHeight = settings.signatureDataUrl ? 44 : 32;
 
   drawContractPaperFrame(doc, cursor);
   cursor.value += 16;
   doc.setFont("times", "normal");
   doc.setFontSize(17);
   doc.setTextColor(31, 41, 55);
-  doc.text("CONTRATO DE PRESTACAO DE SERVICOS FOTOGRAFICOS", 28, cursor.value);
+  doc.text("CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS", 28, cursor.value);
   cursor.value += 8;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.4);
   doc.setTextColor(100, 116, 139);
-  doc.text("Instrumento particular entre as partes, com condicoes comerciais e juridicas registradas.", 28, cursor.value);
+  doc.text("Instrumento particular entre as partes, com condições comerciais e jurídicas registradas.", 28, cursor.value);
   cursor.value += 10;
   renderContractBody(doc, cursor, contractText, settings);
 
-  ensureContractPageSpace(doc, cursor, signatureClosingHeight, settings);
+  ensureContractPageSpace(doc, cursor, signatureClosingHeight, settings, { bottom: 276 });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.3);
   doc.setTextColor(71, 85, 105);
   doc.text(`${contractCity}, ${formatDateBR(getTodayLocalISO())}.`, 28, cursor.value);
-  cursor.value += 7;
+  cursor.value += 5;
   doc.setFontSize(8.7);
   doc.setTextColor(100, 116, 139);
   doc.text(`Foro eleito: ${contractForum}.`, 28, cursor.value);
-  cursor.value += 8;
+  cursor.value += 5.5;
   doc.setDrawColor(214, 180, 95);
   doc.line(28, cursor.value, 98, cursor.value);
-  cursor.value += 8;
+  cursor.value += 5.5;
 
   drawContractSignatureBlock(doc, cursor, clientName, studioName, settings);
   const totalPages = doc.getNumberOfPages();
