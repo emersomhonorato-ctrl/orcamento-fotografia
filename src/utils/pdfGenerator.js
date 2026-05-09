@@ -1138,24 +1138,6 @@ function fixSentenceSpacing(text) {
   return String(text).replace(/([.!?])([A-ZÀ-Ú])/g, "$1 $2");
 }
 
-function normalizeBudgetTextForComparison(text) {
-  return String(fixSentenceSpacing(text) || "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function getPreferredCompleteBudgetText(primaryText, fallbackText, defaultText = "") {
-  const primary = normalizeBudgetTextForComparison(primaryText);
-  const fallback = normalizeBudgetTextForComparison(fallbackText);
-  const defaultValue = normalizeBudgetTextForComparison(defaultText);
-
-  if (fallback && (!primary || (fallback.length > primary.length && fallback.toLowerCase().startsWith(primary.toLowerCase())))) {
-    return fallback;
-  }
-
-  return primary || fallback || defaultValue;
-}
-
 function getBudgetResolvedLeadLineCount(lines, requestedLineCount) {
   let lineCount = Math.max(0, Math.min(requestedLineCount, lines.length));
 
@@ -1183,11 +1165,6 @@ function prepareBudgetPdfData(record, settings = {}) {
   const printedPhotosCount = Number(record.editedPhotosCount || 0);
   const rawItems = Array.isArray(record.items) ? record.items : [];
   const serviceCatalog = normalizeBudgetServiceCatalog(record, settings);
-  const primaryService = findBudgetServiceForItem({
-    serviceId: record.serviceId,
-    name: record.eventType,
-    packageName: record.packageName,
-  }, serviceCatalog);
   const items = normalizeItems(record.items || []).map((item, index) => {
     const source = rawItems[index] && typeof rawItems[index] === "object" ? rawItems[index] : {};
     const service = findBudgetServiceForItem(source, serviceCatalog);
@@ -1208,12 +1185,8 @@ function prepareBudgetPdfData(record, settings = {}) {
   });
   const total = items.length > 0 ? getItemsTotal(items) : Number(record.amount || 0);
   const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
-  const paymentTerms = getPreferredCompleteBudgetText(
-    record.contractPaymentMethod,
-    primaryService?.contractPaymentMethod,
-    settings.paymentTerms || "Condição de pagamento a combinar.",
-  );
-  const deliveryTerms = getPreferredCompleteBudgetText(record.contractDeliveryTerms, primaryService?.contractDeliveryTerms, "");
+  const paymentTerms = String(fixSentenceSpacing(record.contractPaymentMethod || settings.paymentTerms) || "").trim();
+  const deliveryTerms = String(fixSentenceSpacing(record.contractDeliveryTerms) || "").trim();
   const notes = fixSentenceSpacing(record.notes || "");
   const workDescription = (fixSentenceSpacing(record.budgetDescription) || "").trim() || "Cobertura e entrega conforme combinado.";
   const normalizedWorkDescription = workDescription.replace(/\s+/g, " ").trim().toLowerCase();
