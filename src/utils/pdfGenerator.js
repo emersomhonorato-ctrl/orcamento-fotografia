@@ -823,6 +823,38 @@ function formatTaxId(value) {
   return value;
 }
 
+function hasPdfFieldValue(value) {
+  const normalized = normalizeContractCompareText(value).replace(/[.;:]+$/g, "");
+  return Boolean(normalized && normalized !== "-" && normalized !== "nao informado");
+}
+
+function isEmptyContractClientFieldLine(line) {
+  const match = String(line || "").trim().match(/^(CPF\/CNPJ|Telefone|E-mail):\s*(.*)$/i);
+  if (!match) return false;
+  return !hasPdfFieldValue(match[2]);
+}
+
+function cleanContractClientEmptyFields(lines) {
+  let section = "";
+
+  return lines.filter((line) => {
+    const normalized = normalizeContractCompareText(line).replace(/:$/, "");
+    if (normalized === "contratante") {
+      section = "contratante";
+    } else if (normalized === "contratado" || normalized === "assinaturas" || /^clausula\s+\d+/.test(normalized)) {
+      section = "";
+    }
+
+    return !(section === "contratante" && isEmptyContractClientFieldLine(line));
+  });
+}
+
+function fixContractDeliveryText(text) {
+  return String(text || "")
+    .replace(/(Galeria online)\s+em\s+(?:úteis|uteis)\b/gi, "$1")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
 function toContractCityTitleCase(value, fallback = "Criciúma") {
   const normalized = normalizeContractCompareText(value);
   if (!normalized || ["a combinar", "a definir", normalizeContractCompareText("Cidade não informada")].includes(normalized)) {
@@ -894,6 +926,8 @@ function normalizeContractTextForPdf(text, record, settings, contractCity, contr
     normalizedText = replaceContractTextValue(normalizedText, settings.contractForum, contractForum);
   }
 
+  normalizedText = fixContractDeliveryText(normalizedText);
+
   const lines = normalizedText.replace(/\r\n/g, "\n").split("\n");
   const signatureIndex = lines.findIndex((line) => normalizeContractCompareText(line) === "assinaturas");
   const bodyLines = signatureIndex >= 0 ? lines.slice(0, signatureIndex) : lines;
@@ -908,7 +942,7 @@ function normalizeContractTextForPdf(text, record, settings, contractCity, contr
     }
   }
 
-  return bodyLines
+  return cleanContractClientEmptyFields(bodyLines)
     .map((line) => {
       if (isContractPhotoDeliveryParagraph(line)) return photoDeliveryParagraph;
       return line;
@@ -1115,22 +1149,24 @@ function sanitizeFilePart(value, fallback) {
 
 function buildReceiptPreview(record, settings = {}) {
   const receiptDate = record.receiptDate ? formatDateBR(record.receiptDate) : formatDateBR(getTodayLocalISO());
-  const receiptMethod = record.receiptMethod || "A combinar";
+  const receiptMethod = hasPdfFieldValue(record.receiptMethod) ? String(record.receiptMethod).trim() : "";
   const receiptReference = fixSentenceSpacing(record.receiptReference) || "Sem observações adicionais.";
   const receiptReferenceText = /[.!?]$/.test(receiptReference) ? receiptReference : `${receiptReference}.`;
   const studioName = settings.studioName || "Emerson Honorato Retratos";
   const studioDocument = settings.studioDocument || "-";
+  const clientCpf = hasPdfFieldValue(record.clientCpf) ? formatTaxId(record.clientCpf) : "";
+  const cpfPart = clientCpf ? `, CPF ${clientCpf}` : "";
 
   return [
-    `Recebi de ${record.clientName || "-"}, CPF ${formatTaxId(record.clientCpf) || "-"}, o valor de ${formatCurrency(record.amountPaid || 0)}, referente ao serviço ${record.eventType || record.packageName || "-"}` +
+    `Recebi de ${record.clientName || "-"}${cpfPart}, o valor de ${formatCurrency(record.amountPaid || 0)}, referente ao serviço ${record.eventType || record.packageName || "-"}` +
       `${record.eventDate ? ` previsto/realizado em ${formatDateBR(record.eventDate)}` : ""}.`,
     `Data do recebimento: ${receiptDate}.`,
-    `Forma de pagamento: ${receiptMethod}.`,
+    receiptMethod ? `Forma de pagamento: ${receiptMethod}.` : null,
     `Referência: ${receiptReferenceText}`,
     "",
     `${studioName}`,
     `CNPJ: ${formatTaxId(studioDocument) || "-"}`,
-  ].join("\n");
+  ].filter((line) => line !== null).join("\n");
 }
 
 function fixSentenceSpacing(text) {
@@ -1348,7 +1384,7 @@ function drawBudgetSimpleServiceSection(doc, cursor, budgetData, settings) {
 
   if (budgetData.serviceSnapshot.itemDescription) {
     const itemLines = buildBudgetTechnicalScopeLines(doc, budgetData);
-    drawBudgetTechnicalScopeCard(doc, cursor, "Escopo contratado", itemLines, {
+    drawBudgetTechnicalScopeCard(doc, cursor, "Escopo", itemLines, {
       fill: [250, 250, 251],
       accent: [191, 201, 214],
       textColor: [51, 65, 85],
@@ -2079,23 +2115,20 @@ export function generateEventPDF(record, settings = {}) {
     location !== "Local a combinar" ? location : null,
   ].filter(Boolean).join("   •   ");
 
+  const introCardHeight = eventSummary ? 23 : 17;
   doc.setFillColor(249, 250, 251);
-  doc.roundedRect(16, cursor.value, 178, 30, 4, 4, "F");
+  doc.roundedRect(16, cursor.value, 178, introCardHeight, 4, 4, "F");
   doc.setDrawColor(214, 180, 95);
-  doc.line(22, cursor.value + 6, 188, cursor.value + 6);
-  doc.setFont("times", "normal");
-  doc.setFontSize(16.5);
-  doc.setTextColor(31, 41, 55);
-  doc.text("CONFIRMAÇÃO DE AGENDAMENTO", 20, cursor.value + 15);
+  doc.line(22, cursor.value + 5, 188, cursor.value + 5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
-  doc.text("Documento de apoio com dados principais do compromisso e condições registradas.", 20, cursor.value + 21);
+  doc.text("Documento de apoio com dados principais do compromisso e condições registradas.", 20, cursor.value + 10.5);
   if (eventSummary) {
     doc.setFontSize(8);
-    doc.text(doc.splitTextToSize(eventSummary, 166), 20, cursor.value + 26);
+    doc.text(doc.splitTextToSize(eventSummary, 166), 20, cursor.value + 16);
   }
-  cursor.value += 38;
+  cursor.value += introCardHeight + 8;
 
   drawSectionTitle(doc, cursor, "Dados do agendamento");
 
@@ -2275,6 +2308,7 @@ export function generateReceiptPDF(record, settings = {}) {
   const doc = new jsPDF();
   const studioName = drawDocumentHeader(doc, settings, "RECIBO DE PAGAMENTO");
   const clientName = record.clientName || "Cliente não informado";
+  const receiptMethod = hasPdfFieldValue(record.receiptMethod) ? String(record.receiptMethod).trim() : "";
   const previewText = buildReceiptPreview(record, settings);
   const cursor = { value: 56 };
 
@@ -2314,8 +2348,8 @@ export function generateReceiptPDF(record, settings = {}) {
     doc.splitTextToSize(
       [
         `Data: ${record.receiptDate ? formatDateBR(record.receiptDate) : formatDateBR(getTodayLocalISO())}`,
-        `Forma: ${record.receiptMethod || "-"}`,
-      ].join("\n"),
+        receiptMethod ? `Forma: ${receiptMethod}` : null,
+      ].filter(Boolean).join("\n"),
       78,
     ),
     112,
