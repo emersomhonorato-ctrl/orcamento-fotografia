@@ -351,6 +351,10 @@ function splitTextIntoBudgetParagraphLines(doc, text, width) {
     });
 }
 
+function getBudgetCommercialSectionLines(doc, value) {
+  return splitTextIntoBudgetParagraphLines(doc, value, 168);
+}
+
 function extractBulletLines(text) {
   return String(fixSentenceSpacing(text) || "")
     .replace(/\r\n/g, "\n")
@@ -455,12 +459,33 @@ function buildBudgetTechnicalScopeLines(doc, budgetData) {
 
 function estimateBudgetSimpleCommercialBlocksHeight(doc, sections) {
   return sections.reduce((total, section) => {
-    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 168).slice(0, 6);
+    const lines = getBudgetCommercialSectionLines(doc, section.value);
     return total + estimateBudgetEditorialCardHeight(lines, {
       minHeight: 18,
       leadLineCount: Math.min(1, lines.length),
     });
   }, 0);
+}
+
+function drawBudgetCommercialSectionCard(doc, cursor, section, index) {
+  const lines = getBudgetCommercialSectionLines(doc, section.value);
+  const cardHeight = estimateBudgetEditorialCardHeight(lines, {
+    minHeight: 18,
+    leadLineCount: Math.min(1, lines.length),
+  });
+
+  if (cursor.value + cardHeight > 282) {
+    doc.addPage();
+    cursor.value = 18;
+  }
+
+  drawBudgetEditorialCard(doc, cursor, section.title, lines, {
+    fill: index % 2 === 0 ? [248, 249, 252] : [250, 250, 251],
+    accent: index % 2 === 0 ? [214, 180, 95] : [191, 201, 214],
+    bodyColor: [51, 65, 85],
+    minHeight: 18,
+    leadLineCount: Math.min(1, lines.length),
+  });
 }
 
 function buildBudgetItemDescriptionLines(
@@ -1113,6 +1138,24 @@ function fixSentenceSpacing(text) {
   return String(text).replace(/([.!?])([A-ZÀ-Ú])/g, "$1 $2");
 }
 
+function normalizeBudgetTextForComparison(text) {
+  return String(fixSentenceSpacing(text) || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPreferredCompleteBudgetText(primaryText, fallbackText, defaultText = "") {
+  const primary = normalizeBudgetTextForComparison(primaryText);
+  const fallback = normalizeBudgetTextForComparison(fallbackText);
+  const defaultValue = normalizeBudgetTextForComparison(defaultText);
+
+  if (fallback && (!primary || (fallback.length > primary.length && fallback.toLowerCase().startsWith(primary.toLowerCase())))) {
+    return fallback;
+  }
+
+  return primary || fallback || defaultValue;
+}
+
 function getBudgetResolvedLeadLineCount(lines, requestedLineCount) {
   let lineCount = Math.max(0, Math.min(requestedLineCount, lines.length));
 
@@ -1140,6 +1183,11 @@ function prepareBudgetPdfData(record, settings = {}) {
   const printedPhotosCount = Number(record.editedPhotosCount || 0);
   const rawItems = Array.isArray(record.items) ? record.items : [];
   const serviceCatalog = normalizeBudgetServiceCatalog(record, settings);
+  const primaryService = findBudgetServiceForItem({
+    serviceId: record.serviceId,
+    name: record.eventType,
+    packageName: record.packageName,
+  }, serviceCatalog);
   const items = normalizeItems(record.items || []).map((item, index) => {
     const source = rawItems[index] && typeof rawItems[index] === "object" ? rawItems[index] : {};
     const service = findBudgetServiceForItem(source, serviceCatalog);
@@ -1160,7 +1208,12 @@ function prepareBudgetPdfData(record, settings = {}) {
   });
   const total = items.length > 0 ? getItemsTotal(items) : Number(record.amount || 0);
   const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
-  const paymentTerms = settings.paymentTerms || "Condição de pagamento a combinar.";
+  const paymentTerms = getPreferredCompleteBudgetText(
+    record.contractPaymentMethod,
+    primaryService?.contractPaymentMethod,
+    settings.paymentTerms || "Condição de pagamento a combinar.",
+  );
+  const deliveryTerms = getPreferredCompleteBudgetText(record.contractDeliveryTerms, primaryService?.contractDeliveryTerms, "");
   const notes = fixSentenceSpacing(record.notes || "");
   const workDescription = (fixSentenceSpacing(record.budgetDescription) || "").trim() || "Cobertura e entrega conforme combinado.";
   const normalizedWorkDescription = workDescription.replace(/\s+/g, " ").trim().toLowerCase();
@@ -1184,8 +1237,8 @@ function prepareBudgetPdfData(record, settings = {}) {
     category: String(record.category || "").trim(),
     itemDescription: String(fixSentenceSpacing(record.serviceItemsSnapshot) || "").trim(),
     workDescription: String(fixSentenceSpacing(record.serviceDescriptionSnapshot || record.budgetDescription) || "").trim(),
-    paymentTerms: String(fixSentenceSpacing(record.contractPaymentMethod || settings.paymentTerms) || "").trim(),
-    deliveryTerms: String(fixSentenceSpacing(record.contractDeliveryTerms) || "").trim(),
+    paymentTerms,
+    deliveryTerms,
     commercialNotes: String(fixSentenceSpacing(record.notes) || "").trim(),
     contractNotes: String(fixSentenceSpacing(record.contractNotes) || "").trim(),
     receiptMethod: String(record.receiptMethod || "").trim(),
@@ -1502,14 +1555,7 @@ function drawBudgetSimpleFinancialSection(doc, cursor, budgetData, settings) {
   cursor.value += 40;
 
   sections.forEach((section, index) => {
-    const lines = splitTextIntoBudgetParagraphLines(doc, section.value, 168).slice(0, 6);
-    drawBudgetEditorialCard(doc, cursor, section.title, lines, {
-      fill: index % 2 === 0 ? [248, 249, 252] : [250, 250, 251],
-      accent: index % 2 === 0 ? [214, 180, 95] : [191, 201, 214],
-      bodyColor: [51, 65, 85],
-      minHeight: 18,
-      leadLineCount: Math.min(1, lines.length),
-    });
+    drawBudgetCommercialSectionCard(doc, cursor, section, index);
   });
 }
 
