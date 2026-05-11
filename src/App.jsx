@@ -156,6 +156,7 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(getTodayLocalISO().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [typeFilter, setTypeFilter] = useState("Todos");
+  const [showPastEvents, setShowPastEvents] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
@@ -287,6 +288,8 @@ export default function App() {
   );
 
   const filteredEvents = useMemo(() => {
+    const today = new Date(`${getTodayLocalISO()}T00:00:00`);
+
     return onlyEvents
       .filter((record) => {
         const haystack = [
@@ -306,6 +309,12 @@ export default function App() {
         const matchesSearch = haystack.includes(search.toLowerCase());
         const matchesStatus = statusFilter === "Todos" ? true : record.status === statusFilter;
         const matchesType = typeFilter === "Todos" ? true : record.eventType === typeFilter;
+
+        if (!showPastEvents && record.eventDate) {
+          const eventDate = new Date(`${record.eventDate}T00:00:00`);
+          if (!Number.isNaN(eventDate.getTime()) && eventDate < today) return false;
+        }
+
         return matchesSearch && matchesStatus && matchesType;
       })
       .sort((a, b) => {
@@ -313,7 +322,18 @@ export default function App() {
         const bDate = combineDateTime(b.eventDate, b.startTime || "00:00")?.getTime() || 0;
         return aDate - bDate;
       });
-  }, [onlyEvents, search, statusFilter, typeFilter]);
+  }, [onlyEvents, search, showPastEvents, statusFilter, typeFilter]);
+
+  const pastEventsCount = useMemo(() => {
+    const today = new Date(`${getTodayLocalISO()}T00:00:00`);
+
+    return onlyEvents.filter((record) => {
+      if (!record.eventDate) return false;
+
+      const eventDate = new Date(`${record.eventDate}T00:00:00`);
+      return !Number.isNaN(eventDate.getTime()) && eventDate < today;
+    }).length;
+  }, [onlyEvents]);
 
   const selectedDayEvents = useMemo(
     () => onlyEvents.filter((record) => record.eventDate === selectedDate),
@@ -1618,6 +1638,21 @@ export default function App() {
                 {eventTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
               </SelectContent>
             </Select>
+
+            {activeTab === "agenda" ? (
+              <Button
+                type="button"
+                variant={showPastEvents ? "default" : "outline"}
+                onClick={() => setShowPastEvents((current) => !current)}
+                className={`rounded-[22px] shadow-[0_18px_50px_rgba(40,52,84,0.08)] ${
+                  showPastEvents
+                    ? "bg-[#7f274f] text-white hover:bg-[#692040]"
+                    : "border-white/70 bg-white/80 text-slate-700 hover:bg-white"
+                }`}
+              >
+                {showPastEvents ? "Ocultar realizados" : "Mostrar realizados"}
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -1902,6 +1937,11 @@ export default function App() {
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
+                    {showPastEvents && pastEventsCount > 0 ? (
+                      <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-2 text-xs font-medium text-slate-500">
+                        Mostrando {pastEventsCount} trabalhos realizados
+                      </div>
+                    ) : null}
                   {filteredEvents.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                       <p className="font-medium text-slate-700">Nenhum agendamento encontrado</p>
