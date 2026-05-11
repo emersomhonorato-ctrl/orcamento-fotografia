@@ -157,6 +157,10 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [typeFilter, setTypeFilter] = useState("Todos");
   const [showPastEvents, setShowPastEvents] = useState(false);
+  const [realizedSearch, setRealizedSearch] = useState("");
+  const [realizedMonthFilter, setRealizedMonthFilter] = useState("all");
+  const [realizedStatusFilter, setRealizedStatusFilter] = useState("all");
+  const [realizedValueRange, setRealizedValueRange] = useState("all");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
@@ -334,6 +338,86 @@ export default function App() {
       return !Number.isNaN(eventDate.getTime()) && eventDate < today;
     }).length;
   }, [onlyEvents]);
+
+  const realizedEvents = useMemo(() => {
+    const today = new Date(`${getTodayLocalISO()}T00:00:00`);
+
+    return onlyEvents.filter((record) => {
+      if (!record.eventDate) return false;
+
+      const eventDate = new Date(`${record.eventDate}T00:00:00`);
+      return !Number.isNaN(eventDate.getTime()) && eventDate < today;
+    });
+  }, [onlyEvents]);
+
+  const realizedMonthOptions = useMemo(() => {
+    const months = new Set();
+
+    realizedEvents.forEach((record) => {
+      const eventDate = new Date(`${record.eventDate}T00:00:00`);
+      if (Number.isNaN(eventDate.getTime())) return;
+      months.add(`${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}`);
+    });
+
+    return Array.from(months)
+      .sort()
+      .reverse()
+      .map((key) => ({
+        key,
+        label: (() => {
+          const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" })
+            .format(new Date(`${key}-01T12:00:00`))
+            .replace(" de ", " ");
+          return label.charAt(0).toUpperCase() + label.slice(1);
+        })(),
+      }));
+  }, [realizedEvents]);
+
+  const realizedStatusOptions = useMemo(() => {
+    return Array.from(new Set([
+      ...EVENT_STATUS_OPTIONS,
+      ...PAYMENT_OPTIONS,
+      ...realizedEvents.flatMap((record) => [record.status, record.paymentStatus]).filter(Boolean),
+    ]))
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [realizedEvents]);
+
+  const filteredRealizedEvents = useMemo(() => {
+    return realizedEvents
+      .filter((record) => {
+        const clientName = String(record.clientName || "").toLowerCase();
+        const amount = Number(record.computedAmount || record.amount || 0);
+
+        if (realizedSearch.trim() && !clientName.includes(realizedSearch.trim().toLowerCase())) return false;
+
+        if (realizedMonthFilter !== "all") {
+          const eventDate = new Date(`${record.eventDate}T00:00:00`);
+          if (Number.isNaN(eventDate.getTime())) return false;
+          const monthKey = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}`;
+          if (monthKey !== realizedMonthFilter) return false;
+        }
+
+        if (
+          realizedStatusFilter !== "all" &&
+          record.status !== realizedStatusFilter &&
+          record.paymentStatus !== realizedStatusFilter
+        ) {
+          return false;
+        }
+
+        if (realizedValueRange === "below500" && amount >= 500) return false;
+        if (realizedValueRange === "500to1500" && (amount < 500 || amount >= 1500)) return false;
+        if (realizedValueRange === "1500to3000" && (amount < 1500 || amount >= 3000)) return false;
+        if (realizedValueRange === "above3000" && amount < 3000) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        const aDate = combineDateTime(a.eventDate, a.startTime || "00:00")?.getTime() || 0;
+        const bDate = combineDateTime(b.eventDate, b.startTime || "00:00")?.getTime() || 0;
+        return bDate - aDate;
+      });
+  }, [realizedEvents, realizedMonthFilter, realizedSearch, realizedStatusFilter, realizedValueRange]);
 
   const selectedDayEvents = useMemo(
     () => onlyEvents.filter((record) => record.eventDate === selectedDate),
@@ -1451,6 +1535,69 @@ export default function App() {
     setSyncMessage("Faça login novamente para acessar o sistema.");
   }
 
+  function renderEventCard(record) {
+    return (
+      <div key={record.id} className="overflow-hidden rounded-[30px] border border-rose-100/80 bg-gradient-to-r from-white via-[#fffafb] to-[#fff7f8] p-5 shadow-[0_16px_38px_rgba(99,32,67,0.08)]">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-500">
+                {record.eventDate ? formatDateBR(record.eventDate) : "Sem data"}
+              </span>
+              <StatusBadge value={record.status} />
+              <StatusBadge value={record.paymentStatus} />
+            </div>
+            <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
+            <p className="mt-1 text-sm text-slate-500">{record.eventType}</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Horário</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{record.startTime || "Sem horário"}</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Local</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{record.location || "Local a combinar"}</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Valor</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.computedAmount)}</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.amountPaid || 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 xl:max-w-[280px] xl:justify-end">
+            <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedContractId(record.id); setActiveTab("contratos"); }}><FileText className="mr-2 h-4 w-4" />Contrato</Button>
+            {Number(record.amountPaid || 0) > 0 ? (
+              <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedReceiptId(record.id); setActiveTab("recibos"); }}><Wallet className="mr-2 h-4 w-4" />Recibo</Button>
+            ) : null}
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF orçamento</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, getAgendaMessageType(record))}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, getAgendaMessageType(record))}><Bell className="mr-2 h-4 w-4" />{getAgendaMessageLabel(record)}</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => markAsPaid(record)}><Wallet className="mr-2 h-4 w-4" />Quitar</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
+            <Button
+              variant="destructive"
+              className="rounded-2xl"
+              onClick={() => {
+                if (window.confirm(`Excluir o trabalho de ${record.clientName || "cliente sem nome"}?`)) {
+                  removeEvent(record.id);
+                }
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (AUTH_ENABLED && authLoading) {
     return (
       <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
@@ -1692,9 +1839,10 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-4 rounded-2xl p-1 shadow-sm md:grid-cols-8">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-9">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
+            <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
             <TabsTrigger value="servicos" className="rounded-xl">Serviços</TabsTrigger>
@@ -1942,65 +2090,108 @@ export default function App() {
                         Mostrando {pastEventsCount} trabalhos realizados
                       </div>
                     ) : null}
-                  {filteredEvents.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-                      <p className="font-medium text-slate-700">Nenhum agendamento encontrado</p>
-                      <p className="mt-2 text-sm">Cadastre seu primeiro evento para começar a organizar a agenda.</p>
-                      <Button onClick={() => openNewEventModal()} className="mt-4 rounded-2xl">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Criar agendamento
-                      </Button>
-                    </div>
-                  ) : (
-                    filteredEvents.map((record) => (
-                      <div key={record.id} className="overflow-hidden rounded-[30px] border border-rose-100/80 bg-gradient-to-r from-white via-[#fffafb] to-[#fff7f8] p-5 shadow-[0_16px_38px_rgba(99,32,67,0.08)]">
-                        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="inline-flex rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-500">
-                                {record.eventDate ? formatDateBR(record.eventDate) : "Sem data"}
-                              </span>
-                              <StatusBadge value={record.status} />
-                              <StatusBadge value={record.paymentStatus} />
-                            </div>
-                            <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
-                            <p className="mt-1 text-sm text-slate-500">{record.eventType}</p>
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Horário</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{record.startTime || "Sem horário"}</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Local</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{record.location || "Local a combinar"}</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Valor</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.computedAmount)}</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.amountPaid || 0)}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 xl:max-w-[280px] xl:justify-end">
-                            <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedContractId(record.id); setActiveTab("contratos"); }}><FileText className="mr-2 h-4 w-4" />Contrato</Button>
-                            {Number(record.amountPaid || 0) > 0 ? (
-                              <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedReceiptId(record.id); setActiveTab("recibos"); }}><Wallet className="mr-2 h-4 w-4" />Recibo</Button>
-                            ) : null}
-                            <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, getAgendaMessageType(record))}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, getAgendaMessageType(record))}><Bell className="mr-2 h-4 w-4" />{getAgendaMessageLabel(record)}</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => markAsPaid(record)}><Wallet className="mr-2 h-4 w-4" />Quitar</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
-                            <Button variant="destructive" className="rounded-2xl" onClick={() => removeEvent(record.id)}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button>
-                          </div>
-                        </div>
+                    {filteredEvents.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                        <p className="font-medium text-slate-700">Nenhum agendamento encontrado</p>
+                        <p className="mt-2 text-sm">Cadastre seu primeiro evento para começar a organizar a agenda.</p>
+                        <Button onClick={() => openNewEventModal()} className="mt-4 rounded-2xl">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Criar agendamento
+                        </Button>
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      filteredEvents.map((record) => renderEventCard(record))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="realizados" className="mt-6">
+            <div className="space-y-6">
+              <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
+                <div className="mb-5 flex items-center gap-2">
+                  <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
+                    Realizados
+                  </span>
+                  <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
+                    Histórico
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Trabalhos realizados</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      Consulte compromissos com data passada, mantendo acesso rápido aos documentos, edição e histórico financeiro.
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-rose-100 bg-white/85 px-4 py-3 text-sm font-medium text-slate-600 shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                    {filteredRealizedEvents.length} de {realizedEvents.length} trabalhos
+                  </div>
+                </div>
+              </div>
+
+              <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+                <CardContent className="space-y-5 pt-6">
+                  <div className="grid gap-3 lg:grid-cols-[1.2fr,0.9fr,0.8fr,0.9fr]">
+                    <div className="flex items-center gap-3 rounded-[24px] border border-rose-100 bg-white px-4 py-3 shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                      <Search className="h-4 w-4 text-slate-500" />
+                      <Input
+                        value={realizedSearch}
+                        onChange={(event) => setRealizedSearch(event.target.value)}
+                        placeholder="Buscar cliente..."
+                        className="border-0 p-0 shadow-none focus-visible:ring-0"
+                      />
+                    </div>
+
+                    <Select value={realizedMonthFilter} onValueChange={setRealizedMonthFilter}>
+                      <SelectTrigger className="rounded-[24px] border-rose-100 bg-white shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                        <SelectValue placeholder="Mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os meses</SelectItem>
+                        {realizedMonthOptions.map((item) => (
+                          <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={realizedStatusFilter} onValueChange={setRealizedStatusFilter}>
+                      <SelectTrigger className="rounded-[24px] border-rose-100 bg-white shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os status</SelectItem>
+                        {realizedStatusOptions.map((item) => (
+                          <SelectItem key={item} value={item}>{item}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={realizedValueRange} onValueChange={setRealizedValueRange}>
+                      <SelectTrigger className="rounded-[24px] border-rose-100 bg-white shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                        <SelectValue placeholder="Valor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os valores</SelectItem>
+                        <SelectItem value="below500">Até R$ 500</SelectItem>
+                        <SelectItem value="500to1500">R$ 500 - R$ 1.500</SelectItem>
+                        <SelectItem value="1500to3000">R$ 1.500 - R$ 3.000</SelectItem>
+                        <SelectItem value="above3000">Acima de R$ 3.000</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    {filteredRealizedEvents.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                        <p className="text-lg font-medium text-slate-700">Nenhum trabalho realizado encontrado</p>
+                        <p className="mt-2 text-sm">Ajuste os filtros ou aguarde novos trabalhos concluídos.</p>
+                      </div>
+                    ) : (
+                      filteredRealizedEvents.map((record) => renderEventCard(record))
+                    )}
                   </div>
                 </CardContent>
               </Card>
