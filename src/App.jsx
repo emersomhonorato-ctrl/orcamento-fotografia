@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Ban,
   Bell,
   Briefcase,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   Save,
   Search,
   Trash2,
@@ -141,6 +143,24 @@ function normalizePhoneDigits(value = "") {
   return String(value || "").replace(/\D/g, "");
 }
 
+function formatMonthOptionLabel(key) {
+  const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" })
+    .format(new Date(`${key}-01T12:00:00`))
+    .replace(" de ", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function getBudgetReferenceDate(record = {}) {
+  return record.createdAt || record.eventDate || record.updatedAt || "";
+}
+
+function getMonthKeyFromDate(value) {
+  if (!value) return "";
+  const date = new Date(String(value).includes("T") ? value : `${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function App() {
   const [appState, setAppState] = useState(readLocalAppState);
   const [session, setSession] = useState(null);
@@ -161,6 +181,9 @@ export default function App() {
   const [realizedMonthFilter, setRealizedMonthFilter] = useState("all");
   const [realizedStatusFilter, setRealizedStatusFilter] = useState("all");
   const [realizedValueRange, setRealizedValueRange] = useState("all");
+  const [canceledSearch, setCanceledSearch] = useState("");
+  const [canceledMonthFilter, setCanceledMonthFilter] = useState("all");
+  const [canceledValueRange, setCanceledValueRange] = useState("all");
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
@@ -291,6 +314,16 @@ export default function App() {
     [enrichedRecords],
   );
 
+  const activeBudgets = useMemo(
+    () => onlyBudgets.filter((record) => record.status !== "Cancelado"),
+    [onlyBudgets],
+  );
+
+  const canceledBudgets = useMemo(
+    () => onlyBudgets.filter((record) => record.status === "Cancelado"),
+    [onlyBudgets],
+  );
+
   const filteredEvents = useMemo(() => {
     const today = new Date(`${getTodayLocalISO()}T00:00:00`);
 
@@ -419,6 +452,59 @@ export default function App() {
       });
   }, [realizedEvents, realizedMonthFilter, realizedSearch, realizedStatusFilter, realizedValueRange]);
 
+  const canceledMonthOptions = useMemo(() => {
+    const months = new Set();
+
+    canceledBudgets.forEach((record) => {
+      const monthKey = getMonthKeyFromDate(getBudgetReferenceDate(record));
+      if (monthKey) months.add(monthKey);
+    });
+
+    return Array.from(months)
+      .sort()
+      .reverse()
+      .map((key) => ({ key, label: formatMonthOptionLabel(key) }));
+  }, [canceledBudgets]);
+
+  const filteredCanceledBudgets = useMemo(() => {
+    return canceledBudgets
+      .filter((record) => {
+        const haystack = [
+          record.clientName,
+          record.email,
+          record.phone,
+          record.whatsapp,
+          record.eventType,
+          record.location,
+          record.notes,
+          record.packageName,
+          record.budgetDescription,
+        ]
+          .join(" ")
+          .toLowerCase();
+        const amount = Number(record.computedAmount || record.amount || 0);
+
+        if (canceledSearch.trim() && !haystack.includes(canceledSearch.trim().toLowerCase())) return false;
+
+        if (canceledMonthFilter !== "all") {
+          const monthKey = getMonthKeyFromDate(getBudgetReferenceDate(record));
+          if (monthKey !== canceledMonthFilter) return false;
+        }
+
+        if (canceledValueRange === "below500" && amount >= 500) return false;
+        if (canceledValueRange === "500to1500" && (amount < 500 || amount >= 1500)) return false;
+        if (canceledValueRange === "1500to3000" && (amount < 1500 || amount >= 3000)) return false;
+        if (canceledValueRange === "above3000" && amount < 3000) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        const aDate = new Date(getBudgetReferenceDate(a)).getTime() || 0;
+        const bDate = new Date(getBudgetReferenceDate(b)).getTime() || 0;
+        return bDate - aDate;
+      });
+  }, [canceledBudgets, canceledMonthFilter, canceledSearch, canceledValueRange]);
+
   const selectedDayEvents = useMemo(
     () => onlyEvents.filter((record) => record.eventDate === selectedDate),
     [onlyEvents, selectedDate],
@@ -499,12 +585,12 @@ export default function App() {
 
   const budgetPipeline = useMemo(() => {
     return {
-      pending: onlyBudgets.filter((record) => record.status === "Pendente").length,
-      negotiation: onlyBudgets.filter((record) => record.status === "Em negociação").length,
-      approved: onlyBudgets.filter((record) => record.status === "Aprovado").length,
-      canceled: onlyBudgets.filter((record) => record.status === "Cancelado").length,
+      pending: activeBudgets.filter((record) => record.status === "Pendente").length,
+      negotiation: activeBudgets.filter((record) => record.status === "Em negociação").length,
+      approved: activeBudgets.filter((record) => record.status === "Aprovado").length,
+      canceled: canceledBudgets.length,
     };
-  }, [onlyBudgets]);
+  }, [activeBudgets, canceledBudgets.length]);
 
   const commercialActions = useMemo(() => {
     const reminderDays = Number(settings.reminderDaysBefore || 0);
@@ -523,7 +609,7 @@ export default function App() {
         record,
       }));
 
-    const budgetActions = onlyBudgets
+    const budgetActions = activeBudgets
       .filter((record) => ["Pendente", "Em negociação"].includes(record.status))
       .slice(0, 4)
       .map((record) => ({
@@ -546,7 +632,7 @@ export default function App() {
       }));
 
     return [...agendaActions, ...budgetActions, ...paymentActions].slice(0, 6);
-  }, [onlyEvents, onlyBudgets, settings.reminderDaysBefore, settings.reminderSameDay]);
+  }, [onlyEvents, activeBudgets, settings.reminderDaysBefore, settings.reminderSameDay]);
 
   const contractRecords = useMemo(
     () => enrichedRecords.filter((record) => record.clientName || record.eventType || record.packageName),
@@ -775,11 +861,9 @@ export default function App() {
     const totalRevenue = onlyEvents.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
     const received = onlyEvents.reduce((sum, record) => sum + Number(record.amountPaid || 0), 0);
     const pending = Math.max(totalRevenue - received, 0);
-    const potentialRevenue = onlyBudgets
-      .filter((record) => record.status !== "Cancelado")
-      .reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
+    const potentialRevenue = activeBudgets.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
 
-    const conversionBase = onlyEvents.length + onlyBudgets.length;
+    const conversionBase = onlyEvents.length + activeBudgets.length;
     const conversionRate = conversionBase > 0 ? Math.round((onlyEvents.length / conversionBase) * 100) : 0;
 
     return {
@@ -789,13 +873,13 @@ export default function App() {
       totalRevenue,
       received,
       pending,
-      openBudgets: onlyBudgets.filter((record) => ["Pendente", "Em negociação"].includes(record.status)).length,
+      openBudgets: activeBudgets.filter((record) => ["Pendente", "Em negociação"].includes(record.status)).length,
       potentialRevenue,
       conversionRate,
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [onlyBudgets, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
+  }, [activeBudgets, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
 
   function changeSelectedMonth(direction) {
     const baseDate = new Date(`${selectedMonth}-01T12:00:00`);
@@ -1145,6 +1229,37 @@ export default function App() {
     });
 
     setActiveTab("agenda");
+  }
+
+  function cancelBudget(record) {
+    if (!window.confirm("Tem certeza que quer cancelar este orçamento? Ele continuará no sistema na aba Cancelados.")) {
+      return;
+    }
+
+    updateRecordFields(record.id, { status: "Cancelado" });
+    setActiveTab("cancelados");
+  }
+
+  function reactivateBudget(record) {
+    if (!window.confirm(`Reativar o orçamento de ${record.clientName || "cliente sem nome"}? Ele voltará para a aba Orçamentos.`)) {
+      return;
+    }
+
+    updateRecordFields(record.id, { status: "Pendente" });
+    setActiveTab("orcamentos");
+  }
+
+  function deleteBudgetPermanently(record) {
+    const clientName = record.clientName || "cliente sem nome";
+    if (!window.confirm(`Tem certeza que deseja excluir definitivamente o orçamento de ${clientName}?`)) {
+      return;
+    }
+
+    if (!window.confirm("Confirme novamente: esta ação é permanente e não pode ser desfeita.")) {
+      return;
+    }
+
+    removeEvent(record.id);
   }
 
   function markAsPaid(record) {
@@ -1598,6 +1713,111 @@ export default function App() {
     );
   }
 
+  function renderBudgetCard(record) {
+    const isCanceled = record.status === "Cancelado";
+
+    return (
+      <div
+        key={record.id}
+        className={`overflow-hidden rounded-[30px] border p-5 shadow-[0_16px_38px_rgba(99,32,67,0.08)] ${
+          isCanceled
+            ? "border-amber-100/80 bg-gradient-to-r from-white via-[#fffaf0] to-[#fff7e6]"
+            : "border-rose-100/80 bg-gradient-to-r from-white via-[#fffafb] to-[#fff7f8]"
+        }`}
+      >
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-500">
+                {record.eventDate ? formatDateBR(record.eventDate) : "Sem data prevista"}
+              </span>
+              <StatusBadge value={record.status} />
+              {isCanceled && record.updatedAt ? (
+                <span className="inline-flex rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+                  Atualizado em {formatDateBR(String(record.updatedAt).slice(0, 10))}
+                </span>
+              ) : null}
+            </div>
+            <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
+            <p className="mt-1 text-sm text-slate-500">{record.eventType || "Orçamento"}</p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Valor</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.computedAmount)}</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Local</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{record.location || "Local a combinar"}</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Validade</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{record.budgetValidityDays || settings.budgetValidityDays} dias</p>
+              </div>
+              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.amountPaid || 0)}</p>
+              </div>
+            </div>
+
+            {record.budgetDescription ? (
+              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-500">
+                {record.budgetDescription}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-2 xl:max-w-[300px] xl:justify-end">
+            <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedContractId(record.id); setActiveTab("contratos"); }}><FileText className="mr-2 h-4 w-4" />Contrato</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, "proposta")}><Bell className="mr-2 h-4 w-4" />Proposta</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, "proposta")}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
+            {!isCanceled ? (
+              <Button className="rounded-2xl" onClick={() => approveBudget(record)}><CheckCircle2 className="mr-2 h-4 w-4" />Aprovar</Button>
+            ) : null}
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+            {isCanceled ? (
+              <Button
+                variant="outline"
+                className="rounded-2xl border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900"
+                onClick={() => reactivateBudget(record)}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reativar
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="rounded-2xl border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                onClick={() => cancelBudget(record)}
+              >
+                <Ban className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+            )}
+            <Button
+              variant="destructive"
+              className="rounded-2xl"
+              onClick={() => {
+                if (isCanceled) {
+                  deleteBudgetPermanently(record);
+                  return;
+                }
+
+                if (window.confirm(`Excluir o orçamento de ${record.clientName || "cliente sem nome"}?`)) {
+                  removeEvent(record.id);
+                }
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (AUTH_ENABLED && authLoading) {
     return (
       <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
@@ -1839,16 +2059,15 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-9">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-8">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
             <TabsTrigger value="servicos" className="rounded-xl">Serviços</TabsTrigger>
-            <TabsTrigger value="contratos" className="rounded-xl">Contratos</TabsTrigger>
-            <TabsTrigger value="recibos" className="rounded-xl">Recibos</TabsTrigger>
             <TabsTrigger value="configuracoes" className="rounded-xl">Configurações</TabsTrigger>
+            <TabsTrigger value="cancelados" className="rounded-xl">Cancelados</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="mt-6">
@@ -2245,71 +2464,99 @@ export default function App() {
                   </div>
 
                   <div className="space-y-4">
-                  {onlyBudgets.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-                      <p className="font-medium text-slate-700">Nenhum orçamento encontrado</p>
-                      <p className="mt-2 text-sm">Crie um orçamento para gerar PDF e organizar suas propostas comerciais.</p>
-                      <Button onClick={openNewBudgetModal} className="mt-4 rounded-2xl">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Criar orçamento
-                      </Button>
-                    </div>
-                  ) : (
-                    onlyBudgets.map((record) => (
-                      <div key={record.id} className="overflow-hidden rounded-[30px] border border-rose-100/80 bg-gradient-to-r from-white via-[#fffafb] to-[#fff7f8] p-5 shadow-[0_16px_38px_rgba(99,32,67,0.08)]">
-                        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="inline-flex rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-500">
-                                {record.eventDate ? formatDateBR(record.eventDate) : "Sem data prevista"}
-                              </span>
-                              <StatusBadge value={record.status} />
-                            </div>
-                            <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
-                            <p className="mt-1 text-sm text-slate-500">{record.eventType || "Orçamento"}</p>
-
-                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Valor</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.computedAmount)}</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Local</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{record.location || "Local a combinar"}</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Validade</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{record.budgetValidityDays || settings.budgetValidityDays} dias</p>
-                              </div>
-                              <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
-                                <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.amountPaid || 0)}</p>
-                              </div>
-                            </div>
-
-                            {record.budgetDescription ? (
-                              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-500">
-                                {record.budgetDescription}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 xl:max-w-[280px] xl:justify-end">
-                            <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedContractId(record.id); setActiveTab("contratos"); }}><FileText className="mr-2 h-4 w-4" />Contrato</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, "proposta")}><Bell className="mr-2 h-4 w-4" />Proposta</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, "proposta")}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
-                            <Button className="rounded-2xl" onClick={() => approveBudget(record)}><CheckCircle2 className="mr-2 h-4 w-4" />Aprovar</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF</Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-                            <Button variant="destructive" className="rounded-2xl" onClick={() => removeEvent(record.id)}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button>
-                          </div>
-                        </div>
+                    {activeBudgets.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                        <p className="font-medium text-slate-700">Nenhum orçamento ativo encontrado</p>
+                        <p className="mt-2 text-sm">Crie um orçamento para gerar PDF e organizar suas propostas comerciais.</p>
+                        <Button onClick={openNewBudgetModal} className="mt-4 rounded-2xl">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Criar orçamento
+                        </Button>
                       </div>
-                    ))
-                  )}
-                </div>
+                    ) : (
+                      activeBudgets.map((record) => renderBudgetCard(record))
+                    )}
+                  </div>
               </CardContent>
             </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="cancelados" className="mt-6">
+            <div className="space-y-6">
+              <div className="overflow-hidden rounded-[32px] border border-amber-200/70 bg-gradient-to-r from-[#fffbeb] via-white to-[#fff7ed] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
+                <div className="mb-5 flex items-center gap-2">
+                  <span className="inline-flex rounded-full border border-amber-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">
+                    Cancelados
+                  </span>
+                  <span className="inline-flex rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                    Histórico de orçamentos
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Orçamentos cancelados</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      Consulte propostas retiradas do funil ativo sem perder PDFs, contratos, contatos e a possibilidade de reativar.
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-amber-100 bg-white/85 px-4 py-3 text-sm font-medium text-slate-600 shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                    {filteredCanceledBudgets.length} de {canceledBudgets.length} cancelados
+                  </div>
+                </div>
+              </div>
+
+              <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+                <CardContent className="space-y-5 pt-6">
+                  <div className="grid gap-3 lg:grid-cols-[1.2fr,0.9fr,0.9fr]">
+                    <div className="flex items-center gap-3 rounded-[24px] border border-amber-100 bg-white px-4 py-3 shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                      <Search className="h-4 w-4 text-slate-500" />
+                      <Input
+                        value={canceledSearch}
+                        onChange={(event) => setCanceledSearch(event.target.value)}
+                        placeholder="Buscar cliente..."
+                        className="border-0 p-0 shadow-none focus-visible:ring-0"
+                      />
+                    </div>
+
+                    <Select value={canceledMonthFilter} onValueChange={setCanceledMonthFilter}>
+                      <SelectTrigger className="rounded-[24px] border-amber-100 bg-white shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                        <SelectValue placeholder="Mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os meses</SelectItem>
+                        {canceledMonthOptions.map((item) => (
+                          <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={canceledValueRange} onValueChange={setCanceledValueRange}>
+                      <SelectTrigger className="rounded-[24px] border-amber-100 bg-white shadow-[0_12px_28px_rgba(99,32,67,0.06)]">
+                        <SelectValue placeholder="Valor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os valores</SelectItem>
+                        <SelectItem value="below500">Até R$ 500</SelectItem>
+                        <SelectItem value="500to1500">R$ 500 - R$ 1.500</SelectItem>
+                        <SelectItem value="1500to3000">R$ 1.500 - R$ 3.000</SelectItem>
+                        <SelectItem value="above3000">Acima de R$ 3.000</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    {filteredCanceledBudgets.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <p className="text-lg mb-2">Nenhum orçamento cancelado</p>
+                        <p className="text-sm">Quando você cancelar orçamentos, eles aparecerão aqui</p>
+                      </div>
+                    ) : (
+                      filteredCanceledBudgets.map((record) => renderBudgetCard(record))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
