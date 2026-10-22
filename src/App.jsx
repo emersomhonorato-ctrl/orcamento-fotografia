@@ -959,6 +959,64 @@ export default function App() {
     setAppState((current) => normalizeAppState({ ...current, ...partial }));
   }
 
+  // Cada pedido do formulário vira um cliente cadastrado (uma vez só; não duplica quem já existe)
+  const importClientsFromRequests = useCallback((requests = []) => {
+    setAppState((current) => {
+      const imported = new Set(current.settings?.importedRequestIds || []);
+      const pending = requests.filter((request) => request?.id && request.name && !imported.has(request.id) && request.status !== "arquivado");
+      if (!pending.length) return current;
+
+      const clientsList = [...(current.clients || [])];
+      pending.forEach((request) => {
+        imported.add(request.id);
+        const email = String(request.email || "").trim().toLowerCase();
+        const phone = normalizePhoneDigits(request.whatsapp);
+        const exists = clientsList.some((client) => {
+          const clientEmail = String(client.email || "").trim().toLowerCase();
+          const clientPhones = [normalizePhoneDigits(client.phone), normalizePhoneDigits(client.whatsapp)].filter(Boolean);
+          return (email && clientEmail === email) || (phone && clientPhones.includes(phone));
+        });
+        if (exists) return;
+
+        clientsList.push(normalizeClient({
+          name: String(request.name).trim(),
+          email,
+          phone: request.whatsapp || "",
+          whatsapp: request.whatsapp || "",
+          city: request.location || "",
+          notes: [
+            `Cadastrado pelo formulário de pedido em ${String(request.created_at || "").slice(0, 10).split("-").reverse().join("/")}.`,
+            request.service ? `Interesse: ${request.service}${request.event_date ? ` (${request.event_date.split("-").reverse().join("/")})` : ""}.` : "",
+            request.how_found ? `Conheceu por: ${request.how_found}.` : "",
+          ].filter(Boolean).join(" "),
+        }));
+      });
+
+      return normalizeAppState({
+        ...current,
+        clients: clientsList,
+        settings: { ...current.settings, importedRequestIds: Array.from(imported).slice(-500) },
+      });
+    });
+  }, []);
+
+  // Ao abrir o app (depois de carregar os dados do Supabase), cadastra clientes de pedidos novos
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    let active = true;
+    supabase
+      .from("budget_requests")
+      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found")
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .then(({ data, error }) => {
+        if (active && !error && data) importClientsFromRequests(data);
+      });
+    return () => {
+      active = false;
+    };
+  }, [hasHydratedRemote, isAuthorized, importClientsFromRequests]);
+
   const findMatchingClient = useCallback((candidate = {}, ignoreId = "") => {
     const candidateEmail = String(candidate.email || "").trim().toLowerCase();
     const candidatePhone = normalizePhoneDigits(candidate.phone || candidate.whatsapp || "");
@@ -1143,8 +1201,10 @@ export default function App() {
       request.how_found ? `Conheceu por: ${request.how_found}` : "",
     ].filter(Boolean);
 
+    const linkedClient = findMatchingClient({ name: request.name, email: request.email, whatsapp: request.whatsapp });
     openNewBudgetModal({
-      clientName: request.name || "",
+      clientId: linkedClient?.id || "",
+      clientName: linkedClient?.name || request.name || "",
       whatsapp: request.whatsapp || "",
       phone: request.whatsapp || "",
       email: request.email || "",
@@ -2575,7 +2635,11 @@ export default function App() {
                 </div>
               </div>
 
-              <BudgetRequestsPanel settings={settings} onCreateBudget={createBudgetFromRequest} />
+              <BudgetRequestsPanel
+                settings={settings}
+                onCreateBudget={createBudgetFromRequest}
+                onRequestsLoaded={hasHydratedRemote ? importClientsFromRequests : undefined}
+              />
 
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
                 <CardContent className="pt-6">

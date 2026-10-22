@@ -29,7 +29,7 @@ function formatCreatedAt(value) {
   return `${formatDateBR(value.slice(0, 10))} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function BudgetRequestsPanel({ settings = {}, onCreateBudget }) {
+export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onRequestsLoaded }) {
   const [requests, setRequests] = useState([]);
   const [state, setState] = useState("loading"); // loading | ready | missing | error
   const [showArchived, setShowArchived] = useState(false);
@@ -46,7 +46,8 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget }) {
     }
     setRequests(data || []);
     setState("ready");
-  }, []);
+    onRequestsLoaded?.(data || []);
+  }, [onRequestsLoaded]);
 
   useEffect(() => {
     let active = true;
@@ -64,11 +65,12 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget }) {
         }
         setRequests(data || []);
         setState("ready");
+        onRequestsLoaded?.(data || []);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [onRequestsLoaded]);
 
   async function setStatus(request, status) {
     setRequests((current) => current.map((item) => (item.id === request.id ? { ...item, status } : item)));

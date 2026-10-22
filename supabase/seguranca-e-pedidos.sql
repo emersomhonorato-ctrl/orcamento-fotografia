@@ -84,3 +84,15 @@ create policy "pedidos: admin gerencia"
 select tablename, policyname, roles, cmd from pg_policies
 where schemaname = 'public' and tablename in ('app_state', 'budget_requests')
 order by tablename, policyname;
+
+-- ---------------------------------------------------------------------
+-- 3) CAMPOS OBRIGATÓRIOS NO PEDIDO (nome e sobrenome, e-mail válido,
+--    data do evento e tipo de evento). "not valid" = vale só para pedidos novos.
+-- ---------------------------------------------------------------------
+alter table public.budget_requests drop constraint if exists pedidos_campos_obrigatorios;
+alter table public.budget_requests add constraint pedidos_campos_obrigatorios check (
+  email is not null and email ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}$'
+  and event_date is not null
+  and service is not null and char_length(service) > 0
+  and name ~ '[^[:space:]]{2,}[[:space:]]+[^[:space:]]{2,}'
+) not valid;
