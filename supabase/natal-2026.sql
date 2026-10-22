@@ -205,3 +205,101 @@ create policy "ensaios: admin lê" on storage.objects for select to authenticate
   using (bucket_id = 'ensaios' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
 
 select id, public, file_size_limit from storage.buckets where id = 'ensaios';
+
+-- =====================================================================
+-- Pessoa extra + opção de pagar o valor completo
+-- =====================================================================
+alter table public.booking_campaigns
+  add column if not exists extra_person_price numeric not null default 0,
+  add column if not exists max_extra_people int not null default 5,
+  add column if not exists allow_full_payment boolean not null default true;
+
+alter table public.bookings
+  add column if not exists extra_people int not null default 0,
+  add column if not exists extra_people_amount numeric(10,2) not null default 0,
+  add column if not exists total_price numeric(10,2),
+  add column if not exists payment_choice text not null default 'sinal';
+
+drop function if exists public.book_slot(uuid, text, text, text, text, text);
+drop function if exists public.book_slot(uuid, text, text, text, text, text, int, text);
+
+create function public.book_slot(
+  p_slot_id uuid, p_package text, p_name text, p_whatsapp text, p_email text,
+  p_notes text default null, p_extra_people int default 0, p_payment text default 'sinal'
+) returns json
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  s public.booking_slots;
+  c public.booking_campaigns;
+  pkg jsonb;
+  b_id uuid;
+  phone_digits text := regexp_replace(coalesce(p_whatsapp, ''), '\D', '', 'g');
+  v_extra int := greatest(coalesce(p_extra_people, 0), 0);
+  v_price numeric;
+  v_extra_amount numeric;
+  v_total numeric;
+  v_payment text := case when p_payment = 'total' then 'total' else 'sinal' end;
+  v_deposit numeric;
+begin
+  if coalesce(p_name, '') !~ '[^[:space:]]{2,}[[:space:]]+[^[:space:]]{2,}' then
+    raise exception 'Informe nome e sobrenome.';
+  end if;
+  if length(phone_digits) < 10 then
+    raise exception 'Informe um WhatsApp com DDD.';
+  end if;
+  if coalesce(p_email, '') !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]{2,}$' then
+    raise exception 'Informe um e-mail válido.';
+  end if;
+
+  select * into s from public.booking_slots where id = p_slot_id for update;
+  if not found then raise exception 'Horário não encontrado.'; end if;
+  if s.status <> 'livre' then raise exception 'Este horário acabou de ser reservado. Escolha outro, por favor.'; end if;
+  if s.starts_at < now() then raise exception 'Este horário já passou.'; end if;
+
+  select * into c from public.booking_campaigns where id = s.campaign_id and active;
+  if not found then raise exception 'As reservas desta agenda estão encerradas.'; end if;
+
+  if (select count(*) from public.bookings b
+      where b.campaign_id = c.id and b.status in ('aguardando_sinal', 'confirmado')
+        and regexp_replace(b.whatsapp, '\D', '', 'g') = phone_digits) >= 3 then
+    raise exception 'Este WhatsApp já tem 3 reservas. Para mais horários, fale comigo pelo WhatsApp.';
+  end if;
+
+  select x into pkg from jsonb_array_elements(c.packages) x where x ->> 'name' = p_package limit 1;
+  if pkg is null then raise exception 'Escolha um pacote.'; end if;
+
+  if coalesce(c.extra_person_price, 0) <= 0 then v_extra := 0; end if;
+  if v_extra > coalesce(c.max_extra_people, 5) then
+    raise exception 'Máximo de % pessoas extras. Para mais, fale comigo pelo WhatsApp.', coalesce(c.max_extra_people, 5);
+  end if;
+  if v_payment = 'total' and not coalesce(c.allow_full_payment, true) then v_payment := 'sinal'; end if;
+
+  v_price := (pkg ->> 'price')::numeric;
+  v_extra_amount := round(v_extra * coalesce(c.extra_person_price, 0), 2);
+  v_total := v_price + v_extra_amount;
+  v_deposit := case when v_payment = 'total' then v_total
+                    else round(v_total * coalesce(c.deposit_percent, 50) / 100.0, 2) end;
+
+  update public.booking_slots set status = 'reservado' where id = s.id;
+  insert into public.bookings (campaign_id, slot_id, starts_at, status, package_name, package_photos, package_price,
+                               extra_people, extra_people_amount, total_price, payment_choice, deposit_amount,
+                               name, whatsapp, email, notes)
+  values (c.id, s.id, s.starts_at, 'aguardando_sinal', pkg ->> 'name', (pkg ->> 'photos')::int, v_price,
+          v_extra, v_extra_amount, v_total, v_payment, v_deposit,
+          left(trim(p_name), 120), left(trim(p_whatsapp), 30), lower(left(trim(p_email), 160)), left(p_notes, 1000))
+  returning id into b_id;
+
+  return json_build_object('id', b_id, 'starts_at', s.starts_at, 'package', pkg ->> 'name',
+    'package_price', v_price, 'extra_people', v_extra, 'extra_amount', v_extra_amount,
+    'price', v_total, 'photos', pkg ->> 'photos', 'deposit', v_deposit, 'payment', v_payment,
+    'status', 'aguardando_sinal');
+end;
+$fn$;
+
+revoke all on function public.book_slot(uuid, text, text, text, text, text, int, text) from public;
+grant execute on function public.book_slot(uuid, text, text, text, text, text, int, text) to anon, authenticated;
+
+select pg_get_function_identity_arguments('public.book_slot'::regproc) as args;

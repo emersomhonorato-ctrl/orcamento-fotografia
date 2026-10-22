@@ -18,6 +18,7 @@ import {
   weekdayLabel,
   fetchAllRows,
   themeEmoji,
+  bookingTotal,
 } from "@/lib/bookings";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
@@ -99,7 +100,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       free: slots.filter((slot) => slot.status === "livre").length,
       booked: confirmed.length,
       awaiting: awaiting.length,
-      revenue: confirmed.reduce((sum, booking) => sum + Number(booking.package_price || 0), 0),
+      revenue: confirmed.reduce((sum, booking) => sum + bookingTotal(booking), 0),
       deposits: confirmed.reduce((sum, booking) => sum + Number(booking.deposit_amount || 0), 0),
     };
   }, [slots, bookings]);
@@ -165,7 +166,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   }
 
   async function markDepositReceived(booking) {
-    if (!window.confirm(`Confirmar que o sinal de ${formatBRL(booking.deposit_amount)} de ${booking.name} foi recebido?`)) return;
+    if (!window.confirm(`Confirmar que o ${booking.payment_choice === "total" ? "pagamento" : "sinal"} de ${formatBRL(booking.deposit_amount)} de ${booking.name} foi recebido?`)) return;
     setBusy(true);
     await supabase.from("bookings").update({ status: "confirmado", paid_at: new Date().toISOString() }).eq("id", booking.id);
     setBusy(false);
@@ -209,6 +210,9 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       studio_whatsapp: campaign?.studio_whatsapp || "",
       slot_minutes: String(campaign?.slot_minutes ?? 30),
       extra_photo_price: String(campaign?.extra_photo_price ?? 0),
+      extra_person_price: String(campaign?.extra_person_price ?? 0),
+      max_extra_people: String(campaign?.max_extra_people ?? 5),
+      allow_full_payment: campaign?.allow_full_payment !== false,
       start_date: campaign?.start_date || "",
       end_date: campaign?.end_date || "",
       packages: (Array.isArray(campaign?.packages) ? campaign.packages : []).map((item) => ({
@@ -255,6 +259,9 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         studio_whatsapp: infoForm.studio_whatsapp.replace(/\D/g, ""),
         slot_minutes: Math.max(5, toNumber(infoForm.slot_minutes) || 30),
         extra_photo_price: toNumber(infoForm.extra_photo_price),
+        extra_person_price: toNumber(infoForm.extra_person_price),
+        max_extra_people: Math.max(0, Math.round(toNumber(infoForm.max_extra_people))),
+        allow_full_payment: Boolean(infoForm.allow_full_payment),
         start_date: infoForm.start_date || null,
         end_date: infoForm.end_date || null,
         packages,
@@ -344,6 +351,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       "",
       ...(Array.isArray(campaign?.packages) ? campaign.packages.map((item) => `• ${item.photos} fotos — ${formatBRL(item.price)}`) : []),
       Number(campaign?.extra_photo_price) ? `• Foto extra: ${formatBRL(campaign.extra_photo_price)}` : "",
+      Number(campaign?.extra_person_price) ? `• Pessoa extra: ${formatBRL(campaign.extra_person_price)}` : "",
     ].filter((line) => line !== null).join("\n");
     window.open(buildWhatsAppShareLink(text), "_blank", "noopener");
   }
@@ -362,10 +370,14 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       `📅 *Data:* ${date}`,
       `⏰ *Horário:* ${localTime(booking.starts_at)}`,
       `📸 *Pacote:* ${booking.package_photos} fotos — ${formatBRL(booking.package_price)}`,
+      Number(booking.extra_people) ? `👥 *Pessoas extras:* ${booking.extra_people} — ${formatBRL(booking.extra_people_amount)}` : "",
+      `💵 *Total:* ${formatBRL(bookingTotal(booking))}`,
       awaiting
-        ? `💰 *Sinal para confirmar:* ${formatBRL(booking.deposit_amount)}`
-        : `✅ *Sinal recebido:* ${formatBRL(booking.deposit_amount)} • restante no dia: ${formatBRL(Number(booking.package_price || 0) - Number(booking.deposit_amount || 0))}`,
-    ];
+        ? `💰 *${booking.payment_choice === "total" ? "Valor para confirmar" : "Sinal para confirmar"}:* ${formatBRL(booking.deposit_amount)}`
+        : Number(booking.deposit_amount || 0) >= bookingTotal(booking)
+          ? `✅ *Pagamento recebido:* ${formatBRL(booking.deposit_amount)} — tudo pago!`
+          : `✅ *Sinal recebido:* ${formatBRL(booking.deposit_amount)} • restante no dia: ${formatBRL(bookingTotal(booking) - Number(booking.deposit_amount || 0))}`,
+    ].filter((line) => line !== "");
     if (campaign?.instructions_pdf_url) lines.push("", "📄 Instruções para o ensaio:", campaign.instructions_pdf_url);
     if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
     else lines.push("", "Qualquer dúvida, é só responder esta mensagem.");
@@ -424,7 +436,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
             ["Livres", totals.free],
             ["Aguardando sinal", totals.awaiting],
             ["Confirmados", totals.booked],
-            ["Sinais recebidos", formatBRL(totals.deposits)],
+            ["Recebido via Pix", formatBRL(totals.deposits)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white bg-white/80 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
@@ -461,6 +473,14 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                 <div className="space-y-1"><Label>Duração (min)</Label><Input type="number" min="5" className="rounded-2xl" value={infoForm.slot_minutes} onChange={(e) => setInfoForm({ ...infoForm, slot_minutes: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Foto extra (R$)</Label><Input inputMode="decimal" className="rounded-2xl" value={infoForm.extra_photo_price} onChange={(e) => setInfoForm({ ...infoForm, extra_photo_price: e.target.value })} /></div>
               </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1"><Label>Pessoa extra (R$ por pessoa)</Label><Input inputMode="decimal" className="rounded-2xl" placeholder="0 = sem opção" value={infoForm.extra_person_price} onChange={(e) => setInfoForm({ ...infoForm, extra_person_price: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Máximo de pessoas extras</Label><Input type="number" min="0" className="rounded-2xl" value={infoForm.max_extra_people} onChange={(e) => setInfoForm({ ...infoForm, max_extra_people: e.target.value })} /></div>
+                <label className="flex items-center gap-2 self-end rounded-2xl border border-slate-200 px-3 py-2.5 text-sm">
+                  <input type="checkbox" checked={infoForm.allow_full_payment} onChange={(e) => setInfoForm({ ...infoForm, allow_full_payment: e.target.checked })} />
+                  Cliente pode pagar o valor total
+                </label>
+              </div>
               <div className="space-y-2">
                 <Label>Pacotes</Label>
                 {infoForm.packages.map((item, index) => (
@@ -482,6 +502,8 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           ) : (
             <p className="text-sm text-slate-600">
               {campaign?.title} • {Number(campaign?.slot_minutes || 30)} min
+              {Number(campaign?.extra_person_price) ? ` • pessoa extra ${formatBRL(campaign.extra_person_price)} (até ${campaign?.max_extra_people ?? 5})` : " • sem pessoa extra"}
+              {campaign?.allow_full_payment !== false ? " • aceita pagamento total" : ""}
               {campaign?.location ? ` • ${campaign.location}` : ""}
               {campaign?.start_date && campaign?.end_date ? ` • ${dayMonthLabel(campaign.start_date)} a ${dayMonthLabel(campaign.end_date)}` : ""}
             </p>
@@ -622,16 +644,16 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                       {booking ? (
                         <div className="mt-1 space-y-1">
                           <p className="font-medium text-slate-900">{booking.name}</p>
-                          <p className="text-xs text-slate-600">{booking.package_photos} fotos • {formatBRL(booking.package_price)} • {booking.whatsapp}</p>
+                          <p className="text-xs text-slate-600">{booking.package_photos} fotos{Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa${booking.extra_people > 1 ? "s" : ""}` : ""} • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</p>
                           {booking.status === "aguardando_sinal" ? (
-                            <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Aguardando sinal {formatBRL(booking.deposit_amount)}</p>
+                            <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{booking.payment_choice === "total" ? "Aguardando pagamento total" : "Aguardando sinal"} {formatBRL(booking.deposit_amount)}</p>
                           ) : (
-                            <p className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Sinal recebido {formatBRL(booking.deposit_amount)}</p>
+                            <p className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">{Number(booking.deposit_amount || 0) >= bookingTotal(booking) ? "Pago completo" : "Sinal recebido"} {formatBRL(booking.deposit_amount)}</p>
                           )}
                           {booking.notes ? <p className="text-xs text-slate-500">“{booking.notes}”</p> : null}
                           <div className="flex flex-wrap gap-2 pt-1">
                             {booking.status === "aguardando_sinal" ? (
-                              <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" disabled={busy} onClick={() => markDepositReceived(booking)}><BadgeCheck className="h-3.5 w-3.5" />Sinal recebido</button>
+                              <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" disabled={busy} onClick={() => markDepositReceived(booking)}><BadgeCheck className="h-3.5 w-3.5" />{booking.payment_choice === "total" ? "Pagamento recebido" : "Sinal recebido"}</button>
                             ) : null}
                             <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700" onClick={() => confirmOnWhatsApp(booking)}><Send className="h-3.5 w-3.5" />{booking.status === "aguardando_sinal" ? "Cobrar sinal" : "Confirmar"}</button>
                             <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-red-700" onClick={() => cancelBooking(booking)}><Undo2 className="h-3.5 w-3.5" />Cancelar</button>
