@@ -150,6 +150,38 @@ function formatMonthOptionLabel(key) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function toLocalISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getBudgetValidityInfo(record = {}, defaultDays = 7) {
+  const days = Number(record.budgetValidityDays || defaultDays || 7);
+  const baseRaw = record.budgetSentAt || record.createdAt;
+  const base = baseRaw ? new Date(baseRaw) : null;
+
+  if (!base || Number.isNaN(base.getTime())) {
+    return { days, baseISO: "", expiresISO: "", daysLeft: null, isSent: false };
+  }
+
+  const baseDay = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  const expires = new Date(baseDay);
+  expires.setDate(expires.getDate() + days);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysLeft = Math.round((expires.getTime() - today.getTime()) / 86400000);
+
+  return {
+    days,
+    baseISO: toLocalISODate(baseDay),
+    expiresISO: toLocalISODate(expires),
+    daysLeft,
+    isSent: Boolean(record.budgetSentAt),
+  };
+}
+
 function getBudgetReferenceDate(record = {}) {
   return record.createdAt || record.eventDate || record.updatedAt || "";
 }
@@ -587,10 +619,14 @@ export default function App() {
     return {
       pending: activeBudgets.filter((record) => record.status === "Pendente").length,
       negotiation: activeBudgets.filter((record) => record.status === "Em negociação").length,
-      approved: activeBudgets.filter((record) => record.status === "Aprovado").length,
+      approved: onlyEvents.filter((record) => record.convertedFromBudget).length,
+      expired: activeBudgets.filter((record) => {
+        const info = getBudgetValidityInfo(record, settings.budgetValidityDays);
+        return info.daysLeft !== null && info.daysLeft < 0;
+      }).length,
       canceled: canceledBudgets.length,
     };
-  }, [activeBudgets, canceledBudgets.length]);
+  }, [activeBudgets, canceledBudgets.length, onlyEvents, settings.budgetValidityDays]);
 
   const commercialActions = useMemo(() => {
     const reminderDays = Number(settings.reminderDaysBefore || 0);
@@ -611,8 +647,10 @@ export default function App() {
 
     const budgetActions = activeBudgets
       .filter((record) => ["Pendente", "Em negociação"].includes(record.status))
+      .map((record) => ({ record, info: getBudgetValidityInfo(record, settings.budgetValidityDays) }))
+      .sort((a, b) => (a.info.daysLeft ?? 9999) - (b.info.daysLeft ?? 9999))
       .slice(0, 4)
-      .map((record) => ({
+      .map(({ record }) => ({
         id: `budget-${record.id}`,
         type: "proposta",
         title: "Follow-up de proposta",
@@ -632,7 +670,7 @@ export default function App() {
       }));
 
     return [...agendaActions, ...budgetActions, ...paymentActions].slice(0, 6);
-  }, [onlyEvents, activeBudgets, settings.reminderDaysBefore, settings.reminderSameDay]);
+  }, [onlyEvents, activeBudgets, settings.reminderDaysBefore, settings.reminderSameDay, settings.budgetValidityDays]);
 
   const contractRecords = useMemo(
     () => enrichedRecords.filter((record) => record.clientName || record.eventType || record.packageName),
@@ -863,8 +901,11 @@ export default function App() {
     const pending = Math.max(totalRevenue - received, 0);
     const potentialRevenue = activeBudgets.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
 
-    const conversionBase = onlyEvents.length + activeBudgets.length;
-    const conversionRate = conversionBase > 0 ? Math.round((onlyEvents.length / conversionBase) * 100) : 0;
+    // Conversão = trabalhos fechados ÷ (fechados + cancelados + orçamentos em aberto)
+    const wonCount = onlyEvents.filter((record) => record.status !== "Cancelado").length;
+    const lostCount = canceledBudgets.length + onlyEvents.filter((record) => record.status === "Cancelado").length;
+    const conversionBase = wonCount + lostCount + activeBudgets.length;
+    const conversionRate = conversionBase > 0 ? Math.round((wonCount / conversionBase) * 100) : 0;
 
     return {
       totalEvents: onlyEvents.length,
@@ -879,7 +920,7 @@ export default function App() {
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [activeBudgets, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
+  }, [activeBudgets, canceledBudgets.length, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
 
   function changeSelectedMonth(direction) {
     const baseDate = new Date(`${selectedMonth}-01T12:00:00`);
@@ -1207,6 +1248,12 @@ export default function App() {
 
   function markCommunicationSent(record, kind) {
     if (!record?.id) return;
+    if (kind === "proposta") {
+      if (!record.budgetSentAt) {
+        updateRecordFields(record.id, { budgetSentAt: new Date().toISOString() });
+      }
+      return;
+    }
     if (kind !== "lembrete" && kind !== "lembrete_hoje") return;
 
     updateRecordFields(record.id, kind === "lembrete_hoje" ? { sameDayReminderSent: true } : { reminderSent: true });
@@ -1221,6 +1268,8 @@ export default function App() {
           ...item,
           recordType: "evento",
           status: "Confirmado",
+          convertedFromBudget: true,
+          budgetApprovedAt: new Date().toISOString(),
           paymentStatus: item.paymentStatus || "Pendente",
           eventDate: item.eventDate || getTodayLocalISO(),
           updatedAt: new Date().toISOString(),
@@ -1715,6 +1764,18 @@ export default function App() {
 
   function renderBudgetCard(record) {
     const isCanceled = record.status === "Cancelado";
+    const validity = getBudgetValidityInfo(record, settings.budgetValidityDays);
+    let validityBadge = null;
+    if (!isCanceled && validity.daysLeft !== null) {
+      if (validity.daysLeft < 0) {
+        const n = Math.abs(validity.daysLeft);
+        validityBadge = { text: `Vencido há ${n} ${n === 1 ? "dia" : "dias"}`, className: "border-red-200 bg-red-50 text-red-700" };
+      } else if (validity.daysLeft === 0) {
+        validityBadge = { text: "Vence hoje", className: "border-amber-200 bg-amber-50 text-amber-800" };
+      } else if (validity.daysLeft <= 2) {
+        validityBadge = { text: `Vence em ${validity.daysLeft} ${validity.daysLeft === 1 ? "dia" : "dias"}`, className: "border-amber-200 bg-amber-50 text-amber-800" };
+      }
+    }
 
     return (
       <div
@@ -1732,6 +1793,11 @@ export default function App() {
                 {record.eventDate ? formatDateBR(record.eventDate) : "Sem data prevista"}
               </span>
               <StatusBadge value={record.status} />
+              {validityBadge ? (
+                <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${validityBadge.className}`}>
+                  {validityBadge.text}
+                </span>
+              ) : null}
               {isCanceled && record.updatedAt ? (
                 <span className="inline-flex rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">
                   Atualizado em {formatDateBR(String(record.updatedAt).slice(0, 10))}
@@ -1752,7 +1818,14 @@ export default function App() {
               </div>
               <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Validade</p>
-                <p className="mt-2 text-sm font-medium text-slate-800">{record.budgetValidityDays || settings.budgetValidityDays} dias</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">
+                  {validity.expiresISO ? `Até ${formatDateBR(validity.expiresISO)}` : `${validity.days} dias`}
+                </p>
+                {validity.baseISO ? (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {validity.days} dias · {validity.isSent ? "enviado" : "criado"} em {formatDateBR(validity.baseISO)}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
@@ -2208,8 +2281,8 @@ export default function App() {
                       <strong className="text-2xl text-amber-900">{budgetPipeline.pending}</strong>
                     </div>
                     <div className="flex items-center justify-between rounded-[22px] border border-sky-200/60 bg-gradient-to-r from-sky-50 to-white p-4">
-                      <span className="text-sm font-medium text-sky-800">Confirmados</span>
-                      <strong className="text-2xl text-sky-900">{budgetPipeline.approved}</strong>
+                      <span className="text-sm font-medium text-sky-800">Fechados (na agenda)</span>
+                      <strong className="text-2xl text-sky-900">{metrics.confirmedEvents}</strong>
                     </div>
                     <div className="flex items-center justify-between rounded-[22px] border border-rose-200/60 bg-gradient-to-r from-rose-50 to-white p-4">
                       <span className="text-sm font-medium text-rose-800">Cancelados</span>
@@ -2228,8 +2301,9 @@ export default function App() {
                       <p className="mt-2 text-2xl font-bold text-slate-900">{formatCurrency(metrics.potentialRevenue)}</p>
                     </div>
                     <div className="rounded-[24px] border border-rose-100/70 bg-gradient-to-br from-white to-[#fff8fa] p-5 shadow-[0_10px_24px_rgba(99,32,67,0.05)]">
-                      <p className="text-sm text-slate-500">Conversão estimada</p>
+                      <p className="text-sm text-slate-500">Taxa de conversão</p>
                       <p className="mt-2 text-2xl font-bold text-slate-900">{metrics.conversionRate}%</p>
+                      <p className="mt-1 text-xs text-slate-400">Fechados ÷ todos os orçamentos, incluindo cancelados</p>
                     </div>
                     <div className="rounded-[24px] border border-rose-100/70 bg-gradient-to-br from-white to-[#fff8fa] p-5 shadow-[0_10px_24px_rgba(99,32,67,0.05)]">
                       <p className="text-sm text-slate-500">Confirmados e concluídos</p>
@@ -2450,11 +2524,11 @@ export default function App() {
                       <p className="mt-3 text-3xl font-extrabold text-amber-900">{budgetPipeline.pending}</p>
                     </div>
                     <div className="rounded-[24px] border border-sky-200/80 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Em negociação</p>
-                      <p className="mt-3 text-3xl font-extrabold text-sky-900">{budgetPipeline.negotiation}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Vencidos</p>
+                      <p className="mt-3 text-3xl font-extrabold text-sky-900">{budgetPipeline.expired}</p>
                     </div>
                     <div className="rounded-[24px] border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Aprovado</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Aprovados</p>
                       <p className="mt-3 text-3xl font-extrabold text-emerald-900">{budgetPipeline.approved}</p>
                     </div>
                     <div className="rounded-[24px] border border-red-200/80 bg-gradient-to-br from-red-50 to-white p-4 shadow-sm">
