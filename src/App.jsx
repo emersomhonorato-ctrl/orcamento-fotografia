@@ -40,6 +40,7 @@ import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
 import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
+import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -1099,7 +1100,7 @@ export default function App() {
     setIsEventModalOpen(true);
   }
 
-  function openNewBudgetModal() {
+  function openNewBudgetModal(prefill = {}) {
     setForm({
       ...defaultForm,
       recordType: "orcamento",
@@ -1125,8 +1126,35 @@ export default function App() {
       items: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      ...prefill,
     });
     setIsEventModalOpen(true);
+  }
+
+  // Pedido vindo do formulário público -> novo orçamento já preenchido
+  function createBudgetFromRequest(request) {
+    const requested = String(request.service || "").trim().toLowerCase();
+    const matchedService = services.find((service) => String(service.name || "").trim().toLowerCase() === requested)
+      || services.find((service) => requested && String(service.name || "").toLowerCase().includes(requested.split(" ")[0]));
+    const noteLines = [
+      request.details ? `Pedido do cliente: ${request.details}` : "",
+      request.event_time ? `Horário desejado: ${request.event_time}` : "",
+      request.people ? `Pessoas/convidados: ${request.people}` : "",
+      request.how_found ? `Conheceu por: ${request.how_found}` : "",
+    ].filter(Boolean);
+
+    openNewBudgetModal({
+      clientName: request.name || "",
+      whatsapp: request.whatsapp || "",
+      phone: request.whatsapp || "",
+      email: request.email || "",
+      eventType: matchedService?.name || request.service || "",
+      packageName: matchedService?.name || request.service || "",
+      eventDate: request.event_date || "",
+      startTime: /^\d{1,2}:\d{2}$/.test(String(request.event_time || "").trim()) ? String(request.event_time).trim().padStart(5, "0") : "",
+      location: request.location || "",
+      notes: noteLines.join("\n"),
+    });
   }
 
   function editEvent(record) {
@@ -2043,7 +2071,7 @@ export default function App() {
               <Plus className="mr-2 h-4 w-4" />
               Novo agendamento
             </Button>
-            <Button variant="outline" onClick={openNewBudgetModal} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
+            <Button variant="outline" onClick={() => openNewBudgetModal()} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
               <FileText className="mr-2 h-4 w-4" />
               Novo orçamento
             </Button>
@@ -2540,12 +2568,14 @@ export default function App() {
                       Acompanhe a negociação, destaque valores e transforme propostas em eventos confirmados com mais clareza visual.
                     </p>
                   </div>
-                  <Button onClick={openNewBudgetModal} className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]">
+                  <Button onClick={() => openNewBudgetModal()} className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]">
                     <Plus className="mr-2 h-4 w-4" />
                     Novo orçamento
                   </Button>
                 </div>
               </div>
+
+              <BudgetRequestsPanel settings={settings} onCreateBudget={createBudgetFromRequest} />
 
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
                 <CardContent className="pt-6">
@@ -2573,7 +2603,7 @@ export default function App() {
                       <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                         <p className="font-medium text-slate-700">Nenhum orçamento ativo encontrado</p>
                         <p className="mt-2 text-sm">Crie um orçamento para gerar PDF e organizar suas propostas comerciais.</p>
-                        <Button onClick={openNewBudgetModal} className="mt-4 rounded-2xl">
+                        <Button onClick={() => openNewBudgetModal()} className="mt-4 rounded-2xl">
                           <Plus className="mr-2 h-4 w-4" />
                           Criar orçamento
                         </Button>
