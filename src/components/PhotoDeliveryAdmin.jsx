@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Eye, EyeOff, ImagePlus, KeyRound, Link2, Pencil, Plus, Send, Trash2, X } from "lucide-react";
+import { Copy, Eye, EyeOff, ImagePlus, KeyRound, Link2, Pencil, Plus, Save, Send, Star, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [copiedId, setCopiedId] = useState("");
+  const [reviewUrl, setReviewUrl] = useState("");
+  const [reviewDraft, setReviewDraft] = useState(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("photo_deliveries").select("*").order("created_at", { ascending: false }).limit(500);
@@ -57,8 +59,40 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       return;
     }
     setDeliveries(data || []);
+    const settingsRes = await supabase.from("studio_settings").select("google_review_url").eq("id", 1).maybeSingle();
+    if (!settingsRes.error) setReviewUrl(settingsRes.data?.google_review_url || "");
     setState("ready");
   }, []);
+
+  async function saveReviewUrl() {
+    const url = String(reviewDraft || "").trim();
+    if (url && !/^https:\/\//.test(url)) return setMessage("O link de avaliação precisa começar com https://");
+    const { error } = await supabase.from("studio_settings").upsert({ id: 1, google_review_url: url || null, updated_at: new Date().toISOString() });
+    if (error) return setMessage(`Erro ao salvar o link: ${error.message}`);
+    setReviewUrl(url);
+    setReviewDraft(null);
+    setMessage("Link de avaliação do Google salvo.");
+  }
+
+  async function askReview(item) {
+    if (!reviewUrl) return setMessage("Cadastre primeiro o link de avaliação do Google (no topo desta aba).");
+    const first = String(item.client_name).trim().split(/\s+/)[0];
+    const text = [
+      `Oi, ${first}! Tudo bem? 😊`,
+      "",
+      `Espero que você tenha amado as fotos (${item.title})!`,
+      "",
+      "Se puder, me ajuda muito uma avaliação no Google — leva menos de 1 minuto:",
+      reviewUrl,
+      "",
+      "Muito obrigado pela confiança! 💛",
+      "Emerson Honorato Retratos",
+    ].join("\n");
+    const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener");
+    await supabase.from("photo_deliveries").update({ review_requested_at: new Date().toISOString() }).eq("id", item.id);
+    load();
+  }
 
   useEffect(() => {
     const timer = setTimeout(load, 0);
@@ -206,6 +240,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       item.expires_at ? `\n⏳ Disponível para download até ${formatDateBR(item.expires_at)}. Baixe e guarde uma cópia!` : "",
       "",
       "Espero que você ame! Qualquer coisa é só me chamar. 💛",
+      reviewUrl ? `\n⭐ Se gostar, uma avaliação no Google me ajuda muito: ${reviewUrl}` : "",
       "Emerson Honorato Retratos",
     ].filter((line) => line !== "").join("\n").replace(/\n{3,}/g, "\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -241,13 +276,30 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
           {[
             ["Entregas", deliveries.length],
             ["Já abriram", deliveries.filter((item) => item.views > 0).length],
-            ["Aguardando", deliveries.filter((item) => item.active && !item.views).length],
+            ["Clicaram em avaliar", deliveries.filter((item) => item.review_clicked_at).length],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">{label}</p>
               <p className="mt-1 text-xl font-semibold">{value}</p>
             </div>
           ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+          <Star className="h-4 w-4 text-[#e9c77b]" />
+          <span className="text-sm font-medium">Avaliação no Google</span>
+          {reviewDraft !== null ? (
+            <>
+              <Input className="h-9 min-w-[240px] flex-1 rounded-xl border-white/20 bg-black/20 text-white" value={reviewDraft} placeholder="https://g.page/r/.../review" onChange={(e) => setReviewDraft(e.target.value)} />
+              <Button size="sm" className="rounded-xl bg-[#e9c77b] text-[#1b1610] hover:bg-[#f3d692]" onClick={saveReviewUrl}><Save className="mr-1.5 h-3.5 w-3.5" />Salvar</Button>
+              <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => setReviewDraft(null)}>Cancelar</Button>
+            </>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1 truncate text-xs text-white/60">{reviewUrl || "Nenhum link cadastrado — o pedido de avaliação não aparece."}</span>
+              {reviewUrl ? <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => window.open(reviewUrl, "_blank", "noopener")}>Testar</Button> : null}
+              <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => setReviewDraft(reviewUrl)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -377,10 +429,18 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                   {item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}
                   {item.last_viewed_at ? ` • última visita ${new Date(item.last_viewed_at).toLocaleDateString("pt-BR")}` : ""}
                 </p>
+                {item.review_clicked_at ? (
+                  <p className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">⭐ Clicou em avaliar no Google</p>
+                ) : item.review_requested_at ? (
+                  <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">Avaliação pedida em {new Date(item.review_requested_at).toLocaleDateString("pt-BR")}</p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => sendWhatsApp(item)}><Send className="mr-1.5 h-3.5 w-3.5" />Enviar</Button>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => copyLink(item)}><Copy className="mr-1.5 h-3.5 w-3.5" />{copiedId === item.id ? "Copiado!" : "Link"}</Button>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => window.open(linkFor(item).replace(DELIVERY_PUBLIC_BASE, `${window.location.origin}/entrega/`), "_blank", "noopener")}><Eye className="mr-1.5 h-3.5 w-3.5" />Ver</Button>
+                  {!item.review_clicked_at ? (
+                    <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800 hover:bg-amber-50" title="Pedir avaliação no Google pelo WhatsApp" onClick={() => askReview(item)}><Star className="mr-1.5 h-3.5 w-3.5" />Avaliação</Button>
+                  ) : null}
                   <Button size="sm" variant="ghost" className="rounded-xl" onClick={() => startEdit(item)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl" title={item.active ? "Desativar link" : "Ativar link"} onClick={() => toggleActive(item)}>{item.active ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</Button>
                   <Button size="sm" variant="ghost" className="rounded-xl text-red-600" disabled={busy} onClick={() => remove(item)}><Trash2 className="h-3.5 w-3.5" /></Button>

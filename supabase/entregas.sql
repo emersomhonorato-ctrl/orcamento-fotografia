@@ -85,3 +85,74 @@ create policy "entregas capa: admin lê" on storage.objects for select to authen
   using (bucket_id = 'entregas' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
 
 select count(*) as entregas from public.photo_deliveries;
+
+-- =====================================================================
+-- Avaliação no Google na entrega de fotos
+-- =====================================================================
+create table if not exists public.studio_settings (
+  id int primary key default 1 check (id = 1),
+  google_review_url text,
+  updated_at timestamptz not null default now()
+);
+alter table public.studio_settings enable row level security;
+drop policy if exists "config estudio: admin" on public.studio_settings;
+create policy "config estudio: admin" on public.studio_settings for all to authenticated
+  using (lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com')
+  with check (lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
+insert into public.studio_settings (id, google_review_url)
+values (1, 'https://search.google.com/local/writereview?placeid=ChIJt9KlZeqZIZURnnPB-1MB9wc')
+on conflict (id) do nothing;
+
+alter table public.photo_deliveries
+  add column if not exists review_clicked_at timestamptz,
+  add column if not exists review_requested_at timestamptz;
+
+create or replace function public.get_delivery(p_slug text, p_pin text default null)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  d public.photo_deliveries;
+  v_review text;
+begin
+  select * into d from public.photo_deliveries where slug = lower(trim(p_slug)) and active;
+  if not found then
+    return json_build_object('status', 'not_found');
+  end if;
+  if d.expires_at is not null and d.expires_at < (now() at time zone 'America/Sao_Paulo')::date then
+    return json_build_object('status', 'expired', 'client_name', d.client_name, 'title', d.title);
+  end if;
+  if coalesce(d.pin, '') <> '' and coalesce(trim(p_pin), '') <> d.pin then
+    return json_build_object('status', case when coalesce(p_pin, '') = '' then 'need_pin' else 'wrong_pin' end,
+      'client_name', d.client_name, 'title', d.title, 'cover_url', d.cover_url);
+  end if;
+
+  update public.photo_deliveries
+     set views = views + 1, last_viewed_at = now(), first_viewed_at = coalesce(first_viewed_at, now())
+   where id = d.id;
+
+  select google_review_url into v_review from public.studio_settings where id = 1;
+
+  return json_build_object('status', 'ok', 'title', d.title, 'client_name', d.client_name,
+    'event_date', d.event_date, 'drive_url', d.drive_url, 'cover_url', d.cover_url,
+    'message', d.message, 'expires_at', d.expires_at, 'review_url', v_review);
+end;
+$fn$;
+
+-- Marca quando o cliente clicou em "Avaliar no Google"
+create or replace function public.mark_review_click(p_slug text)
+returns void
+language sql
+security definer
+set search_path = public
+as $fn$
+  update public.photo_deliveries set review_clicked_at = coalesce(review_clicked_at, now())
+   where slug = lower(trim(p_slug)) and active;
+$fn$;
+
+revoke all on function public.mark_review_click(text) from public;
+grant execute on function public.mark_review_click(text) to anon, authenticated;
+
+select google_review_url from public.studio_settings;
