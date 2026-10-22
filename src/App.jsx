@@ -42,7 +42,7 @@ import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
-import { BOOKING_CAMPAIGN_ID, addMinutesToTime, localDateKey, localTime } from "@/lib/bookings";
+import { BOOKING_CAMPAIGN_ID, addMinutesToTime, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -1118,7 +1118,7 @@ export default function App() {
     let active = true;
     Promise.all([
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
-      supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).limit(3000),
+      fetchAllRows(() => supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("created_at")),
     ]).then(([campaignRes, bookingRes]) => {
       if (active && !campaignRes.error && !bookingRes.error && bookingRes.data) {
         importBookingsAsEvents(bookingRes.data, campaignRes.data);

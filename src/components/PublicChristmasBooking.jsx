@@ -11,6 +11,7 @@ import {
   groupSlotsByDay,
   localTime,
   weekdayLabel,
+  fetchAllRows,
 } from "@/lib/bookings";
 
 // Página pública: o cliente escolhe pacote, dia e horário do ensaio de Natal e reserva.
@@ -50,13 +51,14 @@ export default function PublicChristmasBooking() {
   async function loadData() {
     const [{ data: campaignData, error: campaignError }, { data: slotData, error: slotError }] = await Promise.all([
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
-      supabase
-        .from("booking_slots")
-        .select("id, starts_at, status")
-        .eq("campaign_id", BOOKING_CAMPAIGN_ID)
-        .gte("starts_at", new Date().toISOString())
-        .order("starts_at", { ascending: true })
-        .limit(2000),
+      fetchAllRows(() =>
+        supabase
+          .from("booking_slots")
+          .select("id, starts_at, status")
+          .eq("campaign_id", BOOKING_CAMPAIGN_ID)
+          .gte("starts_at", new Date().toISOString())
+          .order("starts_at", { ascending: true }),
+      ),
     ]);
     if (campaignError || slotError) {
       setLoadState("error");
@@ -75,13 +77,14 @@ export default function PublicChristmasBooking() {
     let active = true;
     Promise.all([
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
-      supabase
-        .from("booking_slots")
-        .select("id, starts_at, status")
-        .eq("campaign_id", BOOKING_CAMPAIGN_ID)
-        .gte("starts_at", new Date().toISOString())
-        .order("starts_at", { ascending: true })
-        .limit(2000),
+      fetchAllRows(() =>
+        supabase
+          .from("booking_slots")
+          .select("id, starts_at, status")
+          .eq("campaign_id", BOOKING_CAMPAIGN_ID)
+          .gte("starts_at", new Date().toISOString())
+          .order("starts_at", { ascending: true }),
+      ),
     ]).then(([{ data: campaignData, error: campaignError }, { data: slotData, error: slotError }]) => {
       if (!active) return;
       if (campaignError || slotError) {

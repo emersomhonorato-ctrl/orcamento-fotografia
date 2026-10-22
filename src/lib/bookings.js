@@ -93,3 +93,15 @@ export function buildSlotTimes({ startDate, endDate, weekdays, startTime, endTim
   }
   return result;
 }
+
+// O Supabase entrega no máximo 1000 linhas por consulta; busca em páginas.
+export async function fetchAllRows(build, pageSize = 1000) {
+  let all = [];
+  for (let from = 0; from < 50000; from += pageSize) {
+    const { data, error } = await build().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: all, error: null };
+}

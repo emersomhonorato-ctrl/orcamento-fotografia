@@ -16,6 +16,7 @@ import {
   localDateKey,
   localTime,
   weekdayLabel,
+  fetchAllRows,
 } from "@/lib/bookings";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
@@ -54,8 +55,8 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   const load = useCallback(async () => {
     const [campaignRes, slotRes, bookingRes] = await Promise.all([
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
-      supabase.from("booking_slots").select("id, starts_at, status").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("starts_at").limit(3000),
-      supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("starts_at").limit(3000),
+      fetchAllRows(() => supabase.from("booking_slots").select("id, starts_at, status").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("starts_at")),
+      fetchAllRows(() => supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("starts_at")),
     ]);
     const missing = [campaignRes, slotRes, bookingRes].some((res) => res.error && /could not find|does not exist|PGRST205|42P01/i.test(`${res.error.code} ${res.error.message}`));
     if (missing) {
