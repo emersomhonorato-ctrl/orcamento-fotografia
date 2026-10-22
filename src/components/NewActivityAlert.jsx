@@ -36,14 +36,15 @@ function timeAgo(iso) {
 }
 
 // Aviso no topo do app: pedidos de orçamento e agendamentos que chegaram desde a última vez que você viu.
-export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookings, onRequestsData, onBookingsData }) {
+export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookings, onRequestsData, onBookingsData, onSharesData }) {
   const [seenAt, setSeenAt] = useState(readSeen);
   const [requests, setRequests] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [campaignTitle, setCampaignTitle] = useState("");
+  const [shares, setShares] = useState([]);
 
   const poll = useCallback(async () => {
-    const [requestRes, bookingRes, campaignRes] = await Promise.all([
+    const [requestRes, bookingRes, campaignRes, shareRes] = await Promise.all([
       supabase
         .from("budget_requests")
         .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found")
@@ -51,7 +52,16 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
         .limit(50),
       supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("created_at", { ascending: false }).limit(50),
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
+      supabase
+        .from("budget_shares")
+        .select("id, slug, event_id, status, views, last_viewed_at, responded_at, approved_name, approved_cpf, response_note, created_at, expires_at, snapshot->>clientName, snapshot->>eventType")
+        .order("created_at", { ascending: false })
+        .limit(1000),
     ]);
+    if (!shareRes.error && shareRes.data) {
+      setShares(shareRes.data);
+      onSharesData?.(shareRes.data);
+    }
     if (!requestRes.error && requestRes.data) {
       setRequests(requestRes.data);
       onRequestsData?.(requestRes.data);
@@ -61,7 +71,7 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       onBookingsData?.(bookingRes.data, campaignRes.data || null);
     }
     if (!campaignRes.error && campaignRes.data) setCampaignTitle(campaignRes.data.title || "");
-  }, [onRequestsData, onBookingsData]);
+  }, [onRequestsData, onBookingsData, onSharesData]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -78,7 +88,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
 
   const newRequests = requests.filter((item) => item.created_at > seenAt);
   const newBookings = bookings.filter((item) => item.created_at > seenAt && item.status !== "cancelado");
-  const total = newRequests.length + newBookings.length;
+  const newResponses = shares.filter((item) => item.responded_at && item.responded_at > seenAt);
+  const total = newRequests.length + newBookings.length + newResponses.length;
 
   useEffect(() => {
     const base = "Emerson Honorato Retratos";
@@ -108,6 +119,13 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       title: item.name || "Novo agendamento",
       detail: `${campaignTitle || "Ensaio"} • ${dayMonthLabel(localDateKey(item.starts_at))} às ${localTime(item.starts_at)} • ${item.package_photos} fotos${item.status === "aguardando_sinal" ? " • aguardando sinal" : ""}`,
     })),
+    ...newResponses.map((item) => ({
+      id: `s-${item.id}`,
+      kind: item.status === "aprovado" ? "approved" : "declined",
+      createdAt: item.responded_at,
+      title: item.clientName || item.approved_name || "Cliente",
+      detail: `${item.eventType || "Orçamento"} • ${item.status === "aprovado" ? "aprovou pelo link e já virou agendamento ✅" : `recusou${item.response_note ? `: ${item.response_note}` : ""}`}`,
+    })),
   ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
@@ -121,6 +139,7 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
           {[
             newRequests.length ? `${newRequests.length} pedido${newRequests.length > 1 ? "s" : ""} de orçamento` : "",
             newBookings.length ? `${newBookings.length} agendamento${newBookings.length > 1 ? "s" : ""} novo${newBookings.length > 1 ? "s" : ""}` : "",
+            newResponses.length ? `${newResponses.length} resposta${newResponses.length > 1 ? "s" : ""} de orçamento` : "",
           ].filter(Boolean).join(" e ")}
         </p>
         {newRequests.length ? (
@@ -140,8 +159,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       <ul className="divide-y divide-amber-100/70">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-3 px-5 py-2 text-sm">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>
-              {item.kind === "request" ? "Orçamento" : "Agendamento"}
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : item.kind === "declined" ? "bg-slate-100 text-slate-700" : item.kind === "approved" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+              {item.kind === "request" ? "Pedido" : item.kind === "approved" ? "Aprovado" : item.kind === "declined" ? "Recusado" : "Agendamento"}
             </span>
             <span className="font-medium text-slate-900">{item.title}</span>
             <span className="hidden truncate text-slate-500 sm:inline">{item.detail}</span>

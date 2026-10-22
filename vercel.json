@@ -9,6 +9,8 @@
     { "source": "/ensaios", "destination": "/index.html" },
     { "source": "/ensaios/", "destination": "/index.html" },
     { "source": "/entrega/:codigo", "destination": "/index.html" },
-    { "source": "/entrega/:codigo/", "destination": "/index.html" }
+    { "source": "/entrega/:codigo/", "destination": "/index.html" },
+    { "source": "/orcamento/:codigo", "destination": "/index.html" },
+    { "source": "/orcamento/:codigo/", "destination": "/index.html" }
   ]
 }

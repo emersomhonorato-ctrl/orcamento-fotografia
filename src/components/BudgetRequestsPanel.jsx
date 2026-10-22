@@ -208,6 +208,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
                   <p className="mt-1 text-sm text-slate-600">{[request.whatsapp, request.email].filter(Boolean).join(" • ")}</p>
                   {request.details ? <p className="mt-2 whitespace-pre-line rounded-xl bg-white/70 p-3 text-sm leading-6 text-slate-700">{request.details}</p> : null}
                   {request.how_found ? <p className="mt-2 text-xs text-slate-400">Conheceu por: {request.how_found}</p> : null}
+                  {request.referral_code ? <p className="mt-1 inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">🎁 Indicação: código {request.referral_code}</p> : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" className="rounded-xl" onClick={() => createBudget(request)}>
                       <FilePlus2 className="mr-1.5 h-4 w-4" /> Criar orçamento

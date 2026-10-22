@@ -255,6 +255,33 @@ export default function PublicPhotoDelivery({ slug }) {
           )}
         </section>
 
+        {/* Álbuns e impressões */}
+        {Array.isArray(data.products) && data.products.length ? (
+          <section className="pb-14">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#a8875a]">Eternize</p>
+            <h2 className="mt-1 text-4xl" style={SERIF}>Suas fotos merecem sair da tela</h2>
+            <p className="mt-2 max-w-2xl text-[15px] leading-7 text-[#4a4036]">Fotos no celular se perdem. Impressas, elas viram memória de família.</p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {data.products.map((item, index) => (
+                <div key={`${item.name}-${index}`} className="flex flex-col rounded-[24px] border border-[#e4dbd0] bg-white p-6 shadow-sm">
+                  <span className="text-2xl" aria-hidden="true">{["📖", "🖼️", "📷", "🎁", "✨"][index % 5]}</span>
+                  <h3 className="mt-3 text-2xl" style={SERIF}>{item.name}</h3>
+                  {item.description ? <p className="mt-2 flex-1 text-sm leading-6 text-[#4a4036]">{item.description}</p> : <div className="flex-1" />}
+                  {item.price ? <p className="mt-4 text-sm font-semibold text-[#7a6650]">{item.price}</p> : null}
+                  <a
+                    href={whatsappLink(`Olá, Emerson! Vi minhas fotos (${data.title}) e tenho interesse em: ${item.name}. Pode me passar os detalhes?`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex justify-center rounded-2xl bg-[#1b1610] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#2c241a]"
+                  >
+                    Quero saber mais
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* Avaliação no Google */}
         {data.review_url ? (
           <section className="pb-14">
@@ -281,6 +308,31 @@ export default function PublicPhotoDelivery({ slug }) {
                 </svg>
                 Avaliar no Google
               </button>
+            </div>
+          </section>
+        ) : null}
+
+        {/* Indique e ganhe */}
+        {data.referral_code ? (
+          <section className="pb-14">
+            <div className="grid gap-6 rounded-[32px] border border-[#e4dbd0] bg-white p-7 shadow-sm sm:p-10 md:grid-cols-[1.4fr_1fr] md:items-center">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#a8875a]">Indique e ganhe</p>
+                <h2 className="mt-1 text-4xl" style={SERIF}>Conhece alguém que vai amar?</h2>
+                <p className="mt-3 text-[15px] leading-7 text-[#4a4036]">{data.referral_reward || "Indique um amigo e ganhe um presente no seu próximo ensaio."}</p>
+              </div>
+              <div className="rounded-[24px] bg-[#f7f3ee] p-5 text-center">
+                <p className="text-xs uppercase tracking-[0.2em] text-[#7a6650]">Seu código</p>
+                <p className="mt-1 text-3xl font-bold tracking-[0.18em] text-[#1b1610]">{data.referral_code}</p>
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Fiz meu ensaio com o Emerson Honorato Retratos e amei as fotos! 📸💛\nPede seu orçamento por aqui (já vai com o meu código ${data.referral_code}):\nhttps://orcamento.emersonhonoratoretratos.com.br/pedido?indicacao=${data.referral_code}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex w-full justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  Indicar pelo WhatsApp
+                </a>
+              </div>
             </div>
           </section>
         ) : null}
