@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  Send,
   Trash2,
   User,
   Wallet,
@@ -67,6 +68,10 @@ import {
   robustContractTemplate,
 } from "@/lib/appModel";
 import { fetchRemoteVersion, loadAppState, saveAppState } from "@/lib/appState";
+import { buildContractText } from "@/utils/contractText";
+import { buildWhatsAppLink } from "@/utils/whatsappMessages";
+import { BUDGET_PUBLIC_BASE, buildBudgetSnapshot } from "@/lib/budgetShare";
+import { makeDeliverySlug } from "@/lib/delivery";
 import { supabase } from "@/supabase";
 import { generateContractPDF, generateEventPDF } from "@/utils/pdfGenerator";
 import { generateBudgetPDF, generateReceiptPDF, preparePdfImages } from "@/utils/pdfDocuments";
@@ -235,6 +240,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState("Carregando dados");
   const [syncMessage, setSyncMessage] = useState("Verificando local e nuvem.");
   const [syncConflict, setSyncConflict] = useState(false);
+  const [budgetShares, setBudgetShares] = useState({});
   const remoteVersionRef = useRef(null);
   const skipNextSaveRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -796,163 +802,7 @@ export default function App() {
 
   const contractPreview = useMemo(() => {
     if (!selectedContract) return "";
-
-    const template = settings.contractTemplate || "";
-    if (!template.trim()) return "";
-
-    const amountValue = Number(selectedContract.computedAmount || selectedContract.amount || 0);
-    const amountPaidValue = Number(selectedContract.amountPaid || 0);
-    const balanceValue = Math.max(amountValue - amountPaidValue, 0);
-    const fallback = (value, emptyValue = "a combinar") => {
-      const normalized = String(value ?? "").trim();
-      return normalized || emptyValue;
-    };
-    const startHour = selectedContract.startTime ? Number(selectedContract.startTime.split(":")[0] || 0) : null;
-    const startMinute = selectedContract.startTime ? Number(selectedContract.startTime.split(":")[1] || 0) : null;
-    const endHour = selectedContract.endTime ? Number(selectedContract.endTime.split(":")[0] || 0) : null;
-    const endMinute = selectedContract.endTime ? Number(selectedContract.endTime.split(":")[1] || 0) : null;
-    const hasDuration = Number.isFinite(startHour) && Number.isFinite(startMinute) && Number.isFinite(endHour) && Number.isFinite(endMinute);
-    const eventDuration = hasDuration
-      ? (() => {
-          const startTotal = startHour * 60 + startMinute;
-          const endTotal = endHour * 60 + endMinute;
-          const diffMinutes = Math.max(endTotal - startTotal, 0);
-          const hours = diffMinutes / 60;
-          return hours > 0 ? `${String(hours).replace(".", ",")} ${hours === 1 ? "hora" : "horas"}` : "a combinar";
-        })()
-      : "a combinar";
-    const rawCurrency = (value) => formatCurrency(value).replace(/^R\$\s?/, "");
-    const deliveryTerms = (selectedContract.contractDeliveryTerms || "").trim();
-    const prazoEntrega = deliveryTerms.match(/\d+/)?.[0] || String(selectedContract.recommendedDeliveryDays || "15");
-    const quantidadeFotos = String(selectedContract.editedPhotosCount || selectedContract.onlinePhotosCount || selectedContract.printedPhotosCount || selectedContract.digitalPhotosCount || "a combinar");
-    const formaEntrega = (() => {
-      if (!deliveryTerms) return "galeria online";
-
-      const sanitized = deliveryTerms
-        .replace(/\b(em|até)\s+\d+\s*(dias?|dias úteis|uteis)\b/gi, "")
-        .replace(/\b\d+\s*(dias?|dias úteis|uteis)\b/gi, "")
-        .replace(/[.,;:-]\s*$/g, "")
-        .trim();
-
-      return sanitized || "galeria online";
-    })();
-    const dataPagamento = balanceValue > 0 ? "na quitação do saldo" : formatDateBR(getTodayLocalISO());
-    const companyAddress = settings.contractCity || settings.studioCity || settings.studioAddress || "Endereço do estúdio a definir";
-    const clientAddress = selectedContract.clientAddress || selectedContract.location || "Endereço a informar";
-    const eventDate = selectedContract.eventDate ? formatDateBR(selectedContract.eventDate) : "a combinar";
-    const eventType = selectedContract.eventType || selectedContract.packageName || "ensaio fotográfico";
-    const eventLocation = selectedContract.location || "local a combinar";
-    const clientName = selectedContract.clientName || "Cliente não informado";
-    const clientCpf = selectedContract.clientCpf || "não informado";
-    const clientEmail = selectedContract.email || "não informado";
-    const clientPhone = selectedContract.whatsapp || selectedContract.phone || "não informado";
-    const paymentTerms = selectedContract.contractPaymentMethod || settings.paymentTerms || "Forma de pagamento a combinar.";
-    const contractCity = settings.contractCity || settings.studioCity || "Cidade não informada";
-    const contractForum = settings.contractForum || contractCity;
-    const imageAuthorization = settings.contractImageAuthorization
-      || "O CONTRATANTE autoriza o uso das imagens para portfólio e divulgação, salvo manifestação contrária por escrito.";
-    const matchedService = services.find(
-      (service) => service.name === selectedContract.eventType || service.name === selectedContract.packageName,
-    );
-    const serviceDescription = fallback(
-      selectedContract.serviceDescriptionSnapshot
-      || matchedService?.workDescription
-      || matchedService?.itemDescription
-      || selectedContract.budgetDescription,
-      "Descrição específica do serviço a definir em proposta ou briefing aprovado.",
-    );
-    const serviceItemsBlock = (() => {
-      const explicitLines = [
-        selectedContract.serviceItemsSnapshot,
-        matchedService?.itemDescription,
-        selectedContract.serviceDescriptionSnapshot,
-        matchedService?.workDescription,
-        selectedContract.budgetDescription,
-      ]
-        .filter(Boolean)
-        .flatMap((text) =>
-          String(text)
-            .split(/\n+/)
-            .map((line) => line.trim())
-            .filter(Boolean),
-        );
-
-      const uniqueLines = Array.from(new Set(explicitLines));
-
-      if (uniqueLines.length > 0) {
-        return uniqueLines.map((line) => `- ${line}`).join("\n");
-      }
-
-      return [
-        "- Cobertura fotográfica conforme tempo contratado",
-        "- Direção durante o ensaio/evento",
-        "- Seleção e tratamento profissional das imagens",
-        "- Entrega digital das fotografias em alta resolução",
-      ].join("\n");
-    })();
-
-    const replacements = {
-      studioName: fallback(settings.studioName, "Emerson Honorato Retratos"),
-      studioResponsible: fallback(settings.studioResponsible, "Emerson Honorato"),
-      studioDocument: fallback(settings.studioDocument, "não informado"),
-      studioPhone: fallback(settings.studioPhone, "não informado"),
-      studioEmail: fallback(settings.studioEmail, "não informado"),
-      studioCity: fallback(settings.studioCity, contractCity),
-      clientName,
-      clientCpf,
-      clientEmail,
-      clientPhone,
-      clientAddress,
-      eventType,
-      eventDate,
-      startTime: fallback(selectedContract.startTime),
-      endTime: fallback(selectedContract.endTime),
-      location: eventLocation,
-      amount: formatCurrency(amountValue),
-      amountPaid: formatCurrency(amountPaidValue),
-      balance: formatCurrency(balanceValue),
-      paymentTerms: paymentTerms,
-      contractPaymentMethod: paymentTerms,
-      contractDeliveryTerms: fallback(deliveryTerms),
-      notes: fallback(selectedContract.contractNotes || selectedContract.notes, "Sem observações adicionais."),
-      currentDate: formatDateBR(getTodayLocalISO()),
-      contractCity,
-      contractForum,
-      packageName: fallback(selectedContract.packageName, eventType),
-      NOME_EMPRESA: fallback(settings.studioName, "Emerson Honorato Retratos"),
-      RESPONSAVEL_EMPRESA: fallback(settings.studioResponsible, "Emerson Honorato"),
-      DOCUMENTO_EMPRESA: fallback(settings.studioDocument, "não informado"),
-      TELEFONE_EMPRESA: fallback(settings.studioPhone, "não informado"),
-      EMAIL_EMPRESA: fallback(settings.studioEmail, "não informado"),
-      ENDERECO_EMPRESA: companyAddress,
-      NOME_CLIENTE: clientName,
-      CPF_CLIENTE: clientCpf,
-      CLIENTE_TELEFONE: clientPhone,
-      CLIENTE_EMAIL: clientEmail,
-      ENDERECO_CLIENTE: clientAddress,
-      TIPO_EVENTO: eventType,
-      DATA_EVENTO: eventDate,
-      LOCAL_EVENTO: eventLocation,
-      HORAS_EVENTO: eventDuration,
-      QUANTIDADE_FOTOS: quantidadeFotos,
-      FORMA_ENTREGA: formaEntrega,
-      PRAZO_ENTREGA: prazoEntrega,
-      VALOR_TOTAL: rawCurrency(amountValue),
-      VALOR_SINAL: rawCurrency(amountPaidValue),
-      DATA_PAGAMENTO: dataPagamento,
-      FORMA_PAGAMENTO_CONTRATO: paymentTerms,
-      CONDICAO_PAGAMENTO_CONTRATO: paymentTerms,
-      AUTORIZACAO_IMAGEM: imageAuthorization,
-      DESCRICAO_SERVICO: serviceDescription,
-      ITENS_SERVICO_CONTRATADO: serviceItemsBlock,
-      CIDADE: contractCity,
-      DATA_ATUAL: formatDateBR(getTodayLocalISO()),
-    };
-
-    return template.replace(/\{\{(\w+)\}\}|\{([A-Z_]+)\}/g, (_match, camelKey, legacyKey) => {
-      const key = camelKey || legacyKey;
-      return replacements[key] ?? "";
-    });
+    return buildContractText(selectedContract, settings, services);
   }, [selectedContract, settings, services]);
 
   const contractPreviewBlocks = useMemo(() => {
@@ -1208,6 +1058,73 @@ export default function App() {
       active = false;
     };
   }, [hasHydratedRemote, isAuthorized, importBookingsAsEvents]);
+
+  // Respostas do cliente no link do orçamento -> aprova (vira agendamento) ou marca como perdido
+  const applyBudgetResponses = useCallback((shares = []) => {
+    const map = {};
+    shares.forEach((share) => {
+      map[share.event_id] = share;
+    });
+    setBudgetShares(map);
+    setAppState((current) => {
+      const applied = new Set(current.settings?.appliedShareIds || []);
+      const pending = shares.filter((share) => share.status !== "enviado" && share.responded_at && !applied.has(share.id));
+      if (!pending.length) return current;
+      const byEvent = new Map(pending.map((share) => [String(share.event_id), share]));
+      const nowIso = new Date().toISOString();
+      const events = (current.events || []).map((item) => {
+        const share = byEvent.get(String(item.id));
+        if (!share) return item;
+        applied.add(share.id);
+        const when = new Date(share.responded_at).toLocaleString("pt-BR");
+        if (share.status === "aprovado") {
+          if (deriveRecordType(item) !== "orcamento") return item;
+          const cpf = String(share.approved_cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+          return normalizeRecord({
+            ...item,
+            recordType: "evento",
+            status: "Confirmado",
+            convertedFromBudget: true,
+            budgetApprovedAt: share.responded_at,
+            approvedOnline: true,
+            clientCpf: item.clientCpf || cpf,
+            paymentStatus: item.paymentStatus || "Pendente",
+            eventDate: item.eventDate || getTodayLocalISO(),
+            notes: [item.notes, `Aprovado online por ${share.approved_name || "cliente"} (CPF ${cpf}) em ${when}.`].filter(Boolean).join("\n"),
+            updatedAt: nowIso,
+          });
+        }
+        return normalizeRecord({
+          ...item,
+          status: "Cancelado",
+          lostReason: share.response_note ? `Recusou: ${share.response_note}`.slice(0, 80) : "Recusou pelo link",
+          notes: [item.notes, `Recusado pelo link em ${when}${share.response_note ? ` — ${share.response_note}` : ""}.`].filter(Boolean).join("\n"),
+          updatedAt: nowIso,
+        });
+      });
+      pending.forEach((share) => applied.add(share.id));
+      return {
+        ...current,
+        events,
+        settings: { ...current.settings, appliedShareIds: Array.from(applied).slice(-1000) },
+      };
+    });
+  }, []);
+
+  const loadBudgetShares = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("budget_shares")
+      .select("id, slug, event_id, status, views, last_viewed_at, responded_at, approved_name, approved_cpf, response_note, created_at, expires_at")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (!error && data) applyBudgetResponses(data);
+  }, [applyBudgetResponses]);
+
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    const timer = setTimeout(loadBudgetShares, 0);
+    return () => clearTimeout(timer);
+  }, [hasHydratedRemote, isAuthorized, loadBudgetShares]);
 
   // Ao abrir o app (depois de carregar os dados do Supabase), cadastra clientes de pedidos novos
   useEffect(() => {
@@ -1890,9 +1807,47 @@ export default function App() {
       return;
     }
 
-    const text = encodeURIComponent(buildCommunicationMessage(record, settings, kind));
-    window.open(`https://wa.me/55${phone}?text=${text}`, "_blank");
+    window.open(buildWhatsAppLink(phone, buildCommunicationMessage(record, settings, kind)), "_blank");
     markCommunicationSent(record, kind);
+  }
+
+  // ---------- Aprovação de orçamento pelo link ----------
+  async function sendApprovalLink(record) {
+    const phone = record.whatsapp || record.phone || "";
+    const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
+    const expires = new Date();
+    expires.setDate(expires.getDate() + validityDays);
+    const expiresISO = expires.toISOString().slice(0, 10);
+    const snapshot = buildBudgetSnapshot(record, settings, buildContractText(record, settings, services), expiresISO);
+    const existing = budgetShares[record.id];
+    if (existing && existing.status !== "enviado") {
+      alert(existing.status === "aprovado" ? "Este orçamento já foi aprovado pelo link." : "O cliente recusou este orçamento pelo link. Para reenviar, reative e duplique o orçamento.");
+      return;
+    }
+    const slug = existing?.slug || makeDeliverySlug(record.clientName || "orcamento");
+    const { error } = await supabase
+      .from("budget_shares")
+      .upsert({ event_id: String(record.id), slug, snapshot, expires_at: expiresISO, updated_at: new Date().toISOString() }, { onConflict: "event_id" });
+    if (error) {
+      alert(`Não foi possível criar o link: ${error.message}`);
+      return;
+    }
+    const link = `${BUDGET_PUBLIC_BASE}${slug}`;
+    const first = String(record.clientName || "").trim().split(/\s+/)[0] || "";
+    const text = [
+      `Olá${first ? `, ${first}` : ""}! 📸`,
+      "",
+      `Preparei sua proposta de *${record.eventType || "ensaio"}*${record.eventDate ? ` para ${formatDateBR(record.eventDate)}` : ""}.`,
+      "",
+      "Você pode ver todos os detalhes, ler o contrato e aprovar por aqui:",
+      link,
+      "",
+      `A proposta vale até ${formatDateBR(expiresISO)}. Qualquer dúvida, é só me chamar! 💛`,
+      settings.studioName || "Emerson Honorato Retratos",
+    ].join("\n");
+    window.open(phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    if (!record.budgetSentAt) updateRecordFields(record.id, { budgetSentAt: new Date().toISOString() });
+    loadBudgetShares();
   }
 
   function sendEmail(record, kind = "confirmacao") {
@@ -2170,10 +2125,22 @@ export default function App() {
                 {record.budgetDescription}
               </p>
             ) : null}
+            {budgetShares[record.id] ? (
+              <p className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${budgetShares[record.id].status === "recusado" ? "bg-slate-100 text-slate-600" : budgetShares[record.id].views > 0 ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
+                {budgetShares[record.id].status === "recusado"
+                  ? "Cliente recusou pelo link"
+                  : budgetShares[record.id].views > 0
+                    ? `Link de aprovação aberto ${budgetShares[record.id].views}x • última vez ${new Date(budgetShares[record.id].last_viewed_at).toLocaleDateString("pt-BR")}`
+                    : "Link de aprovação enviado • ainda não abriu"}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2 xl:max-w-[300px] xl:justify-end">
             <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedContractId(record.id); setActiveTab("contratos"); }}><FileText className="mr-2 h-4 w-4" />Contrato</Button>
+            {!isCanceled ? (
+              <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => sendApprovalLink(record)}><Send className="mr-2 h-4 w-4" />Link p/ aprovar</Button>
+            ) : null}
             <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, "proposta")}><Bell className="mr-2 h-4 w-4" />Proposta</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, "proposta")}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
             {!isCanceled ? (
@@ -2355,6 +2322,7 @@ export default function App() {
           onOpenBookings={() => setActiveTab("natal")}
           onRequestsData={importClientsFromRequests}
           onBookingsData={importBookingsAsEvents}
+          onSharesData={applyBudgetResponses}
         />
         <div className="studio-hero mb-8 flex flex-col gap-4 rounded-[32px] px-6 py-8 text-white md:flex-row md:items-center md:justify-between">
           <div>
