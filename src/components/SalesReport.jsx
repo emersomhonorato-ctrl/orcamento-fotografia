@@ -9,8 +9,9 @@ function monthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function normalizeSource(text = "") {
-  const t = String(text).toLowerCase();
+function normalizeSource(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  const t = text.toLowerCase();
   if (!t.trim()) return "Não informado";
   if (t.includes("insta")) return "Instagram";
   if (t.includes("google") || t.includes("pesquisa")) return "Google";
@@ -80,7 +81,7 @@ export default function SalesReport({ events = [], budgets = [] }) {
         yearTotal += amount;
         yearCount += 1;
       }
-      const type = (item.eventType || "Outros").trim();
+      const type = String(item.eventType || "Outros").trim() || "Outros";
       const current = byType.get(type) || { type, total: 0, count: 0 };
       current.total += amount;
       current.count += 1;
@@ -93,7 +94,7 @@ export default function SalesReport({ events = [], budgets = [] }) {
     const decided = converted + lost.length;
     const reasons = new Map();
     lost.forEach((item) => {
-      const reason = (item.lostReason || "Sem motivo registrado").trim();
+      const reason = String(item.lostReason || "Sem motivo registrado").trim() || "Sem motivo registrado";
       reasons.set(reason, (reasons.get(reason) || 0) + 1);
     });
 

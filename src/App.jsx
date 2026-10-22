@@ -47,6 +47,7 @@ import NewActivityAlert from "@/components/NewActivityAlert";
 import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
 import SalesReport from "@/components/SalesReport";
 import FollowUpPanel from "@/components/FollowUpPanel";
+import SafeSection from "@/components/SafeSection";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -2316,6 +2317,7 @@ export default function App() {
             </div>
           </div>
         ) : null}
+        <SafeSection name="Avisos">
         <NewActivityAlert
           enabled={hasHydratedRemote && isAuthorized}
           onOpenRequests={() => setActiveTab("orcamentos")}
@@ -2324,6 +2326,7 @@ export default function App() {
           onBookingsData={importBookingsAsEvents}
           onSharesData={applyBudgetResponses}
         />
+        </SafeSection>
         <div className="studio-hero mb-8 flex flex-col gap-4 rounded-[32px] px-6 py-8 text-white md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-xs font-medium uppercase tracking-[0.28em] backdrop-blur">
@@ -2675,15 +2678,19 @@ export default function App() {
                   )}
                 </CardContent>
               </Card>
-              <FollowUpPanel
-                events={onlyEvents}
-                settings={settings}
-                onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))}
-              />
+              <SafeSection name="Próximo ensaio">
+                <FollowUpPanel
+                  events={onlyEvents}
+                  settings={settings}
+                  onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))}
+                />
+              </SafeSection>
 
               <div>
                 <h2 className="mb-4 text-2xl font-semibold text-slate-900">Relatório de vendas</h2>
-                <SalesReport events={onlyEvents} budgets={onlyBudgets} />
+                <SafeSection name="Relatório de vendas">
+                  <SalesReport events={onlyEvents} budgets={onlyBudgets} />
+                </SafeSection>
               </div>
             </div>
           </TabsContent>
@@ -2758,7 +2765,9 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="entregas" className="mt-6">
-            <PhotoDeliveryAdmin records={records} />
+            <SafeSection name="Entregas">
+              <PhotoDeliveryAdmin records={records} />
+            </SafeSection>
           </TabsContent>
 
           <TabsContent value="realizados" className="mt-6">
