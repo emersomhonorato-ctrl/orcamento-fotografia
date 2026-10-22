@@ -42,10 +42,16 @@ export function toWhatsAppNumber(value) {
   return `55${digits}`;
 }
 
+// Usa api.whatsapp.com direto: o redirecionamento do wa.me estraga emojis (vira "�") em alguns navegadores.
 export function buildWhatsAppLink(phone, text) {
   const number = toWhatsAppNumber(phone);
   if (!number) return "";
-  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+  return `https://api.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(text)}`;
+}
+
+/** Abre o WhatsApp para escolher o contato (sem número definido). */
+export function buildWhatsAppShareLink(text) {
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 }
 
 function paymentLine(record) {

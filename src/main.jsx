@@ -4,8 +4,10 @@ import "./index.css";
 import App from "./App.jsx";
 import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
 
-// Link público do formulário: https://orcamento.emersonhonoratoretratos.com.br/?pedido
-const isPublicRequestForm = new URLSearchParams(window.location.search).has("pedido");
+// Formulário público de pedido (fora do login):
+// https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
+const isPublicRequestForm =
+  /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 
 class PreviewErrorBoundary extends Component {
   constructor(props) {

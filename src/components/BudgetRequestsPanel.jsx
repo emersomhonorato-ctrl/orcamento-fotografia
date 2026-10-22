@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/utils/formatters";
-import { buildWhatsAppLink } from "@/utils/whatsappMessages";
+import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 
-export const PUBLIC_REQUEST_URL = "https://orcamento.emersonhonoratoretratos.com.br/?pedido";
+export const PUBLIC_REQUEST_URL = "https://orcamento.emersonhonoratoretratos.com.br/pedido";
 
 export function buildRequestInviteMessage(settings = {}) {
   const studioName = settings.studioName || "Emerson Honorato Retratos";
@@ -78,7 +78,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget }) {
 
   function sendInvite() {
     const text = buildRequestInviteMessage(settings);
-    const link = clientPhone.replace(/\D/g, "") ? buildWhatsAppLink(clientPhone, text) : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const link = clientPhone.replace(/\D/g, "") ? buildWhatsAppLink(clientPhone, text) : buildWhatsAppShareLink(text);
     window.open(link, "_blank", "noopener");
   }
 
@@ -138,7 +138,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget }) {
               <Copy className="mr-2 h-4 w-4" />
               {copied ? "Copiado!" : "Copiar link"}
             </Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/?pedido`, "_blank", "noopener")}>
+            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/pedido`, "_blank", "noopener")}>
               <ExternalLink className="mr-2 h-4 w-4" />
               Ver formulário
             </Button>
