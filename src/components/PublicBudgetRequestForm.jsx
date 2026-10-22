@@ -59,7 +59,15 @@ const inputClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#c4a050] focus:ring-4 focus:ring-[#c4a050]/15";
 
 export default function PublicBudgetRequestForm() {
-  const [form, setForm] = useState(emptyForm);
+  const [referralCode] = useState(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get("indicacao") || "";
+      return code.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
+    } catch {
+      return "";
+    }
+  });
+  const [form, setForm] = useState(() => ({ ...emptyForm, how_found: referralCode ? "Indicação" : "" }));
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMessage, setErrorMessage] = useState("");
   const today = new Date().toISOString().slice(0, 10);
@@ -111,6 +119,7 @@ export default function PublicBudgetRequestForm() {
       people: form.people.trim().slice(0, 60) || null,
       details: form.details.trim().slice(0, 2000) || null,
       how_found: form.how_found || null,
+      ...(referralCode ? { referral_code: referralCode } : {}),
     };
 
     const { error } = await supabase.from("budget_requests").insert(payload);
@@ -200,6 +209,9 @@ export default function PublicBudgetRequestForm() {
                 <textarea className={`${inputClass} min-h-[120px] resize-y`} value={form.details} onChange={update("details")} maxLength={2000} />
               </Field>
 
+              {referralCode ? (
+                <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">🎁 Você veio por indicação (código <strong>{referralCode}</strong>). Obrigado!</p>
+              ) : null}
               <Field label="Como conheceu meu trabalho?">
                 <select className={inputClass} value={form.how_found} onChange={update("how_found")}>
                   <option value="">Selecione (opcional)</option>

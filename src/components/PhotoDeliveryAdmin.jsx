@@ -51,6 +51,9 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   const [copiedId, setCopiedId] = useState("");
   const [reviewUrl, setReviewUrl] = useState("");
   const [reviewDraft, setReviewDraft] = useState(null);
+  const [extras, setExtras] = useState({ products: [], referral_reward: "" });
+  const [extrasDraft, setExtrasDraft] = useState(null);
+  const [referralCounts, setReferralCounts] = useState({});
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("photo_deliveries").select("*").order("created_at", { ascending: false }).limit(500);
@@ -59,8 +62,23 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       return;
     }
     setDeliveries(data || []);
-    const settingsRes = await supabase.from("studio_settings").select("google_review_url").eq("id", 1).maybeSingle();
-    if (!settingsRes.error) setReviewUrl(settingsRes.data?.google_review_url || "");
+    const settingsRes = await supabase.from("studio_settings").select("google_review_url, products, referral_reward").eq("id", 1).maybeSingle();
+    if (!settingsRes.error) {
+      setReviewUrl(settingsRes.data?.google_review_url || "");
+      setExtras({
+        products: Array.isArray(settingsRes.data?.products) ? settingsRes.data.products : [],
+        referral_reward: settingsRes.data?.referral_reward || "",
+      });
+    }
+    const refRes = await supabase.from("budget_requests").select("referral_code").not("referral_code", "is", null).limit(2000);
+    if (!refRes.error && refRes.data) {
+      const counts = {};
+      refRes.data.forEach((row) => {
+        const code = String(row.referral_code || "").toUpperCase();
+        if (code) counts[code] = (counts[code] || 0) + 1;
+      });
+      setReferralCounts(counts);
+    }
     setState("ready");
   }, []);
 
@@ -72,6 +90,23 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
     setReviewUrl(url);
     setReviewDraft(null);
     setMessage("Link de avaliação do Google salvo.");
+  }
+
+  async function saveExtras() {
+    if (!extrasDraft) return;
+    const products = extrasDraft.products
+      .map((item) => ({ name: String(item.name || "").trim(), description: String(item.description || "").trim(), price: String(item.price || "").trim() }))
+      .filter((item) => item.name);
+    const { error } = await supabase.from("studio_settings").upsert({
+      id: 1,
+      products,
+      referral_reward: String(extrasDraft.referral_reward || "").trim() || null,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return setMessage(`Erro ao salvar: ${error.message}`);
+    setExtras({ products, referral_reward: String(extrasDraft.referral_reward || "").trim() });
+    setExtrasDraft(null);
+    setMessage("Álbuns/impressões e prêmio de indicação salvos.");
   }
 
   async function askReview(item) {
@@ -305,6 +340,46 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
 
       {message ? <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{message}</p> : null}
 
+      <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-semibold">Álbuns, impressões e indicação</h3>
+              <p className="text-sm text-slate-500">Aparece na página de todas as entregas, logo abaixo das fotos.</p>
+            </div>
+            {!extrasDraft ? (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setExtrasDraft({ products: extras.products.map((item) => ({ ...item })), referral_reward: extras.referral_reward })}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+            ) : null}
+          </div>
+          {extrasDraft ? (
+            <div className="space-y-3">
+              {extrasDraft.products.map((item, index) => (
+                <div key={index} className="grid gap-2 rounded-2xl border border-slate-200 p-3 md:grid-cols-[1fr_1.6fr_0.8fr_36px] md:items-center">
+                  <Input className="rounded-xl" placeholder="Nome (ex.: Álbum 20x30)" value={item.name} onChange={(e) => setExtrasDraft({ ...extrasDraft, products: extrasDraft.products.map((p, i) => (i === index ? { ...p, name: e.target.value } : p)) })} />
+                  <Input className="rounded-xl" placeholder="Descrição curta" value={item.description} onChange={(e) => setExtrasDraft({ ...extrasDraft, products: extrasDraft.products.map((p, i) => (i === index ? { ...p, description: e.target.value } : p)) })} />
+                  <Input className="rounded-xl" placeholder="a partir de R$ 390" value={item.price} onChange={(e) => setExtrasDraft({ ...extrasDraft, products: extrasDraft.products.map((p, i) => (i === index ? { ...p, price: e.target.value } : p)) })} />
+                  <button type="button" className="text-red-600" title="Remover" onClick={() => setExtrasDraft({ ...extrasDraft, products: extrasDraft.products.filter((_, i) => i !== index) })}><Trash2 className="mx-auto h-4 w-4" /></button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setExtrasDraft({ ...extrasDraft, products: [...extrasDraft.products, { name: "", description: "", price: "" }] })}><Plus className="mr-2 h-4 w-4" />Adicionar produto</Button>
+              <div className="space-y-1">
+                <Label>Prêmio do “Indique e ganhe”</Label>
+                <Textarea className="min-h-[70px] rounded-2xl" value={extrasDraft.referral_reward} placeholder="Ex.: Para cada amigo que fechar, você ganha 3 fotos extras." onChange={(e) => setExtrasDraft({ ...extrasDraft, referral_reward: e.target.value })} />
+              </div>
+              <div className="flex gap-2">
+                <Button className="rounded-2xl" onClick={saveExtras}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+                <Button variant="ghost" className="rounded-2xl" onClick={() => setExtrasDraft(null)}>Cancelar</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-slate-600">
+              <p>{extras.products.length ? extras.products.map((item) => `${item.name}${item.price ? ` (${item.price})` : ""}`).join(" • ") : "Nenhum produto cadastrado — a seção não aparece."}</p>
+              <p className="mt-1 text-xs text-slate-500">🎁 {extras.referral_reward || "Sem prêmio de indicação definido."}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {form ? (
         <Card className="studio-panel rounded-3xl border-0 bg-white/95 shadow-sm">
           <CardContent className="space-y-5 pt-6">
@@ -429,6 +504,9 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                   {item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}
                   {item.last_viewed_at ? ` • última visita ${new Date(item.last_viewed_at).toLocaleDateString("pt-BR")}` : ""}
                 </p>
+                {item.referral_code ? (
+                  <p className="text-[11px] text-slate-500">🎁 Código de indicação <strong>{item.referral_code}</strong>{referralCounts[item.referral_code] ? ` • ${referralCounts[item.referral_code]} indicação(ões) recebida(s)` : ""}</p>
+                ) : null}
                 {item.review_clicked_at ? (
                   <p className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">⭐ Clicou em avaliar no Google</p>
                 ) : item.review_requested_at ? (
