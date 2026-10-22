@@ -186,13 +186,24 @@ ${signature}`;
   }
 
   if (kind === "lembrete") {
+    const mapsLink = record.location ? `\nComo chegar: https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(record.location)}` : "";
+    const type = `${record.eventType || ""} ${record.packageName || ""}`.toLowerCase();
+    const tips = /newborn|recém|recem/.test(type)
+      ? "Dicas: traga fraldas, lenços, uma troca de roupa e o leitinho. Vamos no tempo do bebê, sem pressa. 💛"
+      : /gestante|grávida|gravida/.test(type)
+        ? "Dicas: venha com roupas confortáveis, evite marcas de elástico na pele e traga um look extra se quiser."
+        : /casamento|noiv/.test(type)
+          ? "Qualquer mudança no cronograma, me avise por aqui."
+          : "Dicas: chegue uns 10 minutinhos antes e traga as roupas combinadas. Se tiver criança, um lanchinho ajuda!";
     return `${greeting}
 
-Passando para lembrar do seu ${serviceName}.
+Passando para lembrar do seu ${serviceName}! 📸
 
 Data: ${eventDate}
 Horário: ${eventTime}
-Local: ${location}
+Local: ${location}${mapsLink}
+
+${tips}
 
 Qualquer ajuste ou dúvida, me chama por aqui.
 

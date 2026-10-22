@@ -44,6 +44,8 @@ import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
 import NewActivityAlert from "@/components/NewActivityAlert";
 import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
+import SalesReport from "@/components/SalesReport";
+import FollowUpPanel from "@/components/FollowUpPanel";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -1601,7 +1603,11 @@ export default function App() {
       return;
     }
 
-    updateRecordFields(record.id, { status: "Cancelado" });
+    const reason = window.prompt(
+      "Por que esse orçamento não fechou? (opcional — ajuda no relatório)\nEx.: preço, data indisponível, fechou com outro, desistiu, sem resposta",
+      record.lostReason || "",
+    );
+    updateRecordFields(record.id, { status: "Cancelado", lostReason: reason ? reason.trim().slice(0, 80) : record.lostReason || "" });
     setActiveTab("cancelados");
   }
 
@@ -2701,6 +2707,16 @@ export default function App() {
                   )}
                 </CardContent>
               </Card>
+              <FollowUpPanel
+                events={onlyEvents}
+                settings={settings}
+                onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))}
+              />
+
+              <div>
+                <h2 className="mb-4 text-2xl font-semibold text-slate-900">Relatório de vendas</h2>
+                <SalesReport events={onlyEvents} budgets={onlyBudgets} />
+              </div>
             </div>
           </TabsContent>
 
