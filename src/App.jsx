@@ -41,6 +41,8 @@ import EventModal from "@/components/EventModal";
 import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
+import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
+import { BOOKING_CAMPAIGN_ID, addMinutesToTime, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -999,6 +1001,100 @@ export default function App() {
       });
     });
   }, []);
+
+  // Reservas da agenda de Natal -> viram agendamento na Agenda + cliente cadastrado (uma vez só)
+  const importBookingsAsEvents = useCallback((bookingList = [], campaign = null) => {
+    setAppState((current) => {
+      const imported = new Set(current.settings?.importedBookingIds || []);
+      const pending = bookingList.filter((booking) => booking?.id && booking.status === "confirmado" && !imported.has(booking.id));
+      if (!pending.length) return current;
+
+      const clientsList = [...(current.clients || [])];
+      const eventsList = [...(current.events || [])];
+      const slotMinutes = Number(campaign?.slot_minutes || 30);
+      const extraPrice = Number(campaign?.extra_photo_price || 0);
+
+      pending.forEach((booking) => {
+        imported.add(booking.id);
+        const email = String(booking.email || "").trim().toLowerCase();
+        const phone = normalizePhoneDigits(booking.whatsapp);
+        let client = clientsList.find((item) => {
+          const itemEmail = String(item.email || "").trim().toLowerCase();
+          const phones = [normalizePhoneDigits(item.phone), normalizePhoneDigits(item.whatsapp)].filter(Boolean);
+          return (email && itemEmail === email) || (phone && phones.includes(phone));
+        });
+        if (!client) {
+          client = normalizeClient({
+            name: String(booking.name || "").trim(),
+            email,
+            phone: booking.whatsapp || "",
+            whatsapp: booking.whatsapp || "",
+            notes: "Cadastrado pela agenda online de Natal 2026.",
+          });
+          clientsList.push(client);
+        }
+
+        const startTime = localTime(booking.starts_at);
+        eventsList.push(normalizeRecord({
+          recordType: "evento",
+          status: "Confirmado",
+          paymentStatus: "Pendente",
+          bookingId: booking.id,
+          clientId: client.id,
+          clientName: client.name || booking.name,
+          whatsapp: booking.whatsapp || "",
+          phone: booking.whatsapp || "",
+          email,
+          eventType: campaign?.title || "Ensaio de Natal 2026",
+          packageName: `${campaign?.title || "Natal 2026"} — ${booking.package_photos || ""} fotos`,
+          eventDate: localDateKey(booking.starts_at),
+          startTime,
+          endTime: addMinutesToTime(startTime, slotMinutes),
+          location: campaign?.location || "",
+          amount: Number(booking.package_price || 0),
+          amountPaid: 0,
+          editedPhotosCount: Number(booking.package_photos || 0),
+          budgetDescription: `Ensaio de Natal (${slotMinutes} min) com ${booking.package_photos} fotos tratadas.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
+          notes: [booking.notes ? `Observação do cliente: ${booking.notes}` : "", "Reservado pela agenda online."].filter(Boolean).join("\n"),
+          createdAt: booking.created_at || new Date().toISOString(),
+        }));
+      });
+
+      return normalizeAppState({
+        ...current,
+        clients: clientsList,
+        events: eventsList,
+        settings: { ...current.settings, importedBookingIds: Array.from(imported).slice(-2000) },
+      });
+    });
+  }, []);
+
+  // Reserva cancelada na aba Natal -> agendamento correspondente fica "Cancelado"
+  const markBookingEventCanceled = useCallback((booking) => {
+    setAppState((current) => normalizeAppState({
+      ...current,
+      events: (current.events || []).map((item) =>
+        item.bookingId === booking.id ? { ...item, status: "Cancelado", updatedAt: new Date().toISOString() } : item,
+      ),
+    }));
+  }, []);
+
+  // Ao abrir o app: traz reservas novas da agenda de Natal para a Agenda
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    let active = true;
+    Promise.all([
+      supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
+      supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).limit(3000),
+    ]).then(([campaignRes, bookingRes]) => {
+      if (active && !campaignRes.error && !bookingRes.error && bookingRes.data) {
+        importBookingsAsEvents(bookingRes.data, campaignRes.data);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [hasHydratedRemote, isAuthorized, importBookingsAsEvents]);
 
   // Ao abrir o app (depois de carregar os dados do Supabase), cadastra clientes de pedidos novos
   useEffect(() => {
@@ -2241,10 +2337,11 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-5 md:grid-cols-9">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-5 md:grid-cols-10">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
+            <TabsTrigger value="natal" className="rounded-xl">Natal 2026</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
@@ -2517,6 +2614,13 @@ export default function App() {
               settings={settings}
               onUpdateSettings={(fields) => updateAppState({ settings: { ...settings, ...fields } })}
               onUpdateRecord={updateRecordFields}
+            />
+          </TabsContent>
+
+          <TabsContent value="natal" className="mt-6">
+            <ChristmasBookingAdmin
+              onBookingsLoaded={hasHydratedRemote ? importBookingsAsEvents : undefined}
+              onBookingCanceled={markBookingEventCanceled}
             />
           </TabsContent>
 

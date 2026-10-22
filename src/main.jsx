@@ -3,9 +3,12 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
 import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
+import PublicChristmasBooking from "./components/PublicChristmasBooking.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
+// Agenda pública de ensaios de Natal: https://orcamento.emersonhonoratoretratos.com.br/natal
+const isPublicChristmasBooking = /^\/natal\/?$/i.test(window.location.pathname);
 const isPublicRequestForm =
   /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 
@@ -44,7 +47,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
     </PreviewErrorBoundary>
   </StrictMode>,
 );
