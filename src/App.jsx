@@ -2445,40 +2445,44 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 rounded-[24px] border border-white/70 bg-white/80 p-2 shadow-[0_18px_50px_rgba(40,52,84,0.08)] backdrop-blur">
-            <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(-1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-[190px] rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white px-4 py-2 text-center text-sm font-semibold capitalize text-slate-700">
-              {monthLabel}
+        {activeTab === "dashboard" ? (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 rounded-[24px] border border-white/70 bg-white/80 p-2 shadow-[0_18px_50px_rgba(40,52,84,0.08)] backdrop-blur">
+              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="min-w-[190px] rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white px-4 py-2 text-center text-sm font-semibold capitalize text-slate-700">
+                {monthLabel}
+              </div>
+              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-            <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setSelectedDate(`${event.target.value}-01`);
+              }}
+              className="rounded-[22px] border border-white/70 bg-white/80 px-4 py-2 text-sm shadow-[0_18px_50px_rgba(40,52,84,0.08)]"
+            />
           </div>
+        ) : null}
 
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(event) => {
-              setSelectedMonth(event.target.value);
-              setSelectedDate(`${event.target.value}-01`);
-            }}
-            className="rounded-[22px] border border-white/70 bg-white/80 px-4 py-2 text-sm shadow-[0_18px_50px_rgba(40,52,84,0.08)]"
-          />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
-          <MetricCard title="Eventos totais" value={metrics.totalEvents} subtitle="Agendamentos ativos" icon={CalendarDays} />
-          <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
-          <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Agenda confirmada" icon={Wallet} />
-          <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="Pagamentos lançados" icon={CheckCircle2} />
-          <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="Saldo pendente" icon={AlertTriangle} />
-          <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="Em andamento" icon={FileText} />
-          <MetricCard title="Clientes" value={metrics.totalClients} subtitle="Base cadastrada" icon={User} />
-          <MetricCard title="Serviços" value={metrics.totalServices} subtitle="Tabela ativa" icon={Briefcase} />
-        </div>
+        {activeTab === "dashboard" ? (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
+            <MetricCard title="Eventos totais" value={metrics.totalEvents} subtitle="Agendamentos ativos" icon={CalendarDays} />
+            <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
+            <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Agenda confirmada" icon={Wallet} />
+            <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="Pagamentos lançados" icon={CheckCircle2} />
+            <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="Saldo pendente" icon={AlertTriangle} />
+            <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="Em andamento" icon={FileText} />
+            <MetricCard title="Clientes" value={metrics.totalClients} subtitle="Base cadastrada" icon={User} />
+            <MetricCard title="Serviços" value={metrics.totalServices} subtitle="Tabela ativa" icon={Briefcase} />
+          </div>
+        ) : null}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
           <TabsList className="studio-tabs flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl p-1 shadow-sm [scrollbar-width:none] xl:grid xl:grid-cols-11 [&>button]:shrink-0">
