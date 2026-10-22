@@ -7,8 +7,8 @@ import PublicChristmasBooking from "./components/PublicChristmasBooking.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
-// Agenda pública de ensaios de Natal: https://orcamento.emersonhonoratoretratos.com.br/natal
-const isPublicChristmasBooking = /^\/natal\/?$/i.test(window.location.pathname);
+// Agenda pública de ensaios temáticos: https://orcamento.emersonhonoratoretratos.com.br/ensaio (também /natal)
+const isPublicChristmasBooking = /^\/(natal|ensaio|ensaios)\/?$/i.test(window.location.pathname);
 const isPublicRequestForm =
   /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 

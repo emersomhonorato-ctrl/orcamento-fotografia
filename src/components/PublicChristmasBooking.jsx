@@ -12,9 +12,10 @@ import {
   localTime,
   weekdayLabel,
   fetchAllRows,
+  themeEmoji,
 } from "@/lib/bookings";
 
-// Página pública: o cliente escolhe pacote, dia e horário do ensaio de Natal e reserva.
+// Página pública: o cliente escolhe pacote, dia e horário do ensaio temático (Natal, Dia das Mães...) e reserva.
 
 const inputClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#b3261e] focus:ring-4 focus:ring-[#b3261e]/10";
@@ -194,7 +195,7 @@ export default function PublicChristmasBooking() {
     const number = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
     const dateKey = selectedDay?.key;
     const text = [
-      `Olá! Acabei de reservar meu ensaio de Natal 🎄`,
+      `Olá! Acabei de reservar meu horário — ${campaign.title || "ensaio"} ${themeEmoji(campaign.title)}`,
       ``,
       `*Nome:* ${form.name.trim()}`,
       `*Data:* ${dateKey ? fullDateLabel(dateKey) : ""}`,
@@ -213,8 +214,9 @@ export default function PublicChristmasBooking() {
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, #fff 1px, transparent 1.5px), radial-gradient(circle at 70% 60%, #fff 1px, transparent 1.5px)", backgroundSize: "60px 60px, 90px 90px" }} />
         <img src="/Emerson%20Honorato%20Retratos%20Logo.png" alt="Emerson Honorato Retratos" className="relative mx-auto h-20 w-20 object-contain" />
         <p className="relative mt-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f3d27a]">Emerson Honorato Retratos</p>
-        <h1 className="relative mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{campaign?.title || "Ensaios de Natal"}</h1>
+        <h1 className="relative mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{campaign?.title || "Ensaios"}</h1>
         <p className="relative mx-auto mt-2 max-w-md text-sm text-white/80">{campaign?.subtitle || "Reserve o seu horário."}</p>
+        {campaign?.location ? <p className="relative mt-2 text-xs text-white/70">📍 {campaign.location}</p> : null}
       </header>
 
       <main className="relative mx-auto -mt-12 max-w-2xl px-4 pb-16">
@@ -225,7 +227,7 @@ export default function PublicChristmasBooking() {
 
           {loadState === "ready" && status === "done" ? (
             <div className="py-2 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-3xl">🎄</div>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-3xl">{themeEmoji(campaign?.title)}</div>
               <h2 className="mt-4 text-2xl font-semibold">Horário pré-reservado!</h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-600">
                 Para <strong>confirmar</strong>, pague o sinal de {depositPercent}% pelo Pix e envie o comprovante pelo WhatsApp.
@@ -263,6 +265,12 @@ export default function PublicChristmasBooking() {
                   </a>
                 </div>
               ) : null}
+
+              {campaign?.instructions_pdf_url ? (
+                <a href={campaign.instructions_pdf_url} target="_blank" rel="noopener noreferrer" className="mx-auto mt-4 flex max-w-sm items-center justify-center gap-2 rounded-2xl border-2 border-[#7a1712]/20 bg-[#fff5f3] px-5 py-3 text-sm font-semibold text-[#7a1712] hover:bg-[#ffece8]">
+                  📄 Baixar instruções para o ensaio (PDF)
+                </a>
+              ) : null}
               <p className="mx-auto mt-5 max-w-sm text-xs leading-5 text-slate-500">
                 Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada. Sem o sinal, o horário pode ser liberado para outra pessoa.
               </p>
@@ -271,6 +279,11 @@ export default function PublicChristmasBooking() {
 
           {loadState === "ready" && status !== "done" ? (
             <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+              {campaign?.instructions_pdf_url ? (
+                <a href={campaign.instructions_pdf_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-[#7a1712]/20 bg-[#fff5f3] px-4 py-3 text-sm font-semibold text-[#7a1712] hover:bg-[#ffece8]">
+                  📄 Ver instruções do ensaio (PDF)
+                </a>
+              ) : null}
               <section className="space-y-4">
                 <StepTitle number="1">Escolha o pacote</StepTitle>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -298,7 +311,7 @@ export default function PublicChristmasBooking() {
               <section className="space-y-4">
                 <StepTitle number="2">Escolha o dia</StepTitle>
                 {days.length === 0 ? (
-                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Os horários ainda não foram abertos. Volte em breve! 🎄</p>
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Os horários ainda não foram abertos. Volte em breve! {themeEmoji(campaign?.title)}</p>
                 ) : (
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     {days.map((day) => (

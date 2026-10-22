@@ -3,6 +3,10 @@
     { "source": "/pedido", "destination": "/index.html" },
     { "source": "/pedido/", "destination": "/index.html" },
     { "source": "/natal", "destination": "/index.html" },
-    { "source": "/natal/", "destination": "/index.html" }
+    { "source": "/natal/", "destination": "/index.html" },
+    { "source": "/ensaio", "destination": "/index.html" },
+    { "source": "/ensaio/", "destination": "/index.html" },
+    { "source": "/ensaios", "destination": "/index.html" },
+    { "source": "/ensaios/", "destination": "/index.html" }
   ]
 }

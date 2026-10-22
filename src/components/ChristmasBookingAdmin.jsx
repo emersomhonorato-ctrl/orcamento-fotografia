@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BadgeCheck, CalendarPlus, Copy, ExternalLink, RefreshCw, RotateCcw, Save, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, BadgeCheck, CalendarPlus, Copy, ExternalLink, FileText, FileUp, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, Undo2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,11 +17,14 @@ import {
   localTime,
   weekdayLabel,
   fetchAllRows,
+  themeEmoji,
 } from "@/lib/bookings";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
 
-export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/natal";
+export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/ensaio";
+const PDF_BUCKET = "ensaios";
+
 
 const WEEKDAYS = [
   { value: 1, label: "Seg" },
@@ -42,6 +45,8 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pixForm, setPixForm] = useState(null);
+  const [infoForm, setInfoForm] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [generator, setGenerator] = useState({
     startDate: "2026-11-01",
     endDate: "2026-12-23",
@@ -196,6 +201,122 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     load();
   }
 
+  function startEditInfo() {
+    setInfoForm({
+      title: campaign?.title || "",
+      subtitle: campaign?.subtitle || "",
+      location: campaign?.location || "",
+      studio_whatsapp: campaign?.studio_whatsapp || "",
+      slot_minutes: String(campaign?.slot_minutes ?? 30),
+      extra_photo_price: String(campaign?.extra_photo_price ?? 0),
+      start_date: campaign?.start_date || "",
+      end_date: campaign?.end_date || "",
+      packages: (Array.isArray(campaign?.packages) ? campaign.packages : []).map((item) => ({
+        name: item.name || "",
+        photos: String(item.photos ?? ""),
+        price: String(item.price ?? ""),
+      })),
+    });
+  }
+
+  function updatePackage(index, field, value) {
+    setInfoForm((current) => ({
+      ...current,
+      packages: current.packages.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+    }));
+  }
+
+  async function saveInfo() {
+    if (!infoForm) return;
+    const toNumber = (value) => Number(String(value).replace(",", ".")) || 0;
+    const packages = infoForm.packages
+      .map((item) => ({ photos: toNumber(item.photos), price: toNumber(item.price), name: String(item.name).trim() }))
+      .filter((item) => item.price > 0)
+      .map((item) => ({ ...item, name: item.name || `${item.photos} fotos` }));
+    if (!infoForm.title.trim()) {
+      setMessage("Dê um nome ao ensaio.");
+      return;
+    }
+    if (!packages.length) {
+      setMessage("Cadastre pelo menos um pacote com valor.");
+      return;
+    }
+    if (new Set(packages.map((item) => item.name.toLowerCase())).size !== packages.length) {
+      setMessage("Cada pacote precisa ter um nome diferente.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase
+      .from("booking_campaigns")
+      .update({
+        title: infoForm.title.trim(),
+        subtitle: infoForm.subtitle.trim(),
+        location: infoForm.location.trim(),
+        studio_whatsapp: infoForm.studio_whatsapp.replace(/\D/g, ""),
+        slot_minutes: Math.max(5, toNumber(infoForm.slot_minutes) || 30),
+        extra_photo_price: toNumber(infoForm.extra_photo_price),
+        start_date: infoForm.start_date || null,
+        end_date: infoForm.end_date || null,
+        packages,
+      })
+      .eq("id", BOOKING_CAMPAIGN_ID);
+    setBusy(false);
+    if (error) {
+      setMessage(`Erro ao salvar: ${error.message}`);
+      return;
+    }
+    if (infoForm.start_date && infoForm.end_date) {
+      setGenerator((current) => ({ ...current, startDate: infoForm.start_date, endDate: infoForm.end_date }));
+    }
+    setMessage("Dados do ensaio salvos. Os novos valores valem para as próximas reservas.");
+    setInfoForm(null);
+    load();
+  }
+
+  async function uploadPdf(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+      setMessage("Escolha um arquivo PDF.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage("O PDF pode ter no máximo 10 MB.");
+      return;
+    }
+    setUploading(true);
+    const path = `${BOOKING_CAMPAIGN_ID}/instrucoes-${Date.now()}.pdf`;
+    const { error } = await supabase.storage.from(PDF_BUCKET).upload(path, file, { contentType: "application/pdf", upsert: true });
+    if (error) {
+      setUploading(false);
+      setMessage(`Erro ao enviar o PDF: ${error.message}`);
+      return;
+    }
+    const { data } = supabase.storage.from(PDF_BUCKET).getPublicUrl(path);
+    const oldPath = campaign?.instructions_pdf_path;
+    const { error: updateError } = await supabase
+      .from("booking_campaigns")
+      .update({ instructions_pdf_url: data.publicUrl, instructions_pdf_path: path, instructions_pdf_name: file.name })
+      .eq("id", BOOKING_CAMPAIGN_ID);
+    if (!updateError && oldPath && oldPath !== path) await supabase.storage.from(PDF_BUCKET).remove([oldPath]);
+    setUploading(false);
+    setMessage(updateError ? `Erro ao salvar o PDF: ${updateError.message}` : "PDF de instruções enviado. O cliente já consegue baixar na página.");
+    load();
+  }
+
+  async function removePdf() {
+    if (!campaign?.instructions_pdf_url || !window.confirm("Remover o PDF de instruções?")) return;
+    setUploading(true);
+    if (campaign.instructions_pdf_path) await supabase.storage.from(PDF_BUCKET).remove([campaign.instructions_pdf_path]);
+    await supabase
+      .from("booking_campaigns")
+      .update({ instructions_pdf_url: null, instructions_pdf_path: null, instructions_pdf_name: null })
+      .eq("id", BOOKING_CAMPAIGN_ID);
+    setUploading(false);
+    load();
+  }
+
   async function toggleCampaign() {
     if (!campaign) return;
     setBusy(true);
@@ -216,9 +337,9 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
 
   function shareLink() {
     const text = [
-      "🎄 *Ensaios de Natal 2026* — Emerson Honorato Retratos",
+      `${themeEmoji(campaign?.title)} *${campaign?.title || "Ensaios"}* — Emerson Honorato Retratos`,
       "",
-      "As vagas para os ensaios de Natal estão abertas! Escolha o pacote e o horário direto pelo link:",
+      "As vagas estão abertas! Escolha o pacote e o horário direto pelo link:",
       CHRISTMAS_PUBLIC_URL,
       "",
       ...(Array.isArray(campaign?.packages) ? campaign.packages.map((item) => `• ${item.photos} fotos — ${formatBRL(item.price)}`) : []),
@@ -235,8 +356,8 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       "🤖 _Mensagem automática do sistema de agendamentos — Emerson Honorato Retratos_",
       "",
       awaiting
-        ? `Olá, ${String(booking.name).split(" ")[0]}! Seu horário do ensaio de Natal está pré-reservado 🎄`
-        : `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio de Natal está confirmado 🎄`,
+        ? `Olá, ${String(booking.name).split(" ")[0]}! Seu horário do ensaio (${campaign?.title || "ensaio"}) está pré-reservado ${themeEmoji(campaign?.title)}`
+        : `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio (${campaign?.title || "ensaio"}) está confirmado ${themeEmoji(campaign?.title)}`,
       "",
       `📅 *Data:* ${date}`,
       `⏰ *Horário:* ${localTime(booking.starts_at)}`,
@@ -245,6 +366,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         ? `💰 *Sinal para confirmar:* ${formatBRL(booking.deposit_amount)}`
         : `✅ *Sinal recebido:* ${formatBRL(booking.deposit_amount)} • restante no dia: ${formatBRL(Number(booking.package_price || 0) - Number(booking.deposit_amount || 0))}`,
     ];
+    if (campaign?.instructions_pdf_url) lines.push("", "📄 Instruções para o ensaio:", campaign.instructions_pdf_url);
     if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
     else lines.push("", "Qualquer dúvida, é só responder esta mensagem.");
     const text = lines.join("\n");
@@ -257,7 +379,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       weekdays: current.weekdays.includes(value) ? current.weekdays.filter((item) => item !== value) : [...current.weekdays, value],
     }));
 
-  if (state === "loading") return <p className="p-6 text-slate-500">Carregando agenda de Natal…</p>;
+  if (state === "loading") return <p className="p-6 text-slate-500">Carregando agenda de ensaios…</p>;
   if (state === "missing") {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -268,7 +390,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   if (state === "error") {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        Não foi possível carregar a agenda de Natal. <button type="button" className="underline" onClick={load}>Tentar de novo</button>
+        Não foi possível carregar a agenda de ensaios. <button type="button" className="underline" onClick={load}>Tentar de novo</button>
       </div>
     );
   }
@@ -277,14 +399,14 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     <div className="space-y-6">
       <div className="overflow-hidden rounded-[32px] border border-red-200/70 bg-gradient-to-r from-[#fff4f2] via-white to-[#fff7f0] p-5 shadow-[0_22px_60px_rgba(122,23,18,0.08)]">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full border border-red-200 bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7a1712]">Natal 2026</span>
+          <span className="inline-flex rounded-full border border-red-200 bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7a1712]">Ensaio temático</span>
           <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${campaign?.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
             {campaign?.active ? "Reservas abertas" : "Reservas fechadas"}
           </span>
         </div>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-900">Agenda de ensaios de Natal</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">{themeEmoji(campaign?.title)} {campaign?.title || "Ensaio temático"}</h2>
             <p className="mt-1 text-sm text-slate-600">
               {Array.isArray(campaign?.packages) ? campaign.packages.map((item) => `${item.photos} fotos ${formatBRL(item.price)}`).join(" • ") : ""}
               {Number(campaign?.extra_photo_price) ? ` • extra ${formatBRL(campaign.extra_photo_price)}` : ""}
@@ -293,7 +415,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           <div className="flex flex-wrap gap-2">
             <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={shareLink}><Send className="mr-2 h-4 w-4" />Divulgar no WhatsApp</Button>
             <Button variant="outline" className="rounded-2xl" onClick={copyLink}><Copy className="mr-2 h-4 w-4" />{copied ? "Copiado!" : "Copiar link"}</Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/natal`, "_blank", "noopener")}><ExternalLink className="mr-2 h-4 w-4" />Ver página</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/ensaio`, "_blank", "noopener")}><ExternalLink className="mr-2 h-4 w-4" />Ver página</Button>
             <Button variant="outline" className="rounded-2xl" disabled={busy} onClick={toggleCampaign}>{campaign?.active ? "Fechar reservas" : "Abrir reservas"}</Button>
           </div>
         </div>
@@ -311,6 +433,82 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           ))}
         </div>
       </div>
+
+      {message ? <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{message}</p> : null}
+
+      <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-semibold">Dados do ensaio</h3>
+              <p className="text-sm text-slate-500">Mude o nome e os valores para usar em outros ensaios (ex.: Dia das Mães 2027).</p>
+            </div>
+            {!infoForm ? (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={startEditInfo}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+            ) : null}
+          </div>
+          {infoForm ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1"><Label>Nome do ensaio</Label><Input className="rounded-2xl" placeholder="Ex.: Ensaios de Dia das Mães 2027" value={infoForm.title} onChange={(e) => setInfoForm({ ...infoForm, title: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Frase da página</Label><Input className="rounded-2xl" value={infoForm.subtitle} onChange={(e) => setInfoForm({ ...infoForm, subtitle: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Local</Label><Input className="rounded-2xl" placeholder="Ex.: Estúdio — Siderópolis" value={infoForm.location} onChange={(e) => setInfoForm({ ...infoForm, location: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Seu WhatsApp (recebe os comprovantes)</Label><Input className="rounded-2xl" value={infoForm.studio_whatsapp} onChange={(e) => setInfoForm({ ...infoForm, studio_whatsapp: e.target.value })} /></div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <div className="space-y-1"><Label>Início</Label><Input type="date" className="rounded-2xl" value={infoForm.start_date} onChange={(e) => setInfoForm({ ...infoForm, start_date: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Fim</Label><Input type="date" className="rounded-2xl" value={infoForm.end_date} onChange={(e) => setInfoForm({ ...infoForm, end_date: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Duração (min)</Label><Input type="number" min="5" className="rounded-2xl" value={infoForm.slot_minutes} onChange={(e) => setInfoForm({ ...infoForm, slot_minutes: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Foto extra (R$)</Label><Input inputMode="decimal" className="rounded-2xl" value={infoForm.extra_photo_price} onChange={(e) => setInfoForm({ ...infoForm, extra_photo_price: e.target.value })} /></div>
+              </div>
+              <div className="space-y-2">
+                <Label>Pacotes</Label>
+                {infoForm.packages.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_90px_110px_40px] items-center gap-2">
+                    <Input className="rounded-2xl" placeholder="Nome (ex.: 15 fotos)" value={item.name} onChange={(e) => updatePackage(index, "name", e.target.value)} />
+                    <Input type="number" min="0" className="rounded-2xl" placeholder="Fotos" value={item.photos} onChange={(e) => updatePackage(index, "photos", e.target.value)} />
+                    <Input inputMode="decimal" className="rounded-2xl" placeholder="R$" value={item.price} onChange={(e) => updatePackage(index, "price", e.target.value)} />
+                    <button type="button" className="text-red-600" title="Remover pacote" onClick={() => setInfoForm({ ...infoForm, packages: infoForm.packages.filter((_, i) => i !== index) })}><Trash2 className="mx-auto h-4 w-4" /></button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setInfoForm({ ...infoForm, packages: [...infoForm.packages, { name: "", photos: "", price: "" }] })}><Plus className="mr-2 h-4 w-4" />Adicionar pacote</Button>
+              </div>
+              <div className="flex gap-2">
+                <Button className="rounded-2xl" disabled={busy} onClick={saveInfo}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+                <Button variant="ghost" className="rounded-2xl" onClick={() => setInfoForm(null)}>Cancelar</Button>
+              </div>
+              <p className="text-xs text-slate-500">Dica: para um ensaio novo, troque o nome e os valores aqui, remova os horários antigos que sobraram e crie os novos logo abaixo. As reservas já feitas continuam com os valores da época.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              {campaign?.title} • {Number(campaign?.slot_minutes || 30)} min
+              {campaign?.location ? ` • ${campaign.location}` : ""}
+              {campaign?.start_date && campaign?.end_date ? ` • ${dayMonthLabel(campaign.start_date)} a ${dayMonthLabel(campaign.end_date)}` : ""}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-3">
+            <FileText className="h-5 w-5 text-[#7a1712]" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-900">PDF de instruções para o ensaio</p>
+              <p className="truncate text-xs text-slate-500">
+                {campaign?.instructions_pdf_url ? (campaign.instructions_pdf_name || "instrucoes.pdf") : "Nenhum PDF enviado. O cliente baixa na página e recebe o link na confirmação."}
+              </p>
+            </div>
+            {campaign?.instructions_pdf_url ? (
+              <>
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => window.open(campaign.instructions_pdf_url, "_blank", "noopener")}><ExternalLink className="mr-2 h-4 w-4" />Ver</Button>
+                <Button variant="ghost" size="sm" className="rounded-xl text-red-600" disabled={uploading} onClick={removePdf}><Trash2 className="h-4 w-4" /></Button>
+              </>
+            ) : null}
+            <label className={`inline-flex cursor-pointer items-center rounded-xl bg-[#7a1712] px-3 py-2 text-sm font-medium text-white hover:bg-[#62120e] ${uploading ? "pointer-events-none opacity-60" : ""}`}>
+              <FileUp className="mr-2 h-4 w-4" />
+              {uploading ? "Enviando…" : campaign?.instructions_pdf_url ? "Trocar PDF" : "Subir PDF"}
+              <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={uploadPdf} />
+            </label>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
         <CardContent className="space-y-3 pt-6">

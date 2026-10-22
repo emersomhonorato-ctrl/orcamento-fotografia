@@ -105,3 +105,15 @@ export async function fetchAllRows(build, pageSize = 1000) {
   }
   return { data: all, error: null };
 }
+
+// Emoji do tema conforme o nome do ensaio (Natal, Dia das Mães, Páscoa...)
+export function themeEmoji(title = "") {
+  const t = String(title).toLowerCase();
+  if (t.includes("natal")) return "🎄";
+  if (t.includes("mãe") || t.includes("mae")) return "💐";
+  if (t.includes("páscoa") || t.includes("pascoa")) return "🐰";
+  if (t.includes("pai")) return "👔";
+  if (t.includes("namorad")) return "❤️";
+  if (t.includes("criança") || t.includes("crianca")) return "🎈";
+  return "📸";
+}
