@@ -4,11 +4,14 @@ import "./index.css";
 import App from "./App.jsx";
 import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
 import PublicChristmasBooking from "./components/PublicChristmasBooking.jsx";
+import PublicPhotoDelivery from "./components/PublicPhotoDelivery.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
 // Agenda pública de ensaios temáticos: https://orcamento.emersonhonoratoretratos.com.br/ensaio (também /natal)
 const isPublicChristmasBooking = /^\/(natal|ensaio|ensaios)\/?$/i.test(window.location.pathname);
+// Entrega de fotos: https://orcamento.emersonhonoratoretratos.com.br/entrega/<codigo>
+const deliveryMatch = window.location.pathname.match(/^\/entrega\/([a-z0-9-]{4,80})\/?$/i);
 const isPublicRequestForm =
   /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 
@@ -47,7 +50,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
     </PreviewErrorBoundary>
   </StrictMode>,
 );

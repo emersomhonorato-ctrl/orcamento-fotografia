@@ -7,6 +7,8 @@
     { "source": "/ensaio", "destination": "/index.html" },
     { "source": "/ensaio/", "destination": "/index.html" },
     { "source": "/ensaios", "destination": "/index.html" },
-    { "source": "/ensaios/", "destination": "/index.html" }
+    { "source": "/ensaios/", "destination": "/index.html" },
+    { "source": "/entrega/:codigo", "destination": "/index.html" },
+    { "source": "/entrega/:codigo/", "destination": "/index.html" }
   ]
 }

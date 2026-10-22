@@ -43,6 +43,7 @@ import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
 import NewActivityAlert from "@/components/NewActivityAlert";
+import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -2378,11 +2379,12 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-5 md:grid-cols-10">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-11">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
             <TabsTrigger value="natal" className="rounded-xl">Ensaios</TabsTrigger>
+            <TabsTrigger value="entregas" className="rounded-xl">Entregas</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
@@ -2663,6 +2665,10 @@ export default function App() {
               onBookingsLoaded={hasHydratedRemote ? importBookingsAsEvents : undefined}
               onBookingCanceled={markBookingEventCanceled}
             />
+          </TabsContent>
+
+          <TabsContent value="entregas" className="mt-6">
+            <PhotoDeliveryAdmin records={records} />
           </TabsContent>
 
           <TabsContent value="realizados" className="mt-6">
