@@ -39,6 +39,7 @@ import CalendarMini from "@/components/CalendarMini";
 import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
 import ServiceModal from "@/components/ServiceModal";
+import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -2152,9 +2153,10 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-8">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-5 md:grid-cols-9">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
+            <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
@@ -2419,6 +2421,15 @@ export default function App() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="whatsapp" className="mt-6">
+            <WhatsAppAgendaTab
+              events={onlyEvents}
+              settings={settings}
+              onUpdateSettings={(fields) => updateAppState({ settings: { ...settings, ...fields } })}
+              onUpdateRecord={updateRecordFields}
+            />
           </TabsContent>
 
           <TabsContent value="realizados" className="mt-6">
