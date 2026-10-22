@@ -42,7 +42,7 @@ import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
-import { BOOKING_CAMPAIGN_ID, addMinutesToTime, localDateKey, localTime } from "@/lib/bookings";
+import { BOOKING_CAMPAIGN_ID, addMinutesToTime, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -1006,11 +1006,37 @@ export default function App() {
   const importBookingsAsEvents = useCallback((bookingList = [], campaign = null) => {
     setAppState((current) => {
       const imported = new Set(current.settings?.importedBookingIds || []);
-      const pending = bookingList.filter((booking) => booking?.id && booking.status === "confirmado" && !imported.has(booking.id));
-      if (!pending.length) return current;
+      const pending = bookingList.filter((booking) => booking?.id && booking.status !== "cancelado" && !imported.has(booking.id));
+
+      // Sincroniza reservas já importadas: sinal recebido / cancelamento
+      const byId = new Map(bookingList.map((booking) => [booking.id, booking]));
+      let changed = false;
+      const syncedEvents = (current.events || []).map((item) => {
+        const booking = item.bookingId ? byId.get(item.bookingId) : null;
+        if (!booking) return item;
+        if (booking.status === "cancelado" && item.status !== "Cancelado") {
+          changed = true;
+          return { ...item, status: "Cancelado", updatedAt: new Date().toISOString() };
+        }
+        if (booking.status === "confirmado" && item.status === "Pendente") {
+          changed = true;
+          return {
+            ...item,
+            status: "Confirmado",
+            amountPaid: Math.max(Number(item.amountPaid || 0), Number(booking.deposit_amount || 0)),
+            paymentStatus: "Entrada paga",
+            receiptDate: String(booking.paid_at || new Date().toISOString()).slice(0, 10),
+            receiptMethod: "Pix",
+            receiptReference: "Sinal do ensaio de Natal",
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return item;
+      });
+      if (!pending.length && !changed) return current;
 
       const clientsList = [...(current.clients || [])];
-      const eventsList = [...(current.events || [])];
+      const eventsList = [...syncedEvents];
       const slotMinutes = Number(campaign?.slot_minutes || 30);
       const extraPrice = Number(campaign?.extra_photo_price || 0);
 
@@ -1035,10 +1061,13 @@ export default function App() {
         }
 
         const startTime = localTime(booking.starts_at);
+        const depositPaid = booking.status === "confirmado" ? Number(booking.deposit_amount || 0) : 0;
         eventsList.push(normalizeRecord({
           recordType: "evento",
-          status: "Confirmado",
-          paymentStatus: "Pendente",
+          status: booking.status === "confirmado" ? "Confirmado" : "Pendente",
+          paymentStatus: depositPaid > 0 ? "Entrada paga" : "Pendente",
+          receiptMethod: depositPaid > 0 ? "Pix" : "",
+          receiptReference: depositPaid > 0 ? "Sinal do ensaio de Natal" : "",
           bookingId: booking.id,
           clientId: client.id,
           clientName: client.name || booking.name,
@@ -1052,10 +1081,14 @@ export default function App() {
           endTime: addMinutesToTime(startTime, slotMinutes),
           location: campaign?.location || "",
           amount: Number(booking.package_price || 0),
-          amountPaid: 0,
+          amountPaid: depositPaid,
           editedPhotosCount: Number(booking.package_photos || 0),
           budgetDescription: `Ensaio de Natal (${slotMinutes} min) com ${booking.package_photos} fotos tratadas.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
-          notes: [booking.notes ? `Observação do cliente: ${booking.notes}` : "", "Reservado pela agenda online."].filter(Boolean).join("\n"),
+          notes: [
+            booking.notes ? `Observação do cliente: ${booking.notes}` : "",
+            booking.status === "aguardando_sinal" ? `Aguardando sinal de R$ ${Number(booking.deposit_amount || 0).toFixed(2).replace(".", ",")} via Pix.` : "",
+            "Reservado pela agenda online.",
+          ].filter(Boolean).join("\n"),
           createdAt: booking.created_at || new Date().toISOString(),
         }));
       });
@@ -1085,7 +1118,7 @@ export default function App() {
     let active = true;
     Promise.all([
       supabase.from("booking_campaigns").select("*").eq("id", BOOKING_CAMPAIGN_ID).maybeSingle(),
-      supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).limit(3000),
+      fetchAllRows(() => supabase.from("bookings").select("*").eq("campaign_id", BOOKING_CAMPAIGN_ID).order("created_at")),
     ]).then(([campaignRes, bookingRes]) => {
       if (active && !campaignRes.error && !bookingRes.error && bookingRes.data) {
         importBookingsAsEvents(bookingRes.data, campaignRes.data);

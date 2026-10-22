@@ -155,3 +155,25 @@ on conflict (id) do update set
   slot_minutes = excluded.slot_minutes;
 
 select id, title, active, start_date, end_date, jsonb_array_length(packages) as pacotes from public.booking_campaigns;
+
+-- =====================================================================
+-- Pix do sinal (50%) + aviso automático por WhatsApp (já aplicado)
+-- =====================================================================
+alter table public.booking_campaigns
+  add column if not exists pix_key text,
+  add column if not exists pix_name text,
+  add column if not exists pix_city text,
+  add column if not exists deposit_percent int not null default 50;
+
+update public.booking_campaigns
+   set pix_key = '55888684000100', pix_name = 'Emerson Honorato Retratos',
+       pix_city = 'Siderópolis', deposit_percent = 50
+ where id = 'natal-2026';
+
+alter table public.bookings
+  add column if not exists deposit_amount numeric(10,2),
+  add column if not exists paid_at timestamptz;
+-- status: aguardando_sinal -> confirmado (quando o sinal é marcado como recebido) | cancelado
+-- book_slot agora grava status 'aguardando_sinal' e deposit_amount = preço * deposit_percent / 100.
+-- Aviso: private.notify_settings (CallMeBot). Para ligar, quando tiver a apikey:
+--   update private.notify_settings set callmebot_apikey = 'SUA_APIKEY', enabled = true where id = 1;
