@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import qrcode from "qrcode-generator";
 import { supabase } from "@/supabase";
+import { buildPixPayload, formatPixKey } from "@/lib/pix";
 import {
   BOOKING_CAMPAIGN_ID,
   addMinutesToTime,
@@ -43,6 +45,7 @@ export default function PublicChristmasBooking() {
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
+  const [pixCopied, setPixCopied] = useState(false);
 
   async function loadData() {
     const [{ data: campaignData, error: campaignError }, { data: slotData, error: slotError }] = await Promise.all([
@@ -152,6 +155,36 @@ export default function PublicChristmasBooking() {
     setStatus("done");
   }
 
+  const depositPercent = Number(campaign?.deposit_percent || 50);
+  const depositAmount = result ? Number(result.deposit || 0) : 0;
+  const pixPayload = useMemo(() => {
+    if (!result || !campaign?.pix_key || !depositAmount) return "";
+    return buildPixPayload({
+      key: campaign.pix_key,
+      name: campaign.pix_name || "Emerson Honorato Retratos",
+      city: campaign.pix_city || "Sideropolis",
+      amount: depositAmount,
+      txid: `NATAL${String(result.id || "").replace(/-/g, "").slice(0, 12)}`,
+    });
+  }, [result, campaign, depositAmount]);
+  const pixQrDataUrl = useMemo(() => {
+    if (!pixPayload) return "";
+    const qr = qrcode(0, "M");
+    qr.addData(pixPayload);
+    qr.make();
+    return qr.createDataURL(6, 2);
+  }, [pixPayload]);
+
+  async function copyPix() {
+    try {
+      await navigator.clipboard.writeText(pixPayload);
+      setPixCopied(true);
+      setTimeout(() => setPixCopied(false), 2500);
+    } catch {
+      window.prompt("Copie o código Pix:", pixPayload);
+    }
+  }
+
   const whatsappToStudio = (() => {
     if (!campaign?.studio_whatsapp || !result) return "";
     const digits = String(campaign.studio_whatsapp).replace(/\D/g, "");
@@ -163,8 +196,11 @@ export default function PublicChristmasBooking() {
       `*Nome:* ${form.name.trim()}`,
       `*Data:* ${dateKey ? fullDateLabel(dateKey) : ""}`,
       `*Horário:* ${selectedSlot ? localTime(selectedSlot.starts_at) : ""}`,
-      `*Pacote:* ${result.package} — ${formatBRL(result.price)}`,
-    ].join("\n");
+      `*Pacote:* ${result.photos} fotos — ${formatBRL(result.price)}`,
+      depositAmount ? `*Sinal (${depositPercent}%):* ${formatBRL(depositAmount)}` : "",
+      ``,
+      `Segue o comprovante do Pix do sinal 👇`,
+    ].filter((line, index, list) => line !== "" || list[index - 1] !== "").join("\n");
     return `https://api.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(text)}`;
   })();
 
@@ -185,24 +221,48 @@ export default function PublicChristmasBooking() {
           {loadState === "closed" ? <p className="py-10 text-center text-slate-600">As reservas para esta agenda estão encerradas.</p> : null}
 
           {loadState === "ready" && status === "done" ? (
-            <div className="py-4 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-3xl">🎄</div>
-              <h2 className="mt-4 text-2xl font-semibold">Horário reservado!</h2>
+            <div className="py-2 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-3xl">🎄</div>
+              <h2 className="mt-4 text-2xl font-semibold">Horário pré-reservado!</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-600">
+                Para <strong>confirmar</strong>, pague o sinal de {depositPercent}% pelo Pix e envie o comprovante pelo WhatsApp.
+              </p>
               {result ? (
                 <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left text-sm leading-7 text-slate-700">
                   <p><strong>Data:</strong> {selectedDay ? fullDateLabel(selectedDay.key) : ""}</p>
                   <p><strong>Horário:</strong> {selectedSlot ? `${localTime(selectedSlot.starts_at)} às ${addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes)}` : ""}</p>
-                  <p><strong>Pacote:</strong> {result.package} — {formatBRL(result.price)}</p>
+                  <p><strong>Pacote:</strong> {result.photos} fotos — {formatBRL(result.price)}</p>
+                  {depositAmount ? <p><strong>Restante no dia:</strong> {formatBRL(Number(result.price || 0) - depositAmount)}</p> : null}
                 </div>
               ) : null}
-              <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-slate-600">
-                Obrigado, {form.name.trim().split(" ")[0]}! Você vai receber a confirmação pelo WhatsApp. Se precisar remarcar, é só me chamar.
-              </p>
-              {whatsappToStudio ? (
-                <a href={whatsappToStudio} target="_blank" rel="noopener noreferrer" className="mt-5 inline-flex rounded-2xl bg-emerald-600 px-5 py-3 font-semibold text-white shadow hover:bg-emerald-700">
-                  Avisar o fotógrafo no WhatsApp
-                </a>
+
+              {pixPayload ? (
+                <div className="mx-auto mt-5 max-w-sm rounded-[24px] border-2 border-emerald-200 bg-emerald-50/50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">1. Pague o sinal pelo Pix</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{formatBRL(depositAmount)}</p>
+                  {pixQrDataUrl ? <img src={pixQrDataUrl} alt="QR Code Pix" className="mx-auto mt-3 h-48 w-48 rounded-xl bg-white p-2" /> : null}
+                  <p className="mt-3 text-xs text-slate-500">Escaneie o QR Code ou use o Pix copia e cola:</p>
+                  <div className="mt-2 break-all rounded-xl bg-white p-3 text-left font-mono text-[11px] leading-4 text-slate-600">{pixPayload}</div>
+                  <button type="button" onClick={copyPix} className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
+                    {pixCopied ? "Código copiado! ✓" : "Copiar código Pix"}
+                  </button>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Chave Pix (CNPJ): {formatPixKey(campaign.pix_key)}<br />{campaign.pix_name}
+                  </p>
+                </div>
               ) : null}
+
+              {whatsappToStudio ? (
+                <div className="mx-auto mt-4 max-w-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">2. Envie o comprovante</p>
+                  <a href={whatsappToStudio} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex w-full justify-center rounded-2xl bg-emerald-600 px-5 py-3.5 font-semibold text-white shadow hover:bg-emerald-700">
+                    Enviar comprovante pelo WhatsApp
+                  </a>
+                </div>
+              ) : null}
+              <p className="mx-auto mt-5 max-w-sm text-xs leading-5 text-slate-500">
+                Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada. Sem o sinal, o horário pode ser liberado para outra pessoa.
+              </p>
             </div>
           ) : null}
 
@@ -227,7 +287,7 @@ export default function PublicChristmasBooking() {
                   ))}
                 </div>
                 <p className="text-xs text-slate-500">
-                  Ensaio de {slotMinutes} minutos.
+                  Ensaio de {slotMinutes} minutos. Reserva confirmada com sinal de {Number(campaign?.deposit_percent || 50)}% via Pix.
                   {Number(campaign?.extra_photo_price) ? ` Fotos extras: ${formatBRL(campaign.extra_photo_price)} cada.` : ""}
                 </p>
               </section>

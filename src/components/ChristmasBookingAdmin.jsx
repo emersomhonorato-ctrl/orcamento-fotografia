@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, CalendarPlus, Copy, ExternalLink, RefreshCw, RotateCcw, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, BadgeCheck, CalendarPlus, Copy, ExternalLink, RefreshCw, RotateCcw, Save, Send, Trash2, Undo2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
   weekdayLabel,
 } from "@/lib/bookings";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
+import { buildPixPayload } from "@/lib/pix";
 
 export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/natal";
 
@@ -39,6 +40,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pixForm, setPixForm] = useState(null);
   const [generator, setGenerator] = useState({
     startDate: "2026-11-01",
     endDate: "2026-12-23",
@@ -79,18 +81,20 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
 
   const bookingBySlot = useMemo(() => {
     const map = new Map();
-    bookings.filter((booking) => booking.status === "confirmado").forEach((booking) => map.set(booking.slot_id, booking));
+    bookings.filter((booking) => booking.status !== "cancelado").forEach((booking) => map.set(booking.slot_id, booking));
     return map;
   }, [bookings]);
 
   const days = useMemo(() => Array.from(groupSlotsByDay(slots).entries()), [slots]);
   const totals = useMemo(() => {
     const confirmed = bookings.filter((booking) => booking.status === "confirmado");
+    const awaiting = bookings.filter((booking) => booking.status === "aguardando_sinal");
     return {
       free: slots.filter((slot) => slot.status === "livre").length,
       booked: confirmed.length,
-      blocked: slots.filter((slot) => slot.status === "bloqueado").length,
+      awaiting: awaiting.length,
       revenue: confirmed.reduce((sum, booking) => sum + Number(booking.package_price || 0), 0),
+      deposits: confirmed.reduce((sum, booking) => sum + Number(booking.deposit_amount || 0), 0),
     };
   }, [slots, bookings]);
 
@@ -154,6 +158,43 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     load();
   }
 
+  async function markDepositReceived(booking) {
+    if (!window.confirm(`Confirmar que o sinal de ${formatBRL(booking.deposit_amount)} de ${booking.name} foi recebido?`)) return;
+    setBusy(true);
+    await supabase.from("bookings").update({ status: "confirmado", paid_at: new Date().toISOString() }).eq("id", booking.id);
+    setBusy(false);
+    load();
+  }
+
+  function pixFor(booking) {
+    if (!campaign?.pix_key || !Number(booking.deposit_amount)) return "";
+    return buildPixPayload({
+      key: campaign.pix_key,
+      name: campaign.pix_name || "Emerson Honorato Retratos",
+      city: campaign.pix_city || "Sideropolis",
+      amount: Number(booking.deposit_amount),
+      txid: `NATAL${String(booking.id).replace(/-/g, "").slice(0, 12)}`,
+    });
+  }
+
+  async function savePix() {
+    if (!pixForm) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("booking_campaigns")
+      .update({
+        pix_key: pixForm.pix_key.trim(),
+        pix_name: pixForm.pix_name.trim(),
+        pix_city: pixForm.pix_city.trim(),
+        deposit_percent: Math.min(100, Math.max(0, Number(pixForm.deposit_percent || 0))),
+      })
+      .eq("id", BOOKING_CAMPAIGN_ID);
+    setBusy(false);
+    setMessage(error ? `Erro ao salvar Pix: ${error.message}` : "Dados do Pix salvos. Valem para as próximas reservas.");
+    setPixForm(null);
+    load();
+  }
+
   async function toggleCampaign() {
     if (!campaign) return;
     setBusy(true);
@@ -187,17 +228,25 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
 
   function confirmOnWhatsApp(booking) {
     const date = fullDateLabel(localDateKey(booking.starts_at));
-    const text = [
+    const awaiting = booking.status === "aguardando_sinal";
+    const pix = awaiting ? pixFor(booking) : "";
+    const lines = [
       "🤖 _Mensagem automática do sistema de agendamentos — Emerson Honorato Retratos_",
       "",
-      `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio de Natal está confirmado 🎄`,
+      awaiting
+        ? `Olá, ${String(booking.name).split(" ")[0]}! Seu horário do ensaio de Natal está pré-reservado 🎄`
+        : `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio de Natal está confirmado 🎄`,
       "",
       `📅 *Data:* ${date}`,
       `⏰ *Horário:* ${localTime(booking.starts_at)}`,
       `📸 *Pacote:* ${booking.package_photos} fotos — ${formatBRL(booking.package_price)}`,
-      "",
-      "Qualquer dúvida, é só responder esta mensagem.",
-    ].join("\n");
+      awaiting
+        ? `💰 *Sinal para confirmar:* ${formatBRL(booking.deposit_amount)}`
+        : `✅ *Sinal recebido:* ${formatBRL(booking.deposit_amount)} • restante no dia: ${formatBRL(Number(booking.package_price || 0) - Number(booking.deposit_amount || 0))}`,
+    ];
+    if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
+    else lines.push("", "Qualquer dúvida, é só responder esta mensagem.");
+    const text = lines.join("\n");
     window.open(buildWhatsAppLink(booking.whatsapp, text), "_blank", "noopener");
   }
 
@@ -250,9 +299,9 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         <div className="mt-5 grid gap-3 sm:grid-cols-4">
           {[
             ["Livres", totals.free],
-            ["Reservados", totals.booked],
-            ["Bloqueados", totals.blocked],
-            ["Receita prevista", formatBRL(totals.revenue)],
+            ["Aguardando sinal", totals.awaiting],
+            ["Confirmados", totals.booked],
+            ["Sinais recebidos", formatBRL(totals.deposits)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white bg-white/80 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
@@ -261,6 +310,38 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           ))}
         </div>
       </div>
+
+      <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">Pix do sinal</h3>
+            {!pixForm ? (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setPixForm({
+                pix_key: campaign?.pix_key || "",
+                pix_name: campaign?.pix_name || "",
+                pix_city: campaign?.pix_city || "",
+                deposit_percent: String(campaign?.deposit_percent ?? 50),
+              })}>Editar</Button>
+            ) : null}
+          </div>
+          {pixForm ? (
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-1"><Label>Chave Pix</Label><Input className="rounded-2xl" value={pixForm.pix_key} onChange={(e) => setPixForm({ ...pixForm, pix_key: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Nome do recebedor</Label><Input className="rounded-2xl" value={pixForm.pix_name} onChange={(e) => setPixForm({ ...pixForm, pix_name: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Cidade</Label><Input className="rounded-2xl" value={pixForm.pix_city} onChange={(e) => setPixForm({ ...pixForm, pix_city: e.target.value })} /></div>
+              <div className="space-y-1"><Label>Sinal (%)</Label><Input type="number" min="0" max="100" className="rounded-2xl" value={pixForm.deposit_percent} onChange={(e) => setPixForm({ ...pixForm, deposit_percent: e.target.value })} /></div>
+              <div className="flex gap-2 md:col-span-4">
+                <Button className="rounded-2xl" disabled={busy} onClick={savePix}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+                <Button variant="ghost" className="rounded-2xl" onClick={() => setPixForm(null)}>Cancelar</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Chave {campaign?.pix_key || "não cadastrada"} • {campaign?.pix_name || "-"} • {campaign?.pix_city || "-"} • sinal de {campaign?.deposit_percent ?? 50}%
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
         <CardContent className="space-y-4 pt-6">
@@ -337,15 +418,23 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-semibold">{localTime(slot.starts_at)}</span>
-                        <span className="text-[11px] uppercase tracking-wide">{booking ? "reservado" : slot.status}</span>
+                        <span className="text-[11px] uppercase tracking-wide">{booking ? (booking.status === "aguardando_sinal" ? "aguardando" : "confirmado") : slot.status}</span>
                       </div>
                       {booking ? (
                         <div className="mt-1 space-y-1">
                           <p className="font-medium text-slate-900">{booking.name}</p>
                           <p className="text-xs text-slate-600">{booking.package_photos} fotos • {formatBRL(booking.package_price)} • {booking.whatsapp}</p>
+                          {booking.status === "aguardando_sinal" ? (
+                            <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Aguardando sinal {formatBRL(booking.deposit_amount)}</p>
+                          ) : (
+                            <p className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Sinal recebido {formatBRL(booking.deposit_amount)}</p>
+                          )}
                           {booking.notes ? <p className="text-xs text-slate-500">“{booking.notes}”</p> : null}
                           <div className="flex flex-wrap gap-2 pt-1">
-                            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" onClick={() => confirmOnWhatsApp(booking)}><Send className="h-3.5 w-3.5" />Confirmar</button>
+                            {booking.status === "aguardando_sinal" ? (
+                              <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" disabled={busy} onClick={() => markDepositReceived(booking)}><BadgeCheck className="h-3.5 w-3.5" />Sinal recebido</button>
+                            ) : null}
+                            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700" onClick={() => confirmOnWhatsApp(booking)}><Send className="h-3.5 w-3.5" />{booking.status === "aguardando_sinal" ? "Cobrar sinal" : "Confirmar"}</button>
                             <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-red-700" onClick={() => cancelBooking(booking)}><Undo2 className="h-3.5 w-3.5" />Cancelar</button>
                           </div>
                         </div>
