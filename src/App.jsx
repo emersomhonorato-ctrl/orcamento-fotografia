@@ -60,7 +60,8 @@ import {
 } from "@/lib/appModel";
 import { loadAppState, saveAppState } from "@/lib/appState";
 import { supabase } from "@/supabase";
-import { generateBudgetPDF, generateContractPDF, generateEventPDF, generateReceiptPDF } from "@/utils/pdfGenerator";
+import { generateContractPDF, generateEventPDF } from "@/utils/pdfGenerator";
+import { generateBudgetPDF, generateReceiptPDF, preparePdfImages } from "@/utils/pdfDocuments";
 import {
   buildCommunicationMessage,
   buildCommunicationSubject,
@@ -615,6 +616,25 @@ export default function App() {
       });
   }, [clients, records]);
 
+  // Logo e assinatura reduzidos para os PDFs (evita arquivos de vários MB)
+  const [pdfImages, setPdfImages] = useState({ key: "", logoDataUrl: "", signatureDataUrl: "" });
+  const pdfImagesKey = `${settings.logoDataUrl?.length || 0}:${settings.signatureDataUrl?.length || 0}`;
+  useEffect(() => {
+    let active = true;
+    preparePdfImages({ logoDataUrl: settings.logoDataUrl, signatureDataUrl: settings.signatureDataUrl }).then((result) => {
+      if (active) setPdfImages({ key: pdfImagesKey, logoDataUrl: result.logoDataUrl, signatureDataUrl: result.signatureDataUrl });
+    });
+    return () => {
+      active = false;
+    };
+  }, [pdfImagesKey, settings.logoDataUrl, settings.signatureDataUrl]);
+  const pdfSettings = useMemo(
+    () => (pdfImages.key === pdfImagesKey
+      ? { ...settings, logoDataUrl: pdfImages.logoDataUrl, signatureDataUrl: pdfImages.signatureDataUrl }
+      : settings),
+    [settings, pdfImages, pdfImagesKey],
+  );
+
   const budgetPipeline = useMemo(() => {
     return {
       pending: activeBudgets.filter((record) => record.status === "Pendente").length,
@@ -714,7 +734,7 @@ export default function App() {
           const endTotal = endHour * 60 + endMinute;
           const diffMinutes = Math.max(endTotal - startTotal, 0);
           const hours = diffMinutes / 60;
-          return hours > 0 ? String(hours).replace(".5", ",5") : "a combinar";
+          return hours > 0 ? `${String(hours).replace(".", ",")} ${hours === 1 ? "hora" : "horas"}` : "a combinar";
         })()
       : "a combinar";
     const rawCurrency = (value) => formatCurrency(value).replace(/^R\$\s?/, "");
@@ -1738,12 +1758,12 @@ export default function App() {
             {Number(record.amountPaid || 0) > 0 ? (
               <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedReceiptId(record.id); setActiveTab("recibos"); }}><Wallet className="mr-2 h-4 w-4" />Recibo</Button>
             ) : null}
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF orçamento</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), pdfSettings)}><FileText className="mr-2 h-4 w-4" />PDF orçamento</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, getAgendaMessageType(record))}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, getAgendaMessageType(record))}><Bell className="mr-2 h-4 w-4" />{getAgendaMessageLabel(record)}</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => markAsPaid(record)}><Wallet className="mr-2 h-4 w-4" />Quitar</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), pdfSettings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
             <Button
               variant="destructive"
               className="rounded-2xl"
@@ -1847,7 +1867,7 @@ export default function App() {
             {!isCanceled ? (
               <Button className="rounded-2xl" onClick={() => approveBudget(record)}><CheckCircle2 className="mr-2 h-4 w-4" />Aprovar</Button>
             ) : null}
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => { generateBudgetPDF(getRecordForBudgetPDF(record), pdfSettings); markCommunicationSent(record, "proposta"); }}><FileText className="mr-2 h-4 w-4" />PDF</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
             {isCanceled ? (
               <Button
@@ -2194,7 +2214,7 @@ export default function App() {
                             <Pencil className="mr-2 h-4 w-4" />
                             Revisar agendamento
                           </Button>
-                          <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(nextUpcomingEvent), settings)}>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(nextUpcomingEvent), pdfSettings)}>
                             <FileText className="mr-2 h-4 w-4" />
                             PDF agenda
                           </Button>
@@ -2824,7 +2844,7 @@ export default function App() {
                   {selectedContract ? (
                     <Button
                       className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]"
-                      onClick={() => generateContractPDF(selectedContract, settings, contractPreview)}
+                      onClick={() => generateContractPDF(selectedContract, pdfSettings, contractPreview)}
                     >
                       <FileText className="mr-2 h-4 w-4" />
                       Baixar contrato em PDF
@@ -3302,7 +3322,7 @@ export default function App() {
                       </div>
                       <Button
                         className="rounded-2xl"
-                        onClick={() => generateReceiptPDF(selectedReceipt, settings)}
+                        onClick={() => generateReceiptPDF(selectedReceipt, pdfSettings)}
                       >
                         <FileText className="mr-2 h-4 w-4" />
                         Baixar recibo em PDF

@@ -7,6 +7,7 @@ import {
   getLogoFormatFromDataUrl,
   normalizeItems,
 } from "./formatters";
+import { PDF_COLORS, addPdfImageFit, drawPdfHeader } from "./pdfDocuments";
 
 const PDF_TYPO = {
   labelSize: 8.5,
@@ -62,12 +63,17 @@ function drawSectionIcon(doc, x, y, type) {
 }
 
 function drawFooter(doc, settings) {
-  doc.setFillColor(248, 248, 246);
-  doc.rect(0, 278, 210, 12, "F");
+  const page = doc.getCurrentPageInfo().pageNumber;
+  const total = doc.getNumberOfPages();
+  doc.setDrawColor(...PDF_COLORS.line);
+  doc.setLineWidth(0.3);
+  doc.line(16, 281, 194, 281);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(166, 176, 192);
-  doc.text(settings.pdfFooter || "Obrigado pela oportunidade.", 105, 287, { align: "center" });
+  doc.setFontSize(7.6);
+  doc.setTextColor(...PDF_COLORS.faint);
+  doc.text(settings.pdfFooter || "Obrigado pela oportunidade.", 16, 286.5);
+  doc.text(`Página ${page} de ${total}`, 194, 286.5, { align: "right" });
+  doc.setLineWidth(0.2);
 }
 
 function ensureSpace(doc, cursor, amount, settings) {
@@ -120,49 +126,7 @@ function drawBudgetInfoCard(doc, x, y, w, h, label, value, options = {}) {
 }
 
 function drawDocumentHeader(doc, settings, subtitle) {
-  const logoFormat = getLogoFormatFromDataUrl(settings.logoDataUrl);
-  const studioName = settings.studioName || "Emerson Honorato Retratos";
-  const headerContacts = [
-    settings.studioPhone,
-    settings.studioEmail,
-    settings.studioInstagram,
-    settings.studioCity,
-  ]
-    .filter(Boolean)
-    .join("   •   ");
-
-  doc.setFillColor(23, 27, 38);
-  doc.rect(0, 0, 210, 46, "F");
-
-  if (settings.logoDataUrl) {
-    try {
-      doc.addImage(settings.logoDataUrl, logoFormat, 16, 9, 28, 28);
-    } catch {
-      // ignore invalid image and continue with the PDF
-    }
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(17);
-  doc.text(studioName, settings.logoDataUrl ? 50 : 16, 19);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  doc.setTextColor(166, 176, 192);
-  if (typeof doc.setCharSpace === "function") {
-    doc.setCharSpace(0.8);
-    doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
-    doc.setCharSpace(0);
-  } else {
-    doc.text(subtitle, settings.logoDataUrl ? 50 : 16, 28);
-  }
-
-  if (headerContacts) {
-    doc.setFontSize(8.5);
-    doc.text(headerContacts, settings.logoDataUrl ? 50 : 16, 35);
-  }
-
-  return studioName;
+  return drawPdfHeader(doc, settings, subtitle);
 }
 
 function drawBudgetEditorialCard(doc, cursor, title, lines, options = {}) {
@@ -735,7 +699,7 @@ function drawCompanySignatureBlock(doc, cursor, companyLabel, settings, options 
   if (hasSignatureImage) {
     const signatureFormat = getLogoFormatFromDataUrl(settings.signatureDataUrl);
     try {
-      doc.addImage(settings.signatureDataUrl, signatureFormat, 69, cursor.value - 2, 72, imageHeight);
+      doc.addImage(settings.signatureDataUrl, signatureFormat, 69, cursor.value - 2, 72, imageHeight, "studio-signature", "FAST");
       cursor.value += imageHeight;
     } catch {
       // Se a imagem falhar, seguimos com a assinatura em texto sem quebrar o PDF.
@@ -767,7 +731,7 @@ function drawCompanySignaturePinned(doc, y, companyLabel, settings, options = {}
   if (hasSignatureImage) {
     const signatureFormat = getLogoFormatFromDataUrl(settings.signatureDataUrl);
     try {
-      doc.addImage(settings.signatureDataUrl, signatureFormat, 69, cursorY - 2, 72, imageHeight);
+      doc.addImage(settings.signatureDataUrl, signatureFormat, 69, cursorY - 2, 72, imageHeight, "studio-signature", "FAST");
       cursorY += imageHeight;
     } catch {
       // Se a imagem falhar, mantemos a assinatura textual na mesma página.
@@ -989,12 +953,8 @@ function drawContractSignatureBlock(doc, cursor, clientLabel, companyLabel, sett
   const lineStartOffset = lineWidth / 2;
 
   if (hasSignatureImage) {
-    const signatureFormat = getLogoFormatFromDataUrl(settings.signatureDataUrl);
-    try {
-      doc.addImage(settings.signatureDataUrl, signatureFormat, 116, cursor.value - 2, 64, 14);
-      cursor.value += 14;
-    } catch {
-      // Se a imagem falhar, mantemos o bloco textual sem interromper o PDF.
+    if (addPdfImageFit(doc, settings.signatureDataUrl, rightCenter - 32, cursor.value - 2, 64, 14, "studio-signature", "center")) {
+      cursor.value += 13;
     }
   }
 
@@ -1017,22 +977,12 @@ function drawContractSignatureBlock(doc, cursor, clientLabel, companyLabel, sett
   doc.text(companyLabel, rightCenter, cursor.value, { align: "center" });
 }
 
-function drawContractPaperFrame(doc, cursor) {
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(16, cursor.value, 178, 248 - cursor.value, 4, 4, "FD");
-  doc.setDrawColor(214, 180, 95);
-  doc.line(22, cursor.value + 7, 188, cursor.value + 7);
-}
-
 function ensureContractPageSpace(doc, cursor, amount, settings, options = {}) {
-  const { bottom = 262 } = options;
+  const { bottom = 272 } = options;
   if (cursor.value + amount <= bottom) return;
   doc.addPage();
-  drawDocumentHeader(doc, settings, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS");
-  cursor.value = 56;
-  drawContractPaperFrame(doc, cursor);
-  cursor.value = 66;
+  drawPdfHeader(doc, settings, "Contrato de prestação de serviços", { compact: true });
+  cursor.value = 32;
 }
 
 function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
@@ -1043,7 +993,7 @@ function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
     return;
   }
 
-  const width = (tone === "body" || tone === "intro" ? 150 : 156) - indent;
+  const width = 178 - indent;
   const lines = doc.splitTextToSize(content, width);
   const lineHeight = tone === "heading" ? 5.8 : tone === "bullet" ? 4.9 : tone === "intro" ? 5.5 : 5.2;
   ensureContractPageSpace(doc, cursor, lines.length * lineHeight + 8, settings);
@@ -1067,10 +1017,12 @@ function drawContractParagraph(doc, cursor, text, options = {}, settings = {}) {
   }
 
   if (tone === "bullet") {
-    doc.text("•", 29, cursor.value);
+    doc.setTextColor(...PDF_COLORS.gold);
+    doc.text("•", 18, cursor.value);
+    doc.setTextColor(55, 65, 81);
   }
 
-  doc.text(lines, 28 + indent, cursor.value);
+  doc.text(lines, 16 + indent, cursor.value);
   cursor.value += lines.length * lineHeight + (tone === "heading" ? 2.6 : 1.8);
 }
 
@@ -2264,20 +2216,23 @@ export function generateContractPDF(record, settings = {}, previewText = "") {
     contractCity,
     contractForum,
   );
-  const cursor = { value: 56 };
+  const cursor = { value: 58 };
   const signatureClosingHeight = settings.signatureDataUrl ? 44 : 32;
 
-  drawContractPaperFrame(doc, cursor);
-  cursor.value += 16;
-  doc.setFont("times", "normal");
-  doc.setFontSize(17);
+  doc.setFont("times", "bold");
+  doc.setFontSize(15);
   doc.setTextColor(31, 41, 55);
-  doc.text("CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS", 28, cursor.value);
-  cursor.value += 8;
+  doc.text("CONTRATO DE PRESTAÇÃO DE SERVIÇOS FOTOGRÁFICOS", 105, cursor.value, { align: "center" });
+  cursor.value += 6;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.4);
   doc.setTextColor(100, 116, 139);
-  doc.text("Instrumento particular entre as partes, com condições comerciais e jurídicas registradas.", 28, cursor.value);
+  doc.text("Instrumento particular entre as partes, com condições comerciais e jurídicas registradas.", 105, cursor.value, { align: "center" });
+  cursor.value += 4;
+  doc.setDrawColor(...PDF_COLORS.gold);
+  doc.setLineWidth(0.4);
+  doc.line(80, cursor.value, 130, cursor.value);
+  doc.setLineWidth(0.2);
   cursor.value += 10;
   renderContractBody(doc, cursor, contractText, settings);
 
@@ -2285,15 +2240,12 @@ export function generateContractPDF(record, settings = {}, previewText = "") {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.3);
   doc.setTextColor(71, 85, 105);
-  doc.text(`${contractCity}, ${formatDateBR(getTodayLocalISO())}.`, 28, cursor.value);
+  doc.text(`${contractCity}, ${formatDateBR(getTodayLocalISO())}.`, 16, cursor.value);
   cursor.value += 5;
   doc.setFontSize(8.7);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Foro eleito: ${contractForum}.`, 28, cursor.value);
-  cursor.value += 5.5;
-  doc.setDrawColor(214, 180, 95);
-  doc.line(28, cursor.value, 98, cursor.value);
-  cursor.value += 5.5;
+  doc.text(`Foro eleito: ${contractForum}.`, 16, cursor.value);
+  cursor.value += 12;
 
   drawContractSignatureBlock(doc, cursor, clientName, studioName, settings);
   const totalPages = doc.getNumberOfPages();
