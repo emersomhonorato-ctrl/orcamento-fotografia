@@ -117,3 +117,10 @@ export function themeEmoji(title = "") {
   if (t.includes("criança") || t.includes("crianca")) return "🎈";
   return "📸";
 }
+
+// Valor total da reserva (pacote + pessoas extras)
+export function bookingTotal(booking) {
+  if (!booking) return 0;
+  if (booking.total_price !== null && booking.total_price !== undefined) return Number(booking.total_price) || 0;
+  return Number(booking.package_price || 0) + Number(booking.extra_people_amount || 0);
+}

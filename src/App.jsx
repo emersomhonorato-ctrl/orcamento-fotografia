@@ -43,7 +43,7 @@ import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
 import NewActivityAlert from "@/components/NewActivityAlert";
-import { BOOKING_CAMPAIGN_ID, addMinutesToTime, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
+import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -1025,7 +1025,7 @@ export default function App() {
             ...item,
             status: "Confirmado",
             amountPaid: Math.max(Number(item.amountPaid || 0), Number(booking.deposit_amount || 0)),
-            paymentStatus: "Entrada paga",
+            paymentStatus: Number(booking.deposit_amount || 0) >= bookingTotal(booking) ? "Pago" : "Entrada paga",
             receiptDate: String(booking.paid_at || new Date().toISOString()).slice(0, 10),
             receiptMethod: "Pix",
             receiptReference: `Sinal — ${campaign?.title || "ensaio"}`,
@@ -1066,7 +1066,7 @@ export default function App() {
         eventsList.push(normalizeRecord({
           recordType: "evento",
           status: booking.status === "confirmado" ? "Confirmado" : "Pendente",
-          paymentStatus: depositPaid > 0 ? "Entrada paga" : "Pendente",
+          paymentStatus: depositPaid > 0 ? (depositPaid >= bookingTotal(booking) ? "Pago" : "Entrada paga") : "Pendente",
           receiptMethod: depositPaid > 0 ? "Pix" : "",
           receiptReference: depositPaid > 0 ? `Sinal — ${campaign?.title || "ensaio"}` : "",
           bookingId: booking.id,
@@ -1081,10 +1081,10 @@ export default function App() {
           startTime,
           endTime: addMinutesToTime(startTime, slotMinutes),
           location: campaign?.location || "",
-          amount: Number(booking.package_price || 0),
+          amount: bookingTotal(booking),
           amountPaid: depositPaid,
           editedPhotosCount: Number(booking.package_photos || 0),
-          budgetDescription: `${campaign?.title || "Ensaio"} (${slotMinutes} min) com ${booking.package_photos} fotos tratadas.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
+          budgetDescription: `${campaign?.title || "Ensaio"} (${slotMinutes} min) com ${booking.package_photos} fotos tratadas${Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa(s) extra(s) (R$ ${Number(booking.extra_people_amount || 0).toFixed(2).replace(".", ",")})` : ""}.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
           notes: [
             booking.notes ? `Observação do cliente: ${booking.notes}` : "",
             booking.status === "aguardando_sinal" ? `Aguardando sinal de R$ ${Number(booking.deposit_amount || 0).toFixed(2).replace(".", ",")} via Pix.` : "",

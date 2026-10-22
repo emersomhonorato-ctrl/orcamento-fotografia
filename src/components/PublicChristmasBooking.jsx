@@ -41,6 +41,8 @@ export default function PublicChristmasBooking() {
   const [slots, setSlots] = useState([]);
   const [loadState, setLoadState] = useState("loading");
   const [packageName, setPackageName] = useState("");
+  const [extraPeople, setExtraPeople] = useState(0);
+  const [paymentChoice, setPaymentChoice] = useState("sinal");
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
   const [form, setForm] = useState({ name: "", whatsapp: "", email: "", notes: "", website: "" });
@@ -118,6 +120,11 @@ export default function PublicChristmasBooking() {
   const selectedDay = days.find((day) => day.key === dayKey) || null;
   const selectedSlot = slots.find((slot) => slot.id === slotId) || null;
   const slotMinutes = Number(campaign?.slot_minutes || 30);
+  const extraPersonPrice = Number(campaign?.extra_person_price || 0);
+  const maxExtraPeople = Math.max(0, Number(campaign?.max_extra_people ?? 5));
+  const allowFullPayment = campaign?.allow_full_payment !== false;
+  const previewTotal = selectedPackage ? Number(selectedPackage.price || 0) + extraPeople * extraPersonPrice : 0;
+  const previewDeposit = Math.round(previewTotal * Number(campaign?.deposit_percent || 50)) / 100;
 
   const update = (field) => (event) => {
     const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : event.target.value;
@@ -145,6 +152,8 @@ export default function PublicChristmasBooking() {
       p_whatsapp: form.whatsapp.trim(),
       p_email: form.email.trim(),
       p_notes: form.notes.trim() || null,
+      p_extra_people: extraPersonPrice > 0 ? extraPeople : 0,
+      p_payment: allowFullPayment ? paymentChoice : "sinal",
     });
     if (error) {
       setStatus("idle");
@@ -161,6 +170,8 @@ export default function PublicChristmasBooking() {
 
   const depositPercent = Number(campaign?.deposit_percent || 50);
   const depositAmount = result ? Number(result.deposit || 0) : 0;
+  const paidInFull = result?.payment === "total";
+  const remainingAmount = result ? Math.max(0, Number(result.price || 0) - depositAmount) : 0;
   const pixPayload = useMemo(() => {
     if (!result || !campaign?.pix_key || !depositAmount) return "";
     return buildPixPayload({
@@ -200,10 +211,12 @@ export default function PublicChristmasBooking() {
       `*Nome:* ${form.name.trim()}`,
       `*Data:* ${dateKey ? fullDateLabel(dateKey) : ""}`,
       `*Horário:* ${selectedSlot ? localTime(selectedSlot.starts_at) : ""}`,
-      `*Pacote:* ${result.photos} fotos — ${formatBRL(result.price)}`,
-      depositAmount ? `*Sinal (${depositPercent}%):* ${formatBRL(depositAmount)}` : "",
+      `*Pacote:* ${result.photos} fotos — ${formatBRL(result.package_price ?? result.price)}`,
+      Number(result.extra_people) ? `*Pessoas extras:* ${result.extra_people} — ${formatBRL(result.extra_amount)}` : "",
+      `*Total:* ${formatBRL(result.price)}`,
+      depositAmount ? (paidInFull ? `*Pagamento:* valor total ${formatBRL(depositAmount)}` : `*Sinal (${depositPercent}%):* ${formatBRL(depositAmount)}`) : "",
       ``,
-      `Segue o comprovante do Pix do sinal 👇`,
+      paidInFull ? `Segue o comprovante do Pix 👇` : `Segue o comprovante do Pix do sinal 👇`,
     ].filter((line, index, list) => line !== "" || list[index - 1] !== "").join("\n");
     return `https://api.whatsapp.com/send?phone=${number}&text=${encodeURIComponent(text)}`;
   })();
@@ -230,20 +243,22 @@ export default function PublicChristmasBooking() {
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-3xl">{themeEmoji(campaign?.title)}</div>
               <h2 className="mt-4 text-2xl font-semibold">Horário pré-reservado!</h2>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-600">
-                Para <strong>confirmar</strong>, pague o sinal de {depositPercent}% pelo Pix e envie o comprovante pelo WhatsApp.
+                Para <strong>confirmar</strong>, pague {paidInFull ? "o valor total" : `o sinal de ${depositPercent}%`} pelo Pix e envie o comprovante pelo WhatsApp.
               </p>
               {result ? (
                 <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left text-sm leading-7 text-slate-700">
                   <p><strong>Data:</strong> {selectedDay ? fullDateLabel(selectedDay.key) : ""}</p>
                   <p><strong>Horário:</strong> {selectedSlot ? `${localTime(selectedSlot.starts_at)} às ${addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes)}` : ""}</p>
-                  <p><strong>Pacote:</strong> {result.photos} fotos — {formatBRL(result.price)}</p>
-                  {depositAmount ? <p><strong>Restante no dia:</strong> {formatBRL(Number(result.price || 0) - depositAmount)}</p> : null}
+                  <p><strong>Pacote:</strong> {result.photos} fotos — {formatBRL(result.package_price ?? result.price)}</p>
+                  {Number(result.extra_people) ? <p><strong>Pessoas extras:</strong> {result.extra_people} — {formatBRL(result.extra_amount)}</p> : null}
+                  <p><strong>Total:</strong> {formatBRL(result.price)}</p>
+                  {depositAmount && remainingAmount > 0 ? <p><strong>Restante no dia:</strong> {formatBRL(remainingAmount)}</p> : null}
                 </div>
               ) : null}
 
               {pixPayload ? (
                 <div className="mx-auto mt-5 max-w-sm rounded-[24px] border-2 border-emerald-200 bg-emerald-50/50 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">1. Pague o sinal pelo Pix</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{paidInFull ? "1. Pague o valor total pelo Pix" : "1. Pague o sinal pelo Pix"}</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900">{formatBRL(depositAmount)}</p>
                   {pixQrDataUrl ? <img src={pixQrDataUrl} alt="QR Code Pix" className="mx-auto mt-3 h-48 w-48 rounded-xl bg-white p-2" /> : null}
                   <p className="mt-3 text-xs text-slate-500">Escaneie o QR Code ou use o Pix copia e cola:</p>
@@ -272,7 +287,7 @@ export default function PublicChristmasBooking() {
                 </a>
               ) : null}
               <p className="mx-auto mt-5 max-w-sm text-xs leading-5 text-slate-500">
-                Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada. Sem o sinal, o horário pode ser liberado para outra pessoa.
+                Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada. Sem o pagamento, o horário pode ser liberado para outra pessoa.
               </p>
             </div>
           ) : null}
@@ -303,9 +318,22 @@ export default function PublicChristmasBooking() {
                   ))}
                 </div>
                 <p className="text-xs text-slate-500">
-                  Ensaio de {slotMinutes} minutos. Reserva confirmada com sinal de {Number(campaign?.deposit_percent || 50)}% via Pix.
+                  Ensaio de {slotMinutes} minutos. Reserva confirmada com sinal de {Number(campaign?.deposit_percent || 50)}% via Pix{allowFullPayment ? " (ou o valor total, se preferir)" : ""}.
                   {Number(campaign?.extra_photo_price) ? ` Fotos extras: ${formatBRL(campaign.extra_photo_price)} cada.` : ""}
                 </p>
+                {extraPersonPrice > 0 && maxExtraPeople > 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4">
+                    <div>
+                      <p className="font-medium text-slate-900">Pessoas extras</p>
+                      <p className="text-xs text-slate-500">{formatBRL(extraPersonPrice)} por pessoa a mais (até {maxExtraPeople})</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button type="button" aria-label="Menos uma pessoa" disabled={extraPeople <= 0} onClick={() => setExtraPeople((n) => Math.max(0, n - 1))} className="h-10 w-10 rounded-full border-2 border-slate-200 text-xl font-semibold text-[#7a1712] disabled:opacity-40">−</button>
+                      <span className="w-6 text-center text-xl font-bold">{extraPeople}</span>
+                      <button type="button" aria-label="Mais uma pessoa" disabled={extraPeople >= maxExtraPeople} onClick={() => setExtraPeople((n) => Math.min(maxExtraPeople, n + 1))} className="h-10 w-10 rounded-full border-2 border-slate-200 text-xl font-semibold text-[#7a1712] disabled:opacity-40">+</button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
               <section className="space-y-4">
@@ -387,7 +415,32 @@ export default function PublicChristmasBooking() {
                   <p className="font-semibold text-[#7a1712]">Resumo</p>
                   <p>{fullDateLabel(selectedDay.key)} • {localTime(selectedSlot.starts_at)} às {addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes)}</p>
                   <p>{selectedPackage.photos} fotos tratadas • {formatBRL(selectedPackage.price)}</p>
+                  {extraPeople > 0 ? <p>{extraPeople} pessoa{extraPeople > 1 ? "s" : ""} extra{extraPeople > 1 ? "s" : ""} • {formatBRL(extraPeople * extraPersonPrice)}</p> : null}
+                  <p className="mt-1 font-semibold text-slate-900">Total: {formatBRL(previewTotal)}</p>
                 </div>
+              ) : null}
+
+              {selectedPackage && allowFullPayment ? (
+                <section className="space-y-2">
+                  <p className="text-sm font-medium">Como prefere pagar?</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      ["sinal", `Sinal de ${Number(campaign?.deposit_percent || 50)}%`, formatBRL(previewDeposit), "o restante no dia do ensaio"],
+                      ["total", "Valor total", formatBRL(previewTotal), "já fica tudo pago"],
+                    ].map(([value, label, amount, hint]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setPaymentChoice(value)}
+                        className={`rounded-2xl border-2 p-3 text-left transition ${paymentChoice === value ? "border-[#7a1712] bg-[#fff5f3]" : "border-slate-200 hover:border-[#c2483d]"}`}
+                      >
+                        <p className="text-sm font-semibold text-slate-900">{label}</p>
+                        <p className="text-lg font-bold text-[#7a1712]">{amount}</p>
+                        <p className="text-xs text-slate-500">{hint}</p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               ) : null}
 
               {errorMessage ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
