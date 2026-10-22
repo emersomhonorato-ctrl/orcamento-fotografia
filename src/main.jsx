@@ -2,6 +2,12 @@ import { Component, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
+import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
+
+// Formulário público de pedido (fora do login):
+// https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
+const isPublicRequestForm =
+  /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 
 class PreviewErrorBoundary extends Component {
   constructor(props) {
@@ -38,7 +44,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      <App />
+      {isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
     </PreviewErrorBoundary>
   </StrictMode>,
 );

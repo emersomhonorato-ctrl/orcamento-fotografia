@@ -39,6 +39,8 @@ import CalendarMini from "@/components/CalendarMini";
 import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
 import ServiceModal from "@/components/ServiceModal";
+import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
+import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import {
   EVENT_STATUS_OPTIONS,
   PAYMENT_OPTIONS,
@@ -60,7 +62,8 @@ import {
 } from "@/lib/appModel";
 import { loadAppState, saveAppState } from "@/lib/appState";
 import { supabase } from "@/supabase";
-import { generateBudgetPDF, generateContractPDF, generateEventPDF, generateReceiptPDF } from "@/utils/pdfGenerator";
+import { generateContractPDF, generateEventPDF } from "@/utils/pdfGenerator";
+import { generateBudgetPDF, generateReceiptPDF, preparePdfImages } from "@/utils/pdfDocuments";
 import {
   buildCommunicationMessage,
   buildCommunicationSubject,
@@ -148,6 +151,38 @@ function formatMonthOptionLabel(key) {
     .format(new Date(`${key}-01T12:00:00`))
     .replace(" de ", " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function toLocalISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getBudgetValidityInfo(record = {}, defaultDays = 7) {
+  const days = Number(record.budgetValidityDays || defaultDays || 7);
+  const baseRaw = record.budgetSentAt || record.createdAt;
+  const base = baseRaw ? new Date(baseRaw) : null;
+
+  if (!base || Number.isNaN(base.getTime())) {
+    return { days, baseISO: "", expiresISO: "", daysLeft: null, isSent: false };
+  }
+
+  const baseDay = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  const expires = new Date(baseDay);
+  expires.setDate(expires.getDate() + days);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysLeft = Math.round((expires.getTime() - today.getTime()) / 86400000);
+
+  return {
+    days,
+    baseISO: toLocalISODate(baseDay),
+    expiresISO: toLocalISODate(expires),
+    daysLeft,
+    isSent: Boolean(record.budgetSentAt),
+  };
 }
 
 function getBudgetReferenceDate(record = {}) {
@@ -583,14 +618,37 @@ export default function App() {
       });
   }, [clients, records]);
 
+  // Logo e assinatura reduzidos para os PDFs (evita arquivos de vários MB)
+  const [pdfImages, setPdfImages] = useState({ key: "", logoDataUrl: "", signatureDataUrl: "" });
+  const pdfImagesKey = `${settings.logoDataUrl?.length || 0}:${settings.signatureDataUrl?.length || 0}`;
+  useEffect(() => {
+    let active = true;
+    preparePdfImages({ logoDataUrl: settings.logoDataUrl, signatureDataUrl: settings.signatureDataUrl }).then((result) => {
+      if (active) setPdfImages({ key: pdfImagesKey, logoDataUrl: result.logoDataUrl, signatureDataUrl: result.signatureDataUrl });
+    });
+    return () => {
+      active = false;
+    };
+  }, [pdfImagesKey, settings.logoDataUrl, settings.signatureDataUrl]);
+  const pdfSettings = useMemo(
+    () => (pdfImages.key === pdfImagesKey
+      ? { ...settings, logoDataUrl: pdfImages.logoDataUrl, signatureDataUrl: pdfImages.signatureDataUrl }
+      : settings),
+    [settings, pdfImages, pdfImagesKey],
+  );
+
   const budgetPipeline = useMemo(() => {
     return {
       pending: activeBudgets.filter((record) => record.status === "Pendente").length,
       negotiation: activeBudgets.filter((record) => record.status === "Em negociação").length,
-      approved: activeBudgets.filter((record) => record.status === "Aprovado").length,
+      approved: onlyEvents.filter((record) => record.convertedFromBudget).length,
+      expired: activeBudgets.filter((record) => {
+        const info = getBudgetValidityInfo(record, settings.budgetValidityDays);
+        return info.daysLeft !== null && info.daysLeft < 0;
+      }).length,
       canceled: canceledBudgets.length,
     };
-  }, [activeBudgets, canceledBudgets.length]);
+  }, [activeBudgets, canceledBudgets.length, onlyEvents, settings.budgetValidityDays]);
 
   const commercialActions = useMemo(() => {
     const reminderDays = Number(settings.reminderDaysBefore || 0);
@@ -611,8 +669,10 @@ export default function App() {
 
     const budgetActions = activeBudgets
       .filter((record) => ["Pendente", "Em negociação"].includes(record.status))
+      .map((record) => ({ record, info: getBudgetValidityInfo(record, settings.budgetValidityDays) }))
+      .sort((a, b) => (a.info.daysLeft ?? 9999) - (b.info.daysLeft ?? 9999))
       .slice(0, 4)
-      .map((record) => ({
+      .map(({ record }) => ({
         id: `budget-${record.id}`,
         type: "proposta",
         title: "Follow-up de proposta",
@@ -632,7 +692,7 @@ export default function App() {
       }));
 
     return [...agendaActions, ...budgetActions, ...paymentActions].slice(0, 6);
-  }, [onlyEvents, activeBudgets, settings.reminderDaysBefore, settings.reminderSameDay]);
+  }, [onlyEvents, activeBudgets, settings.reminderDaysBefore, settings.reminderSameDay, settings.budgetValidityDays]);
 
   const contractRecords = useMemo(
     () => enrichedRecords.filter((record) => record.clientName || record.eventType || record.packageName),
@@ -676,7 +736,7 @@ export default function App() {
           const endTotal = endHour * 60 + endMinute;
           const diffMinutes = Math.max(endTotal - startTotal, 0);
           const hours = diffMinutes / 60;
-          return hours > 0 ? String(hours).replace(".5", ",5") : "a combinar";
+          return hours > 0 ? `${String(hours).replace(".", ",")} ${hours === 1 ? "hora" : "horas"}` : "a combinar";
         })()
       : "a combinar";
     const rawCurrency = (value) => formatCurrency(value).replace(/^R\$\s?/, "");
@@ -863,8 +923,11 @@ export default function App() {
     const pending = Math.max(totalRevenue - received, 0);
     const potentialRevenue = activeBudgets.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
 
-    const conversionBase = onlyEvents.length + activeBudgets.length;
-    const conversionRate = conversionBase > 0 ? Math.round((onlyEvents.length / conversionBase) * 100) : 0;
+    // Conversão = trabalhos fechados ÷ (fechados + cancelados + orçamentos em aberto)
+    const wonCount = onlyEvents.filter((record) => record.status !== "Cancelado").length;
+    const lostCount = canceledBudgets.length + onlyEvents.filter((record) => record.status === "Cancelado").length;
+    const conversionBase = wonCount + lostCount + activeBudgets.length;
+    const conversionRate = conversionBase > 0 ? Math.round((wonCount / conversionBase) * 100) : 0;
 
     return {
       totalEvents: onlyEvents.length,
@@ -879,7 +942,7 @@ export default function App() {
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [activeBudgets, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
+  }, [activeBudgets, canceledBudgets.length, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
 
   function changeSelectedMonth(direction) {
     const baseDate = new Date(`${selectedMonth}-01T12:00:00`);
@@ -1037,7 +1100,7 @@ export default function App() {
     setIsEventModalOpen(true);
   }
 
-  function openNewBudgetModal() {
+  function openNewBudgetModal(prefill = {}) {
     setForm({
       ...defaultForm,
       recordType: "orcamento",
@@ -1063,8 +1126,35 @@ export default function App() {
       items: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      ...prefill,
     });
     setIsEventModalOpen(true);
+  }
+
+  // Pedido vindo do formulário público -> novo orçamento já preenchido
+  function createBudgetFromRequest(request) {
+    const requested = String(request.service || "").trim().toLowerCase();
+    const matchedService = services.find((service) => String(service.name || "").trim().toLowerCase() === requested)
+      || services.find((service) => requested && String(service.name || "").toLowerCase().includes(requested.split(" ")[0]));
+    const noteLines = [
+      request.details ? `Pedido do cliente: ${request.details}` : "",
+      request.event_time ? `Horário desejado: ${request.event_time}` : "",
+      request.people ? `Pessoas/convidados: ${request.people}` : "",
+      request.how_found ? `Conheceu por: ${request.how_found}` : "",
+    ].filter(Boolean);
+
+    openNewBudgetModal({
+      clientName: request.name || "",
+      whatsapp: request.whatsapp || "",
+      phone: request.whatsapp || "",
+      email: request.email || "",
+      eventType: matchedService?.name || request.service || "",
+      packageName: matchedService?.name || request.service || "",
+      eventDate: request.event_date || "",
+      startTime: /^\d{1,2}:\d{2}$/.test(String(request.event_time || "").trim()) ? String(request.event_time).trim().padStart(5, "0") : "",
+      location: request.location || "",
+      notes: noteLines.join("\n"),
+    });
   }
 
   function editEvent(record) {
@@ -1207,6 +1297,12 @@ export default function App() {
 
   function markCommunicationSent(record, kind) {
     if (!record?.id) return;
+    if (kind === "proposta") {
+      if (!record.budgetSentAt) {
+        updateRecordFields(record.id, { budgetSentAt: new Date().toISOString() });
+      }
+      return;
+    }
     if (kind !== "lembrete" && kind !== "lembrete_hoje") return;
 
     updateRecordFields(record.id, kind === "lembrete_hoje" ? { sameDayReminderSent: true } : { reminderSent: true });
@@ -1221,6 +1317,8 @@ export default function App() {
           ...item,
           recordType: "evento",
           status: "Confirmado",
+          convertedFromBudget: true,
+          budgetApprovedAt: new Date().toISOString(),
           paymentStatus: item.paymentStatus || "Pendente",
           eventDate: item.eventDate || getTodayLocalISO(),
           updatedAt: new Date().toISOString(),
@@ -1689,12 +1787,12 @@ export default function App() {
             {Number(record.amountPaid || 0) > 0 ? (
               <Button variant="outline" className="rounded-2xl" onClick={() => { setSelectedReceiptId(record.id); setActiveTab("recibos"); }}><Wallet className="mr-2 h-4 w-4" />Recibo</Button>
             ) : null}
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF orçamento</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), pdfSettings)}><FileText className="mr-2 h-4 w-4" />PDF orçamento</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => sendEmail(record, getAgendaMessageType(record))}><Mail className="mr-2 h-4 w-4" />E-mail</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => sendWhatsApp(record, getAgendaMessageType(record))}><Bell className="mr-2 h-4 w-4" />{getAgendaMessageLabel(record)}</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => markAsPaid(record)}><Wallet className="mr-2 h-4 w-4" />Quitar</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(record), pdfSettings)}><FileText className="mr-2 h-4 w-4" />PDF agenda</Button>
             <Button
               variant="destructive"
               className="rounded-2xl"
@@ -1715,6 +1813,18 @@ export default function App() {
 
   function renderBudgetCard(record) {
     const isCanceled = record.status === "Cancelado";
+    const validity = getBudgetValidityInfo(record, settings.budgetValidityDays);
+    let validityBadge = null;
+    if (!isCanceled && validity.daysLeft !== null) {
+      if (validity.daysLeft < 0) {
+        const n = Math.abs(validity.daysLeft);
+        validityBadge = { text: `Vencido há ${n} ${n === 1 ? "dia" : "dias"}`, className: "border-red-200 bg-red-50 text-red-700" };
+      } else if (validity.daysLeft === 0) {
+        validityBadge = { text: "Vence hoje", className: "border-amber-200 bg-amber-50 text-amber-800" };
+      } else if (validity.daysLeft <= 2) {
+        validityBadge = { text: `Vence em ${validity.daysLeft} ${validity.daysLeft === 1 ? "dia" : "dias"}`, className: "border-amber-200 bg-amber-50 text-amber-800" };
+      }
+    }
 
     return (
       <div
@@ -1732,6 +1842,11 @@ export default function App() {
                 {record.eventDate ? formatDateBR(record.eventDate) : "Sem data prevista"}
               </span>
               <StatusBadge value={record.status} />
+              {validityBadge ? (
+                <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${validityBadge.className}`}>
+                  {validityBadge.text}
+                </span>
+              ) : null}
               {isCanceled && record.updatedAt ? (
                 <span className="inline-flex rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">
                   Atualizado em {formatDateBR(String(record.updatedAt).slice(0, 10))}
@@ -1752,7 +1867,14 @@ export default function App() {
               </div>
               <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Validade</p>
-                <p className="mt-2 text-sm font-medium text-slate-800">{record.budgetValidityDays || settings.budgetValidityDays} dias</p>
+                <p className="mt-2 text-sm font-medium text-slate-800">
+                  {validity.expiresISO ? `Até ${formatDateBR(validity.expiresISO)}` : `${validity.days} dias`}
+                </p>
+                {validity.baseISO ? (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {validity.days} dias · {validity.isSent ? "enviado" : "criado"} em {formatDateBR(validity.baseISO)}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Pago</p>
@@ -1774,7 +1896,7 @@ export default function App() {
             {!isCanceled ? (
               <Button className="rounded-2xl" onClick={() => approveBudget(record)}><CheckCircle2 className="mr-2 h-4 w-4" />Aprovar</Button>
             ) : null}
-            <Button variant="outline" className="rounded-2xl" onClick={() => generateBudgetPDF(getRecordForBudgetPDF(record), settings)}><FileText className="mr-2 h-4 w-4" />PDF</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => { generateBudgetPDF(getRecordForBudgetPDF(record), pdfSettings); markCommunicationSent(record, "proposta"); }}><FileText className="mr-2 h-4 w-4" />PDF</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => editEvent(record)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
             {isCanceled ? (
               <Button
@@ -1949,7 +2071,7 @@ export default function App() {
               <Plus className="mr-2 h-4 w-4" />
               Novo agendamento
             </Button>
-            <Button variant="outline" onClick={openNewBudgetModal} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
+            <Button variant="outline" onClick={() => openNewBudgetModal()} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
               <FileText className="mr-2 h-4 w-4" />
               Novo orçamento
             </Button>
@@ -2059,9 +2181,10 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-8">
+          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-5 md:grid-cols-9">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
+            <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
@@ -2121,7 +2244,7 @@ export default function App() {
                             <Pencil className="mr-2 h-4 w-4" />
                             Revisar agendamento
                           </Button>
-                          <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(nextUpcomingEvent), settings)}>
+                          <Button variant="outline" className="rounded-2xl" onClick={() => generateEventPDF(getRecordForEventPDF(nextUpcomingEvent), pdfSettings)}>
                             <FileText className="mr-2 h-4 w-4" />
                             PDF agenda
                           </Button>
@@ -2208,8 +2331,8 @@ export default function App() {
                       <strong className="text-2xl text-amber-900">{budgetPipeline.pending}</strong>
                     </div>
                     <div className="flex items-center justify-between rounded-[22px] border border-sky-200/60 bg-gradient-to-r from-sky-50 to-white p-4">
-                      <span className="text-sm font-medium text-sky-800">Confirmados</span>
-                      <strong className="text-2xl text-sky-900">{budgetPipeline.approved}</strong>
+                      <span className="text-sm font-medium text-sky-800">Fechados (na agenda)</span>
+                      <strong className="text-2xl text-sky-900">{metrics.confirmedEvents}</strong>
                     </div>
                     <div className="flex items-center justify-between rounded-[22px] border border-rose-200/60 bg-gradient-to-r from-rose-50 to-white p-4">
                       <span className="text-sm font-medium text-rose-800">Cancelados</span>
@@ -2228,8 +2351,9 @@ export default function App() {
                       <p className="mt-2 text-2xl font-bold text-slate-900">{formatCurrency(metrics.potentialRevenue)}</p>
                     </div>
                     <div className="rounded-[24px] border border-rose-100/70 bg-gradient-to-br from-white to-[#fff8fa] p-5 shadow-[0_10px_24px_rgba(99,32,67,0.05)]">
-                      <p className="text-sm text-slate-500">Conversão estimada</p>
+                      <p className="text-sm text-slate-500">Taxa de conversão</p>
                       <p className="mt-2 text-2xl font-bold text-slate-900">{metrics.conversionRate}%</p>
+                      <p className="mt-1 text-xs text-slate-400">Fechados ÷ todos os orçamentos, incluindo cancelados</p>
                     </div>
                     <div className="rounded-[24px] border border-rose-100/70 bg-gradient-to-br from-white to-[#fff8fa] p-5 shadow-[0_10px_24px_rgba(99,32,67,0.05)]">
                       <p className="text-sm text-slate-500">Confirmados e concluídos</p>
@@ -2325,6 +2449,15 @@ export default function App() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="whatsapp" className="mt-6">
+            <WhatsAppAgendaTab
+              events={onlyEvents}
+              settings={settings}
+              onUpdateSettings={(fields) => updateAppState({ settings: { ...settings, ...fields } })}
+              onUpdateRecord={updateRecordFields}
+            />
           </TabsContent>
 
           <TabsContent value="realizados" className="mt-6">
@@ -2435,12 +2568,14 @@ export default function App() {
                       Acompanhe a negociação, destaque valores e transforme propostas em eventos confirmados com mais clareza visual.
                     </p>
                   </div>
-                  <Button onClick={openNewBudgetModal} className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]">
+                  <Button onClick={() => openNewBudgetModal()} className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]">
                     <Plus className="mr-2 h-4 w-4" />
                     Novo orçamento
                   </Button>
                 </div>
               </div>
+
+              <BudgetRequestsPanel settings={settings} onCreateBudget={createBudgetFromRequest} />
 
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
                 <CardContent className="pt-6">
@@ -2450,11 +2585,11 @@ export default function App() {
                       <p className="mt-3 text-3xl font-extrabold text-amber-900">{budgetPipeline.pending}</p>
                     </div>
                     <div className="rounded-[24px] border border-sky-200/80 bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Em negociação</p>
-                      <p className="mt-3 text-3xl font-extrabold text-sky-900">{budgetPipeline.negotiation}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Vencidos</p>
+                      <p className="mt-3 text-3xl font-extrabold text-sky-900">{budgetPipeline.expired}</p>
                     </div>
                     <div className="rounded-[24px] border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Aprovado</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Aprovados</p>
                       <p className="mt-3 text-3xl font-extrabold text-emerald-900">{budgetPipeline.approved}</p>
                     </div>
                     <div className="rounded-[24px] border border-red-200/80 bg-gradient-to-br from-red-50 to-white p-4 shadow-sm">
@@ -2468,7 +2603,7 @@ export default function App() {
                       <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                         <p className="font-medium text-slate-700">Nenhum orçamento ativo encontrado</p>
                         <p className="mt-2 text-sm">Crie um orçamento para gerar PDF e organizar suas propostas comerciais.</p>
-                        <Button onClick={openNewBudgetModal} className="mt-4 rounded-2xl">
+                        <Button onClick={() => openNewBudgetModal()} className="mt-4 rounded-2xl">
                           <Plus className="mr-2 h-4 w-4" />
                           Criar orçamento
                         </Button>
@@ -2750,7 +2885,7 @@ export default function App() {
                   {selectedContract ? (
                     <Button
                       className="rounded-2xl bg-[#7f274f] text-white hover:bg-[#692040]"
-                      onClick={() => generateContractPDF(selectedContract, settings, contractPreview)}
+                      onClick={() => generateContractPDF(selectedContract, pdfSettings, contractPreview)}
                     >
                       <FileText className="mr-2 h-4 w-4" />
                       Baixar contrato em PDF
@@ -3228,7 +3363,7 @@ export default function App() {
                       </div>
                       <Button
                         className="rounded-2xl"
-                        onClick={() => generateReceiptPDF(selectedReceipt, settings)}
+                        onClick={() => generateReceiptPDF(selectedReceipt, pdfSettings)}
                       >
                         <FileText className="mr-2 h-4 w-4" />
                         Baixar recibo em PDF
