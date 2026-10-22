@@ -177,3 +177,31 @@ alter table public.bookings
 -- book_slot agora grava status 'aguardando_sinal' e deposit_amount = preço * deposit_percent / 100.
 -- Aviso: private.notify_settings (CallMeBot). Para ligar, quando tiver a apikey:
 --   update private.notify_settings set callmebot_apikey = 'SUA_APIKEY', enabled = true where id = 1;
+
+-- =====================================================================
+-- Ensaio temático editável + PDF de instruções (Storage)
+-- =====================================================================
+alter table public.booking_campaigns
+  add column if not exists instructions_pdf_url text,
+  add column if not exists instructions_pdf_path text,
+  add column if not exists instructions_pdf_name text;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ensaios', 'ensaios', true, 10485760, array['application/pdf'])
+on conflict (id) do update set public = true, file_size_limit = 10485760, allowed_mime_types = array['application/pdf'];
+
+drop policy if exists "ensaios: admin envia" on storage.objects;
+drop policy if exists "ensaios: admin altera" on storage.objects;
+drop policy if exists "ensaios: admin apaga" on storage.objects;
+create policy "ensaios: admin envia" on storage.objects for insert to authenticated
+  with check (bucket_id = 'ensaios' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
+create policy "ensaios: admin altera" on storage.objects for update to authenticated
+  using (bucket_id = 'ensaios' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
+create policy "ensaios: admin apaga" on storage.objects for delete to authenticated
+  using (bucket_id = 'ensaios' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
+
+drop policy if exists "ensaios: admin lê" on storage.objects;
+create policy "ensaios: admin lê" on storage.objects for select to authenticated
+  using (bucket_id = 'ensaios' and lower(auth.jwt() ->> 'email') = 'emersomhonorato@gmail.com');
+
+select id, public, file_size_limit from storage.buckets where id = 'ensaios';

@@ -42,6 +42,7 @@ import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
+import NewActivityAlert from "@/components/NewActivityAlert";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -1027,7 +1028,7 @@ export default function App() {
             paymentStatus: "Entrada paga",
             receiptDate: String(booking.paid_at || new Date().toISOString()).slice(0, 10),
             receiptMethod: "Pix",
-            receiptReference: "Sinal do ensaio de Natal",
+            receiptReference: `Sinal — ${campaign?.title || "ensaio"}`,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -1055,7 +1056,7 @@ export default function App() {
             email,
             phone: booking.whatsapp || "",
             whatsapp: booking.whatsapp || "",
-            notes: "Cadastrado pela agenda online de Natal 2026.",
+            notes: `Cadastrado pela agenda online (${campaign?.title || "ensaio"}).`,
           });
           clientsList.push(client);
         }
@@ -1067,15 +1068,15 @@ export default function App() {
           status: booking.status === "confirmado" ? "Confirmado" : "Pendente",
           paymentStatus: depositPaid > 0 ? "Entrada paga" : "Pendente",
           receiptMethod: depositPaid > 0 ? "Pix" : "",
-          receiptReference: depositPaid > 0 ? "Sinal do ensaio de Natal" : "",
+          receiptReference: depositPaid > 0 ? `Sinal — ${campaign?.title || "ensaio"}` : "",
           bookingId: booking.id,
           clientId: client.id,
           clientName: client.name || booking.name,
           whatsapp: booking.whatsapp || "",
           phone: booking.whatsapp || "",
           email,
-          eventType: campaign?.title || "Ensaio de Natal 2026",
-          packageName: `${campaign?.title || "Natal 2026"} — ${booking.package_photos || ""} fotos`,
+          eventType: campaign?.title || "Ensaio temático",
+          packageName: `${campaign?.title || "Ensaio"} — ${booking.package_photos || ""} fotos`,
           eventDate: localDateKey(booking.starts_at),
           startTime,
           endTime: addMinutesToTime(startTime, slotMinutes),
@@ -1083,7 +1084,7 @@ export default function App() {
           amount: Number(booking.package_price || 0),
           amountPaid: depositPaid,
           editedPhotosCount: Number(booking.package_photos || 0),
-          budgetDescription: `Ensaio de Natal (${slotMinutes} min) com ${booking.package_photos} fotos tratadas.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
+          budgetDescription: `${campaign?.title || "Ensaio"} (${slotMinutes} min) com ${booking.package_photos} fotos tratadas.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
           notes: [
             booking.notes ? `Observação do cliente: ${booking.notes}` : "",
             booking.status === "aguardando_sinal" ? `Aguardando sinal de R$ ${Number(booking.deposit_amount || 0).toFixed(2).replace(".", ",")} via Pix.` : "",
@@ -2239,6 +2240,13 @@ export default function App() {
   return (
     <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
       <div className="mx-auto w-full max-w-[1480px] p-4 md:p-8 2xl:px-10">
+        <NewActivityAlert
+          enabled={hasHydratedRemote && isAuthorized}
+          onOpenRequests={() => setActiveTab("orcamentos")}
+          onOpenBookings={() => setActiveTab("natal")}
+          onRequestsData={importClientsFromRequests}
+          onBookingsData={importBookingsAsEvents}
+        />
         <div className="studio-hero mb-8 flex flex-col gap-4 rounded-[32px] px-6 py-8 text-white md:flex-row md:items-center md:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-xs font-medium uppercase tracking-[0.28em] backdrop-blur">
@@ -2374,7 +2382,7 @@ export default function App() {
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
-            <TabsTrigger value="natal" className="rounded-xl">Natal 2026</TabsTrigger>
+            <TabsTrigger value="natal" className="rounded-xl">Ensaios</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
