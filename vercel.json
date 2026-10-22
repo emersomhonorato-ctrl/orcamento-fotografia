@@ -1,6 +1,8 @@
 {
   "rewrites": [
     { "source": "/pedido", "destination": "/index.html" },
-    { "source": "/pedido/", "destination": "/index.html" }
+    { "source": "/pedido/", "destination": "/index.html" },
+    { "source": "/natal", "destination": "/index.html" },
+    { "source": "/natal/", "destination": "/index.html" }
   ]
 }
