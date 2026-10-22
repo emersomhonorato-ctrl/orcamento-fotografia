@@ -43,6 +43,7 @@ export default function PublicChristmasBooking() {
   const [packageName, setPackageName] = useState("");
   const [extraPeople, setExtraPeople] = useState(0);
   const [paymentChoice, setPaymentChoice] = useState("sinal");
+  const [bookedAt, setBookedAt] = useState(0);
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
   const [form, setForm] = useState({ name: "", whatsapp: "", email: "", notes: "", website: "" });
@@ -165,6 +166,8 @@ export default function PublicChristmasBooking() {
       return;
     }
     setResult(data);
+    // eslint-disable-next-line react-hooks/purity -- hora da reserva, dentro do envio do formulário
+    setBookedAt(Date.now());
     setStatus("done");
   }
 
@@ -172,6 +175,8 @@ export default function PublicChristmasBooking() {
   const depositAmount = result ? Number(result.deposit || 0) : 0;
   const paidInFull = result?.payment === "total";
   const remainingAmount = result ? Math.max(0, Number(result.price || 0) - depositAmount) : 0;
+  const holdHours = Number(campaign?.payment_hold_hours ?? 24);
+  const payUntil = result && holdHours > 0 ? new Date(bookedAt + holdHours * 3600000) : null;
   const pixPayload = useMemo(() => {
     if (!result || !campaign?.pix_key || !depositAmount) return "";
     return buildPixPayload({
@@ -287,7 +292,10 @@ export default function PublicChristmasBooking() {
                 </a>
               ) : null}
               <p className="mx-auto mt-5 max-w-sm text-xs leading-5 text-slate-500">
-                Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada. Sem o pagamento, o horário pode ser liberado para outra pessoa.
+                Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada.
+                {payUntil
+                  ? ` Pague até ${payUntil.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — depois disso o horário é liberado automaticamente para outra pessoa.`
+                  : " Sem o pagamento, o horário pode ser liberado para outra pessoa."}
               </p>
             </div>
           ) : null}

@@ -213,6 +213,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       extra_person_price: String(campaign?.extra_person_price ?? 0),
       max_extra_people: String(campaign?.max_extra_people ?? 5),
       allow_full_payment: campaign?.allow_full_payment !== false,
+      payment_hold_hours: String(campaign?.payment_hold_hours ?? 24),
       start_date: campaign?.start_date || "",
       end_date: campaign?.end_date || "",
       packages: (Array.isArray(campaign?.packages) ? campaign.packages : []).map((item) => ({
@@ -262,6 +263,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         extra_person_price: toNumber(infoForm.extra_person_price),
         max_extra_people: Math.max(0, Math.round(toNumber(infoForm.max_extra_people))),
         allow_full_payment: Boolean(infoForm.allow_full_payment),
+        payment_hold_hours: Math.max(0, Math.round(toNumber(infoForm.payment_hold_hours))),
         start_date: infoForm.start_date || null,
         end_date: infoForm.end_date || null,
         packages,
@@ -476,6 +478,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1"><Label>Pessoa extra (R$ por pessoa)</Label><Input inputMode="decimal" className="rounded-2xl" placeholder="0 = sem opção" value={infoForm.extra_person_price} onChange={(e) => setInfoForm({ ...infoForm, extra_person_price: e.target.value })} /></div>
                 <div className="space-y-1"><Label>Máximo de pessoas extras</Label><Input type="number" min="0" className="rounded-2xl" value={infoForm.max_extra_people} onChange={(e) => setInfoForm({ ...infoForm, max_extra_people: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Prazo para pagar o Pix (horas)</Label><Input type="number" min="0" className="rounded-2xl" placeholder="0 = não liberar sozinho" value={infoForm.payment_hold_hours} onChange={(e) => setInfoForm({ ...infoForm, payment_hold_hours: e.target.value })} /></div>
                 <label className="flex items-center gap-2 self-end rounded-2xl border border-slate-200 px-3 py-2.5 text-sm">
                   <input type="checkbox" checked={infoForm.allow_full_payment} onChange={(e) => setInfoForm({ ...infoForm, allow_full_payment: e.target.checked })} />
                   Cliente pode pagar o valor total
@@ -504,6 +507,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
               {campaign?.title} • {Number(campaign?.slot_minutes || 30)} min
               {Number(campaign?.extra_person_price) ? ` • pessoa extra ${formatBRL(campaign.extra_person_price)} (até ${campaign?.max_extra_people ?? 5})` : " • sem pessoa extra"}
               {campaign?.allow_full_payment !== false ? " • aceita pagamento total" : ""}
+              {Number(campaign?.payment_hold_hours ?? 24) > 0 ? ` • sem Pix em ${campaign?.payment_hold_hours ?? 24}h o horário é liberado` : " • horários sem Pix não são liberados sozinhos"}
               {campaign?.location ? ` • ${campaign.location}` : ""}
               {campaign?.start_date && campaign?.end_date ? ` • ${dayMonthLabel(campaign.start_date)} a ${dayMonthLabel(campaign.end_date)}` : ""}
             </p>
@@ -646,7 +650,14 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                           <p className="font-medium text-slate-900">{booking.name}</p>
                           <p className="text-xs text-slate-600">{booking.package_photos} fotos{Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa${booking.extra_people > 1 ? "s" : ""}` : ""} • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</p>
                           {booking.status === "aguardando_sinal" ? (
+                            <>
                             <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{booking.payment_choice === "total" ? "Aguardando pagamento total" : "Aguardando sinal"} {formatBRL(booking.deposit_amount)}</p>
+                            {Number(campaign?.payment_hold_hours ?? 24) > 0 ? (
+                              <p className="text-[11px] text-amber-700">
+                                Libera sozinho em {new Date(new Date(booking.created_at).getTime() + Number(campaign?.payment_hold_hours ?? 24) * 3600000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            ) : null}
+                            </>
                           ) : (
                             <p className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">{Number(booking.deposit_amount || 0) >= bookingTotal(booking) ? "Pago completo" : "Sinal recebido"} {formatBRL(booking.deposit_amount)}</p>
                           )}

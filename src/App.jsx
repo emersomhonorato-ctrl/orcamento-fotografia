@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -64,7 +64,7 @@ import {
   readLocalAppState,
   robustContractTemplate,
 } from "@/lib/appModel";
-import { loadAppState, saveAppState } from "@/lib/appState";
+import { fetchRemoteVersion, loadAppState, saveAppState } from "@/lib/appState";
 import { supabase } from "@/supabase";
 import { generateContractPDF, generateEventPDF } from "@/utils/pdfGenerator";
 import { generateBudgetPDF, generateReceiptPDF, preparePdfImages } from "@/utils/pdfDocuments";
@@ -232,6 +232,10 @@ export default function App() {
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Carregando dados");
   const [syncMessage, setSyncMessage] = useState("Verificando local e nuvem.");
+  const [syncConflict, setSyncConflict] = useState(false);
+  const remoteVersionRef = useRef(null);
+  const skipNextSaveRef = useRef(false);
+  const dirtyRef = useRef(false);
 
   const { events, clients, services, settings } = appState;
   const userEmail = session?.user?.email?.toLowerCase() || "";
@@ -287,6 +291,8 @@ export default function App() {
       if (!alive) return;
 
       if (result.data) {
+        remoteVersionRef.current = result.version || null;
+        skipNextSaveRef.current = true;
         setAppState(normalizeAppState(result.data));
       }
 
@@ -310,14 +316,84 @@ export default function App() {
   useEffect(() => {
     if (!hasHydratedRemote || !isAuthorized) return undefined;
 
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return undefined;
+    }
+    dirtyRef.current = true;
+    if (syncConflict) return undefined;
+
     const timer = window.setTimeout(async () => {
-      const result = await saveAppState(appState);
+      const result = await saveAppState(appState, remoteVersionRef.current);
+      if (result.conflict) {
+        setSyncConflict(true);
+        setSyncStatus("Atenção: conflito");
+        setSyncMessage(result.message);
+        return;
+      }
+      if (result.version) {
+        remoteVersionRef.current = result.version;
+        dirtyRef.current = false;
+      }
       setSyncStatus(result.source === "supabase" ? "Sincronizado com Supabase" : "Usando armazenamento local");
       setSyncMessage(result.message);
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [appState, hasHydratedRemote, isAuthorized]);
+  }, [appState, hasHydratedRemote, isAuthorized, syncConflict]);
+
+  // Traz os dados da nuvem (usado ao voltar para o app e para resolver conflito)
+  const applyRemoteState = useCallback(async (message) => {
+    const result = await loadAppState();
+    if (!result.data) return false;
+    remoteVersionRef.current = result.version || null;
+    skipNextSaveRef.current = true;
+    dirtyRef.current = false;
+    setAppState(normalizeAppState(result.data));
+    setSyncConflict(false);
+    setSyncStatus("Sincronizado com Supabase");
+    setSyncMessage(message);
+    return true;
+  }, []);
+
+  // Ao voltar para o app (ex.: celular que ficou aberto), atualiza se outro aparelho salvou algo
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    let checking = false;
+    async function checkRemote() {
+      if (checking || document.visibilityState !== "visible" || syncConflict) return;
+      checking = true;
+      const remote = await fetchRemoteVersion();
+      checking = false;
+      if (!remote.ok || !remote.version || remote.version === remoteVersionRef.current) return;
+      if (dirtyRef.current) {
+        setSyncConflict(true);
+        setSyncStatus("Atenção: conflito");
+        setSyncMessage("Outro aparelho salvou alterações enquanto este tinha mudanças não salvas.");
+        return;
+      }
+      applyRemoteState("Atualizado com as alterações feitas em outro aparelho.");
+    }
+    window.addEventListener("focus", checkRemote);
+    document.addEventListener("visibilitychange", checkRemote);
+    const timer = window.setInterval(checkRemote, 60 * 1000);
+    return () => {
+      window.removeEventListener("focus", checkRemote);
+      document.removeEventListener("visibilitychange", checkRemote);
+      window.clearInterval(timer);
+    };
+  }, [hasHydratedRemote, isAuthorized, syncConflict, applyRemoteState]);
+
+  async function keepThisDevice() {
+    const result = await saveAppState(appState, null, { force: true });
+    if (result.version) {
+      remoteVersionRef.current = result.version;
+      dirtyRef.current = false;
+      setSyncConflict(false);
+    }
+    setSyncStatus(result.source === "supabase" ? "Sincronizado com Supabase" : "Usando armazenamento local");
+    setSyncMessage(result.source === "supabase" ? "Mantidos os dados deste aparelho." : result.message);
+  }
 
   const eventTypes = useMemo(() => services.map((service) => service.name).filter(Boolean), [services]);
 
@@ -1881,7 +1957,17 @@ export default function App() {
   async function handleManualSync() {
     setSyncStatus("Sincronizando...");
     setSyncMessage("Enviando dados atuais para o Supabase.");
-    const result = await saveAppState(appState);
+    const result = await saveAppState(appState, remoteVersionRef.current);
+    if (result.conflict) {
+      setSyncConflict(true);
+      setSyncStatus("Atenção: conflito");
+      setSyncMessage(result.message);
+      return;
+    }
+    if (result.version) {
+      remoteVersionRef.current = result.version;
+      dirtyRef.current = false;
+    }
     setSyncStatus(result.source === "supabase" ? "Sincronizado com Supabase" : "Usando armazenamento local");
     setSyncMessage(result.message);
   }
@@ -2241,6 +2327,22 @@ export default function App() {
   return (
     <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
       <div className="mx-auto w-full max-w-[1480px] p-4 md:p-8 2xl:px-10">
+        {syncConflict ? (
+          <div className="mb-6 rounded-[28px] border border-red-200 bg-red-50 p-5 shadow-sm">
+            <p className="font-semibold text-red-900">⚠️ Os dados foram alterados em outro aparelho</p>
+            <p className="mt-1 text-sm text-red-800">
+              Para não perder nada, pausei o salvamento automático. Escolha qual versão vale:
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button className="rounded-2xl bg-red-700 text-white hover:bg-red-800" onClick={() => applyRemoteState("Carregados os dados mais recentes da nuvem.")}>
+                Carregar os dados mais recentes (recomendado)
+              </Button>
+              <Button variant="outline" className="rounded-2xl border-red-200 bg-white text-red-800 hover:bg-red-100" onClick={() => { if (window.confirm("Isso substitui o que foi salvo no outro aparelho pelos dados desta tela. Continuar?")) keepThisDevice(); }}>
+                Manter os dados desta tela
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <NewActivityAlert
           enabled={hasHydratedRemote && isAuthorized}
           onOpenRequests={() => setActiveTab("orcamentos")}
@@ -2379,7 +2481,7 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs grid w-full grid-cols-3 rounded-2xl p-1 shadow-sm sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-11">
+          <TabsList className="studio-tabs flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl p-1 shadow-sm [scrollbar-width:none] xl:grid xl:grid-cols-11 [&>button]:shrink-0">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
