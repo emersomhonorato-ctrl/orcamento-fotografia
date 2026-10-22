@@ -77,16 +77,25 @@ export default function PublicBudgetRequestForm() {
       setStatus("sent"); // robô: finge sucesso e não grava nada
       return;
     }
-    if (form.name.trim().length < 2) {
-      setErrorMessage("Informe seu nome.");
+    const nameParts = form.name.trim().split(/\s+/).filter((part) => part.length >= 2);
+    if (nameParts.length < 2) {
+      setErrorMessage("Informe seu nome e sobrenome.");
       return;
     }
     if (form.whatsapp.replace(/\D/g, "").length < 10) {
       setErrorMessage("Informe um WhatsApp com DDD.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) {
+      setErrorMessage("Informe um e-mail válido.");
+      return;
+    }
     if (!form.service) {
-      setErrorMessage("Escolha o tipo de serviço.");
+      setErrorMessage("Escolha o tipo de evento.");
+      return;
+    }
+    if (!form.event_date) {
+      setErrorMessage("Informe a data do evento.");
       return;
     }
 
@@ -94,9 +103,9 @@ export default function PublicBudgetRequestForm() {
     const payload = {
       name: form.name.trim().slice(0, 120),
       whatsapp: form.whatsapp.trim(),
-      email: form.email.trim().slice(0, 160) || null,
+      email: form.email.trim().toLowerCase().slice(0, 160),
       service: form.service,
-      event_date: form.event_date || null,
+      event_date: form.event_date,
       event_time: form.event_time.trim().slice(0, 30) || null,
       location: form.location.trim().slice(0, 160) || null,
       people: form.people.trim().slice(0, 60) || null,
@@ -137,7 +146,7 @@ export default function PublicBudgetRequestForm() {
                 Conte um pouco sobre o que você precisa. Leva menos de 2 minutos, e eu te respondo pelo WhatsApp.
               </p>
 
-              <Field label="Seu nome" required>
+              <Field label="Nome e sobrenome" required>
                 <input className={inputClass} value={form.name} onChange={update("name")} autoComplete="name" placeholder="Nome e sobrenome" />
               </Field>
 
@@ -145,12 +154,12 @@ export default function PublicBudgetRequestForm() {
                 <Field label="WhatsApp" required>
                   <input className={inputClass} value={form.whatsapp} onChange={update("whatsapp")} inputMode="tel" autoComplete="tel" placeholder="(48) 99999-9999" />
                 </Field>
-                <Field label="E-mail">
-                  <input className={inputClass} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="opcional" />
+                <Field label="E-mail" required>
+                  <input className={inputClass} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="seuemail@exemplo.com" />
                 </Field>
               </div>
 
-              <Field label="Tipo de serviço" required>
+              <Field label="Tipo de evento" required>
                 <div className="flex flex-wrap gap-2">
                   {SERVICES.map((service) => (
                     <button
@@ -170,7 +179,7 @@ export default function PublicBudgetRequestForm() {
               </Field>
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Data desejada" hint="Se ainda não sabe, deixe em branco">
+                <Field label="Data do evento" required hint="Se ainda não tiver certeza, coloque a data aproximada">
                   <input className={inputClass} type="date" min={today} value={form.event_date} onChange={update("event_date")} />
                 </Field>
                 <Field label="Horário" hint="Ex.: 16h, à tarde">
