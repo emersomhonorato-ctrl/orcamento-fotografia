@@ -48,6 +48,7 @@ import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
 import SalesReport from "@/components/SalesReport";
 import FollowUpPanel from "@/components/FollowUpPanel";
 import SafeSection from "@/components/SafeSection";
+import InstallAppButton from "@/components/InstallAppButton";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -231,7 +232,14 @@ export default function App() {
   const [canceledSearch, setCanceledSearch] = useState("");
   const [canceledMonthFilter, setCanceledMonthFilter] = useState("all");
   const [canceledValueRange, setCanceledValueRange] = useState("all");
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const tab = new URLSearchParams(window.location.search).get("aba");
+      return ["dashboard", "agenda", "orcamentos", "entregas", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
+    } catch {
+      return "dashboard";
+    }
+  });
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -2352,6 +2360,7 @@ export default function App() {
               <FileText className="mr-2 h-4 w-4" />
               Novo orçamento
             </Button>
+            <InstallAppButton className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10" />
             <Button variant="outline" onClick={exportBackup} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
               <Save className="mr-2 h-4 w-4" />
               Backup

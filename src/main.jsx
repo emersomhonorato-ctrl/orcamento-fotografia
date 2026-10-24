@@ -57,3 +57,10 @@ createRoot(document.getElementById("root")).render(
     </PreviewErrorBoundary>
   </StrictMode>,
 );
+
+// App instalável (Mac, Windows, celular): registra o service worker só na versão publicada
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
