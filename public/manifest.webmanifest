@@ -1,0 +1,25 @@
+{
+  "name": "Emerson Honorato Retratos — Estúdio",
+  "short_name": "EH Estúdio",
+  "description": "Agenda, clientes, orçamentos, ensaios e entregas do estúdio Emerson Honorato Retratos.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#1b1610",
+  "theme_color": "#1b1610",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity", "photo"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Agenda", "url": "/?aba=agenda", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Orçamentos", "url": "/?aba=orcamentos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Entregas", "url": "/?aba=entregas", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
