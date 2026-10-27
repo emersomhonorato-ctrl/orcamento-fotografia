@@ -87,9 +87,8 @@ export default function CalendarMini({ events, selectedDate, onSelectDate }) {
     <Card className="studio-panel rounded-3xl border-0 shadow-sm backdrop-blur">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="flex min-w-0 items-center gap-2 text-lg capitalize">
-            <CalendarDays className="h-5 w-5 shrink-0" />
-            <span className="truncate">{monthName}</span>
+          <CardTitle className="flex min-w-0 items-center gap-2 text-base font-semibold first-letter:uppercase">
+            <span className="truncate first-letter:uppercase">{monthName}</span>
           </CardTitle>
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -126,7 +125,7 @@ export default function CalendarMini({ events, selectedDate, onSelectDate }) {
           ))}
         </div>
 
-        <div className="mt-2 grid grid-cols-7 gap-2">
+        <div className="mt-1 grid grid-cols-7 gap-1">
           {days.map((day, index) => {
             if (!day) return <div key={`empty-${index}`} className="h-10 rounded-xl" />;
 
@@ -140,19 +139,19 @@ export default function CalendarMini({ events, selectedDate, onSelectDate }) {
                 key={iso}
                 type="button"
                 onClick={() => onSelectDate(iso)}
-                className={`relative h-10 rounded-xl border text-sm font-medium transition hover:scale-[1.02] ${
+                className={`relative h-10 rounded-lg text-sm tabular-nums transition-colors ${
                   active
-                    ? "border-slate-900 bg-slate-900 text-white"
+                    ? "studio-primary font-semibold text-white"
                     : isToday
-                      ? "border-slate-300 bg-slate-100 text-slate-900"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "font-semibold text-stone-900 ring-1 ring-inset ring-stone-300"
+                      : "text-stone-700 hover:bg-stone-100"
                 }`}
               >
                 {day}
                 {count > 0 ? (
                   <span
-                    className={`absolute bottom-1 right-1 inline-flex h-2.5 w-2.5 rounded-full ${
-                      active ? "bg-white" : "bg-slate-900"
+                    className={`absolute bottom-1.5 left-1/2 inline-flex h-1 w-1 -translate-x-1/2 rounded-full ${
+                      active ? "bg-white" : "studio-primary"
                     }`}
                   />
                 ) : null}
