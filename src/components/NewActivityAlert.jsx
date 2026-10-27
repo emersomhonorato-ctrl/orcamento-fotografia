@@ -43,9 +43,10 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   const [campaignTitle, setCampaignTitle] = useState("");
   const [shares, setShares] = useState([]);
   const [selections, setSelections] = useState([]);
+  const [payments, setPayments] = useState([]);
 
   const poll = useCallback(async () => {
-    const [requestRes, bookingRes, campaignRes, shareRes, selectionRes] = await Promise.all([
+    const [requestRes, bookingRes, campaignRes, shareRes, selectionRes, paymentRes] = await Promise.all([
       supabase
         .from("budget_requests")
         .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found")
@@ -59,7 +60,9 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
         .order("created_at", { ascending: false })
         .limit(1000),
       supabase.from("photo_selections").select("id, client_name, title, submitted_at, selected").not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(50),
+      supabase.from("payments").select("id, client_name, description, amount, installments, paid_at, note").eq("status", "pago").order("paid_at", { ascending: false }).limit(50),
     ]);
+    if (!paymentRes.error && paymentRes.data) setPayments(paymentRes.data);
     if (!selectionRes.error && selectionRes.data) setSelections(selectionRes.data);
     if (!shareRes.error && shareRes.data) {
       setShares(shareRes.data);
@@ -93,7 +96,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   const newBookings = bookings.filter((item) => item.created_at > seenAt && item.status !== "cancelado");
   const newResponses = shares.filter((item) => item.responded_at && item.responded_at > seenAt);
   const newSelections = selections.filter((item) => item.submitted_at && item.submitted_at > seenAt);
-  const total = newRequests.length + newBookings.length + newResponses.length + newSelections.length;
+  const newPayments = payments.filter((item) => item.paid_at && item.paid_at > seenAt);
+  const total = newRequests.length + newBookings.length + newResponses.length + newSelections.length + newPayments.length;
 
   useEffect(() => {
     const base = "Emerson Honorato Retratos";
@@ -137,6 +141,13 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       title: item.client_name || "Cliente",
       detail: `${item.title} • escolheu ${Array.isArray(item.selected) ? item.selected.length : 0} fotos — baixe o arquivo do Lightroom na aba Seleção`,
     })),
+    ...newPayments.map((item) => ({
+      id: `c-${item.id}`,
+      kind: "payment",
+      createdAt: item.paid_at,
+      title: item.client_name || "Cliente",
+      detail: `${item.description} • ${Number(item.amount || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} no cartão${Number(item.installments) > 1 ? ` (${item.installments}x)` : ""} ✅${item.note ? ` • ${item.note}` : ""}`,
+    })),
   ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
@@ -152,6 +163,7 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
             newBookings.length ? `${newBookings.length} agendamento${newBookings.length > 1 ? "s" : ""} novo${newBookings.length > 1 ? "s" : ""}` : "",
             newResponses.length ? `${newResponses.length} resposta${newResponses.length > 1 ? "s" : ""} de orçamento` : "",
             newSelections.length ? `${newSelections.length} escolha${newSelections.length > 1 ? "s" : ""} de fotos` : "",
+            newPayments.length ? `${newPayments.length} pagamento${newPayments.length > 1 ? "s" : ""} no cartão` : "",
           ].filter(Boolean).join(" e ")}
         </p>
         {newRequests.length ? (
@@ -171,8 +183,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       <ul className="divide-y divide-amber-100/70">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-3 px-5 py-2 text-sm">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : item.kind === "declined" ? "bg-slate-100 text-slate-700" : item.kind === "approved" ? "bg-amber-100 text-amber-800" : item.kind === "selection" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>
-              {item.kind === "request" ? "Pedido" : item.kind === "approved" ? "Aprovado" : item.kind === "declined" ? "Recusado" : item.kind === "selection" ? "Seleção" : "Agendamento"}
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : item.kind === "declined" ? "bg-slate-100 text-slate-700" : item.kind === "approved" ? "bg-amber-100 text-amber-800" : item.kind === "selection" ? "bg-rose-100 text-rose-800" : item.kind === "payment" ? "bg-sky-600 text-white" : "bg-emerald-100 text-emerald-800"}`}>
+              {item.kind === "request" ? "Pedido" : item.kind === "approved" ? "Aprovado" : item.kind === "declined" ? "Recusado" : item.kind === "selection" ? "Seleção" : item.kind === "payment" ? "Pago 💳" : "Agendamento"}
             </span>
             <span className="font-medium text-slate-900">{item.title}</span>
             <span className="hidden truncate text-slate-500 sm:inline">{item.detail}</span>

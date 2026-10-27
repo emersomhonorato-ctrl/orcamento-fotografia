@@ -55,6 +55,14 @@
     {
       "source": "/selecao/:codigo/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/pagar/:codigo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pagar/:codigo/",
+      "destination": "/index.html"
     }
   ],
   "headers": [

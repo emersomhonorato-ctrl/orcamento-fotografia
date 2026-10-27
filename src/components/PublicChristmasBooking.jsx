@@ -51,6 +51,32 @@ export default function PublicChristmasBooking() {
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
   const [pixCopied, setPixCopied] = useState(false);
+  const [cardEnabled, setCardEnabled] = useState(false);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardError, setCardError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    supabase.rpc("card_payments_enabled").then(({ data }) => {
+      if (active) setCardEnabled(Boolean(data));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function payWithCard() {
+    if (!result?.id) return;
+    setCardBusy(true);
+    setCardError("");
+    const { data, error } = await supabase.rpc("booking_card_checkout", { p_booking_id: result.id });
+    if (error || !data?.url) {
+      setCardBusy(false);
+      setCardError(error?.message || "Não consegui abrir o pagamento agora. Tente de novo em instantes.");
+      return;
+    }
+    window.location.href = data.url;
+  }
 
   async function loadData() {
     const [{ data: campaignData, error: campaignError }, { data: slotData, error: slotError }] = await Promise.all([
@@ -258,6 +284,20 @@ export default function PublicChristmasBooking() {
                   {Number(result.extra_people) ? <p><strong>Pessoas extras:</strong> {result.extra_people} — {formatBRL(result.extra_amount)}</p> : null}
                   <p><strong>Total:</strong> {formatBRL(result.price)}</p>
                   {depositAmount && remainingAmount > 0 ? <p><strong>Restante no dia:</strong> {formatBRL(remainingAmount)}</p> : null}
+                </div>
+              ) : null}
+
+              {cardEnabled && depositAmount ? (
+                <div className="mx-auto mt-5 max-w-sm rounded-[24px] border-2 border-sky-200 bg-sky-50/60 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">💳 Pagar com cartão de crédito</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {formatBRL(depositAmount)} em até 12x, na página segura do Mercado Pago. A reserva é confirmada na hora — não precisa enviar comprovante.
+                  </p>
+                  <button type="button" onClick={payWithCard} disabled={cardBusy} className="mt-3 w-full rounded-2xl bg-sky-600 px-4 py-3.5 text-sm font-semibold text-white shadow hover:bg-sky-700 disabled:opacity-60">
+                    {cardBusy ? "Abrindo pagamento…" : "Pagar com cartão"}
+                  </button>
+                  {cardError ? <p className="mt-2 text-xs text-red-700">{cardError}</p> : null}
+                  {pixPayload ? <p className="mt-3 text-xs text-slate-500">ou pague pelo Pix abaixo 👇</p> : null}
                 </div>
               ) : null}
 
