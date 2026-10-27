@@ -50,6 +50,7 @@ import FollowUpPanel from "@/components/FollowUpPanel";
 import SafeSection from "@/components/SafeSection";
 import InstallAppButton from "@/components/InstallAppButton";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
+import PaymentsAdmin from "@/components/PaymentsAdmin";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -236,7 +237,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const tab = new URLSearchParams(window.location.search).get("aba");
-      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
+      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "cobrancas", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
     } catch {
       return "dashboard";
     }
@@ -2472,13 +2473,14 @@ export default function App() {
         ) : null}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl p-1 shadow-sm [scrollbar-width:none] xl:grid xl:grid-cols-12 [&>button]:shrink-0">
+          <TabsList className="studio-tabs flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl p-1 shadow-sm [scrollbar-width:none] xl:grid xl:grid-cols-13 [&>button]:shrink-0">
             <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
             <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
             <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
             <TabsTrigger value="natal" className="rounded-xl">Ensaios</TabsTrigger>
             <TabsTrigger value="selecao" className="rounded-xl">Seleção</TabsTrigger>
             <TabsTrigger value="entregas" className="rounded-xl">Entregas</TabsTrigger>
+            <TabsTrigger value="cobrancas" className="rounded-xl">Cobranças</TabsTrigger>
             <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
             <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
@@ -2784,6 +2786,12 @@ export default function App() {
           <TabsContent value="entregas" className="mt-6">
             <SafeSection name="Entregas">
               <PhotoDeliveryAdmin records={records} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="cobrancas" className="mt-6">
+            <SafeSection name="Cobranças">
+              <PaymentsAdmin records={records} />
             </SafeSection>
           </TabsContent>
 
