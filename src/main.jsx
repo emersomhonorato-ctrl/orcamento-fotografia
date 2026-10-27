@@ -6,6 +6,7 @@ import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
 import PublicChristmasBooking from "./components/PublicChristmasBooking.jsx";
 import PublicPhotoDelivery from "./components/PublicPhotoDelivery.jsx";
 import PublicBudgetApproval from "./components/PublicBudgetApproval.jsx";
+import PublicPhotoSelection from "./components/PublicPhotoSelection.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
@@ -15,6 +16,8 @@ const isPublicChristmasBooking = /^\/(natal|ensaio|ensaios)\/?$/i.test(window.lo
 const deliveryMatch = window.location.pathname.match(/^\/entrega\/([a-z0-9-]{4,80})\/?$/i);
 // Aprovação de orçamento: https://orcamento.emersonhonoratoretratos.com.br/orcamento/<codigo>
 const budgetMatch = window.location.pathname.match(/^\/orcamento\/([a-z0-9-]{4,80})\/?$/i);
+// Escolha de fotos: https://orcamento.emersonhonoratoretratos.com.br/selecao/<codigo>
+const selectionMatch = window.location.pathname.match(/^\/selecao\/([a-z0-9-]{4,80})\/?$/i);
 const isPublicRequestForm =
   /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
 
@@ -53,7 +56,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
     </PreviewErrorBoundary>
   </StrictMode>,
 );
