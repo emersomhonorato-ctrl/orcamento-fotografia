@@ -49,24 +49,24 @@
 }
 
 :root {
-    --background: oklch(0.97 0.01 25);
-    --foreground: oklch(0.22 0.03 260);
-    --card: oklch(0.985 0.01 20);
+    --background: #f7f6f4;
+    --foreground: #1c1917;
+    --card: #ffffff;
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.43 0.14 268);
+    --primary: #1c1917;
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.95 0.02 18);
-    --secondary-foreground: oklch(0.28 0.04 260);
-    --muted: oklch(0.96 0.012 25);
-    --muted-foreground: oklch(0.5 0.03 260);
-    --accent: oklch(0.93 0.03 330);
-    --accent-foreground: oklch(0.23 0.03 260);
+    --secondary: #f5f5f4;
+    --secondary-foreground: #292524;
+    --muted: #f5f5f4;
+    --muted-foreground: #78716c;
+    --accent: #f5f5f4;
+    --accent-foreground: #1c1917;
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.9 0.018 18);
-    --input: oklch(0.94 0.012 18);
-    --ring: oklch(0.64 0.08 268);
+    --border: #e7e5e4;
+    --input: #e7e5e4;
+    --ring: #a8a29e;
     --chart-1: oklch(0.72 0.17 35);
     --chart-2: oklch(0.68 0.12 268);
     --chart-3: oklch(0.73 0.11 175);
@@ -132,13 +132,7 @@
     }
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(circle at 18% 18%, rgb(244 205 212 / 0.42), transparent 24%),
-      radial-gradient(circle at 80% 0%, rgb(170 86 125 / 0.12), transparent 26%),
-      radial-gradient(circle at 86% 78%, rgb(255 235 228 / 0.22), transparent 18%),
-      linear-gradient(135deg, rgb(252 248 246 / 0.97), rgb(244 236 234 / 0.92));
-    background-size: auto, auto, auto, auto;
-    background-position: center, center, center, center;
+    -webkit-font-smoothing: antialiased;
     }
   html {
     @apply font-sans;
@@ -271,4 +265,114 @@
     --surface-border: rgb(193 164 124 / 0.2);
     --surface-shadow: rgb(117 92 58 / 0.08);
   }
+}
+
+/* ===== Visual clean (área do administrador) ===== */
+.studio-shell {
+  --brand: var(--hero-mid);
+  background: #f7f6f4;
+}
+.studio-shell::before {
+  display: none;
+}
+
+.studio-primary {
+  background: var(--brand);
+}
+.studio-primary:hover {
+  background: var(--hero-top);
+}
+
+/* Abas como navegação com sublinhado */
+.studio-nav-tab {
+  position: relative;
+  flex: 0 0 auto;
+  height: 2.75rem;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #78716c;
+}
+.studio-nav-tab:hover {
+  color: #1c1917;
+}
+.studio-nav-tab[data-state="active"],
+.studio-nav-tab[data-active] {
+  color: #1c1917;
+}
+.studio-nav-tab[data-state="active"]::after,
+.studio-nav-tab[data-active]::after {
+  content: "";
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--brand);
+  opacity: 1;
+}
+
+/* Superfícies: branco liso, borda fina, sem sombra pesada nem vidro */
+.studio-shell .studio-panel,
+.studio-shell .studio-soft-block {
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.studio-shell [class*="shadow-["],
+.studio-shell .shadow-sm,
+.studio-shell .shadow-md,
+.studio-shell .shadow-lg,
+.studio-shell .shadow-xl {
+  box-shadow: 0 1px 2px rgb(28 25 23 / 0.04) !important;
+}
+.studio-shell [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+}
+
+/* Cantos: um raio só, contido */
+.studio-shell [class*="rounded-[2"],
+.studio-shell [class*="rounded-[3"],
+.studio-shell .rounded-3xl {
+  border-radius: 1rem !important;
+}
+
+/* Degradês decorativos viram fundo liso (blocos escuros com texto branco ficam na cor da marca) */
+.studio-shell [class*="bg-gradient-to"]:not(.text-white) {
+  background-image: none !important;
+  background-color: #ffffff;
+}
+.studio-shell [class*="bg-gradient-to"].text-white {
+  background-image: none !important;
+  background-color: var(--brand) !important;
+}
+
+/* Rótulos: sem caixa alta espaçada */
+.studio-shell .uppercase[class*="tracking-"] {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: max(0.75rem, 1em);
+  font-weight: 500;
+}
+
+/* Bordas rosadas viram neutras */
+.studio-shell [class*="border-rose-1"],
+.studio-shell [class*="border-rose-2"] {
+  border-color: #e7e5e4 !important;
+}
+
+/* Cards do shadcn */
+.studio-shell [data-slot="card"] {
+  box-shadow: none;
+}
+
+.studio-nav {
+  height: auto !important;
+  align-items: stretch;
 }

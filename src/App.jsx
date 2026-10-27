@@ -48,7 +48,7 @@ import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
 import SalesReport from "@/components/SalesReport";
 import FollowUpPanel from "@/components/FollowUpPanel";
 import SafeSection from "@/components/SafeSection";
-import InstallAppButton from "@/components/InstallAppButton";
+import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
@@ -93,6 +93,7 @@ import {
   normalizeItems,
 } from "@/utils/formatters";
 
+const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
 const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "emersomhonorato@gmail.com").trim().toLowerCase();
 
@@ -120,27 +121,13 @@ function StatusBadge({ value }) {
   );
 }
 
-function MetricCard({ title, value, subtitle, icon }) {
-  const IconComponent = icon;
-  const displayValue = String(value ?? "");
-  const valueClassName = displayValue.length > 10 ? "text-[1.55rem]" : displayValue.length > 7 ? "text-[1.8rem]" : "text-[2rem]";
-
+function MetricCard({ title, value, subtitle }) {
   return (
-    <Card className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_38px_rgba(15,23,42,0.09)]">
-      <CardContent className="p-0">
-        <div className="h-px w-full bg-gradient-to-r from-[#f3d675] via-[#f6df95] to-transparent" />
-        <div className="relative min-h-[210px] px-7 py-6">
-          <div className="absolute right-7 top-8 flex h-[54px] w-[54px] items-center justify-center rounded-full border border-[#f3d675] bg-white shadow-[0_8px_18px_rgba(243,214,117,0.12)]">
-            <IconComponent className="h-5 w-5 text-slate-600" />
-          </div>
-          <div className="min-w-0 pr-20">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">{title}</p>
-            <p className={`mt-5 whitespace-nowrap font-semibold leading-none tracking-tight text-slate-900 ${valueClassName}`}>{value}</p>
-            {subtitle ? <p className="mt-4 max-w-[15ch] text-[13px] leading-6 text-slate-500">{subtitle}</p> : null}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="min-w-0 border-b border-r px-5 py-4">
+      <p className="text-[13px] text-stone-500">{title}</p>
+      <p className="mt-1 truncate text-[1.45rem] font-semibold tabular-nums tracking-tight text-stone-900">{value}</p>
+      {subtitle ? <p className="mt-0.5 truncate text-xs text-stone-400">{subtitle}</p> : null}
+    </div>
   );
 }
 
@@ -2219,68 +2206,50 @@ export default function App() {
 
   if (AUTH_ENABLED && !session?.user) {
     return (
-      <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
-        <div className="mx-auto flex min-h-screen w-full max-w-[1480px] items-center justify-center p-6">
-          <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[1.15fr,0.85fr]">
-            <div className="studio-hero rounded-[36px] px-8 py-10 text-white">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-medium uppercase tracking-[0.25em]">
-                <Camera className="h-4 w-4" />
-                Acesso restrito
-              </div>
-              <h1 className="mt-6 text-4xl font-bold tracking-tight">Emerson Honorato Retratos</h1>
-              <p className="mt-4 max-w-xl text-base text-slate-200">
-                Faça login com o e-mail e a senha do administrador para abrir agenda, clientes, orçamentos e configuração do estúdio.
-              </p>
-              <div className="mt-8 space-y-3 text-sm text-slate-200">
-                <div className="rounded-2xl bg-white/10 px-4 py-3">Acesso protegido por sessão de usuário.</div>
-                <div className="rounded-2xl bg-white/10 px-4 py-3">Seu domínio continua o mesmo, mas agora só abre com login.</div>
-                {ADMIN_EMAIL ? (
-                  <div className="rounded-2xl bg-white/10 px-4 py-3">Admin liberado: {ADMIN_EMAIL}</div>
-                ) : (
-                  <div className="rounded-2xl bg-white/10 px-4 py-3">Sem filtro de e-mail admin configurado.</div>
-                )}
-              </div>
+      <div className="studio-shell min-h-screen text-stone-900" data-theme-color={settings.themeColor || "classico"}>
+        <div className="flex min-h-screen items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm">
+            <div className="mb-8 text-center">
+              <img src="/icons/icon-192.png" alt="" className="mx-auto h-14 w-14 rounded-2xl" />
+              <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                Emerson Honorato Retratos
+              </h1>
+              <p className="mt-1 text-sm text-stone-500">Entre para abrir o estúdio</p>
             </div>
-
-            <Card className="studio-panel rounded-[32px] border-0 shadow-xl">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-3xl font-bold text-slate-900">Login do administrador</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5 p-6 pt-2">
-                <form className="space-y-5" onSubmit={handleLogin}>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">E-mail</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      value={loginForm.email}
-                      onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
-                      className="rounded-2xl"
-                      placeholder="admin@seudominio.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Senha</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      value={loginForm.password}
-                      onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                      className="rounded-2xl"
-                      placeholder="Digite sua senha"
-                    />
-                  </div>
-                {authError ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {authError}
-                  </div>
-                ) : null}
-                  <Button type="submit" className="w-full rounded-2xl" disabled={isSubmittingLogin}>
-                    {isSubmittingLogin ? "Entrando..." : "Entrar"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+            <form className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6" onSubmit={handleLogin}>
+              <div className="space-y-1.5">
+                <Label htmlFor="login-email">E-mail</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  autoComplete="username"
+                  value={loginForm.email}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                  className="h-11 rounded-xl"
+                  placeholder="seu@email.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="login-password">Senha</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                  className="h-11 rounded-xl"
+                  placeholder="Sua senha"
+                />
+              </div>
+              {authError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {authError}
+                </div>
+              ) : null}
+              <button type="submit" className="studio-primary h-11 w-full rounded-xl text-sm font-medium text-white disabled:opacity-60" disabled={isSubmittingLogin}>
+                {isSubmittingLogin ? "Entrando…" : "Entrar"}
+              </button>
+            </form>
           </div>
         </div>
       </div>
@@ -2334,170 +2303,121 @@ export default function App() {
           onSharesData={applyBudgetResponses}
         />
         </SafeSection>
-        <div className="studio-hero mb-8 flex flex-col gap-4 rounded-[32px] px-6 py-8 text-white md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2 text-xs font-medium uppercase tracking-[0.28em] backdrop-blur">
-              <Camera className="h-4 w-4" />
-              Sistema do estúdio
-            </div>
-            <h1 className="font-heading text-4xl font-bold tracking-tight md:text-6xl">Emerson Honorato Retratos</h1>
-            <p className="mt-4 max-w-4xl text-base leading-8 text-slate-200 md:text-[1.12rem]">
-              Uma central elegante para agenda, clientes, serviços e propostas comerciais com PDF refinado, marca própria e leitura rápida do financeiro.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-              <Badge className="rounded-full bg-white/10 text-white hover:bg-white/10">{syncStatus}</Badge>
-              <span>{syncMessage}</span>
-            </div>
-          </div>
+        <StudioHeader
+          syncStatus={syncStatus}
+          syncMessage={syncMessage}
+          onNewEvent={() => openNewEventModal()}
+          onNewBudget={() => openNewBudgetModal()}
+          onBackup={exportBackup}
+          onSync={handleManualSync}
+          onImport={importBackup}
+          onLogout={AUTH_ENABLED ? handleLogout : null}
+        />
 
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={() => openNewEventModal()} className="rounded-2xl bg-white text-slate-900 hover:bg-slate-100">
-              <Plus className="mr-2 h-4 w-4" />
-              Novo agendamento
-            </Button>
-            <Button variant="outline" onClick={() => openNewBudgetModal()} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
-              <FileText className="mr-2 h-4 w-4" />
-              Novo orçamento
-            </Button>
-            <InstallAppButton className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10" />
-            <Button variant="outline" onClick={exportBackup} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
-              <Save className="mr-2 h-4 w-4" />
-              Backup
-            </Button>
-            <Button variant="outline" onClick={handleManualSync} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Sincronizar
-            </Button>
-            <label className="inline-flex cursor-pointer items-center rounded-2xl border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10">
-              Importar
-              <input type="file" accept="application/json" className="hidden" onChange={importBackup} />
-            </label>
-            {AUTH_ENABLED ? (
-              <Button variant="outline" onClick={handleLogout} className="rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10">
-                <User className="mr-2 h-4 w-4" />
-                Sair
-              </Button>
-            ) : null}
-          </div>
-        </div>
 
-        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 items-center gap-3 rounded-[24px] border border-white/70 bg-white/80 px-4 py-3 shadow-[0_18px_50px_rgba(40,52,84,0.08)] backdrop-blur">
-            <Search className="h-4 w-4 text-slate-500" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar cliente, serviço, local ou observações"
-              className="border-0 p-0 shadow-none focus-visible:ring-0"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px] rounded-[22px] border-white/70 bg-white/80 shadow-[0_18px_50px_rgba(40,52,84,0.08)]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Todos">Todos os status</SelectItem>
-                {EVENT_STATUS_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[220px] rounded-[22px] border-white/70 bg-white/80 shadow-[0_18px_50px_rgba(40,52,84,0.08)]">
-                <SelectValue placeholder="Serviço" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Todos">Todos os serviços</SelectItem>
-                {eventTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            {activeTab === "agenda" ? (
-              <Button
-                type="button"
-                variant={showPastEvents ? "default" : "outline"}
-                onClick={() => setShowPastEvents((current) => !current)}
-                className={`rounded-[22px] shadow-[0_18px_50px_rgba(40,52,84,0.08)] ${
-                  showPastEvents
-                    ? "bg-[#7f274f] text-white hover:bg-[#692040]"
-                    : "border-white/70 bg-white/80 text-slate-700 hover:bg-white"
-                }`}
-              >
-                {showPastEvents ? "Ocultar realizados" : "Mostrar realizados"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        {activeTab === "dashboard" ? (
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 rounded-[24px] border border-white/70 bg-white/80 p-2 shadow-[0_18px_50px_rgba(40,52,84,0.08)] backdrop-blur">
-              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(-1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="min-w-[190px] rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 to-white px-4 py-2 text-center text-sm font-semibold capitalize text-slate-700">
-                {monthLabel}
-              </div>
-              <Button type="button" variant="outline" className="rounded-2xl" onClick={() => changeSelectedMonth(1)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(event) => {
-                setSelectedMonth(event.target.value);
-                setSelectedDate(`${event.target.value}-01`);
-              }}
-              className="rounded-[22px] border border-white/70 bg-white/80 px-4 py-2 text-sm shadow-[0_18px_50px_rgba(40,52,84,0.08)]"
-            />
-          </div>
-        ) : null}
-
-        {activeTab === "dashboard" ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
-            <MetricCard title="Eventos totais" value={metrics.totalEvents} subtitle="Agendamentos ativos" icon={CalendarDays} />
-            <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
-            <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="Agenda confirmada" icon={Wallet} />
-            <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="Pagamentos lançados" icon={CheckCircle2} />
-            <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="Saldo pendente" icon={AlertTriangle} />
-            <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="Em andamento" icon={FileText} />
-            <MetricCard title="Clientes" value={metrics.totalClients} subtitle="Base cadastrada" icon={User} />
-            <MetricCard title="Serviços" value={metrics.totalServices} subtitle="Tabela ativa" icon={Briefcase} />
-          </div>
-        ) : null}
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="studio-tabs flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl p-1 shadow-sm [scrollbar-width:none] xl:grid xl:grid-cols-13 [&>button]:shrink-0">
-            <TabsTrigger value="dashboard" className="rounded-xl">Dashboard</TabsTrigger>
-            <TabsTrigger value="agenda" className="rounded-xl">Agenda</TabsTrigger>
-            <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
-            <TabsTrigger value="natal" className="rounded-xl">Ensaios</TabsTrigger>
-            <TabsTrigger value="selecao" className="rounded-xl">Seleção</TabsTrigger>
-            <TabsTrigger value="entregas" className="rounded-xl">Entregas</TabsTrigger>
-            <TabsTrigger value="cobrancas" className="rounded-xl">Cobranças</TabsTrigger>
-            <TabsTrigger value="realizados" className="rounded-xl">Realizados</TabsTrigger>
-            <TabsTrigger value="orcamentos" className="rounded-xl">Orçamentos</TabsTrigger>
-            <TabsTrigger value="clientes" className="rounded-xl">Clientes</TabsTrigger>
-            <TabsTrigger value="servicos" className="rounded-xl">Serviços</TabsTrigger>
-            <TabsTrigger value="configuracoes" className="rounded-xl">Configurações</TabsTrigger>
-            <TabsTrigger value="cancelados" className="rounded-xl">Cancelados</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+          <TabsList className="studio-nav flex h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-stone-200 bg-transparent p-0 [scrollbar-width:none] [&>button]:shrink-0">
+            <TabsTrigger value="dashboard" className="studio-nav-tab">Dashboard</TabsTrigger>
+            <TabsTrigger value="agenda" className="studio-nav-tab">Agenda</TabsTrigger>
+            <TabsTrigger value="whatsapp" className="studio-nav-tab">WhatsApp</TabsTrigger>
+            <TabsTrigger value="natal" className="studio-nav-tab">Ensaios</TabsTrigger>
+            <TabsTrigger value="selecao" className="studio-nav-tab">Seleção</TabsTrigger>
+            <TabsTrigger value="entregas" className="studio-nav-tab">Entregas</TabsTrigger>
+            <TabsTrigger value="cobrancas" className="studio-nav-tab">Cobranças</TabsTrigger>
+            <TabsTrigger value="realizados" className="studio-nav-tab">Realizados</TabsTrigger>
+            <TabsTrigger value="orcamentos" className="studio-nav-tab">Orçamentos</TabsTrigger>
+            <TabsTrigger value="clientes" className="studio-nav-tab">Clientes</TabsTrigger>
+            <TabsTrigger value="servicos" className="studio-nav-tab">Serviços</TabsTrigger>
+            <TabsTrigger value="configuracoes" className="studio-nav-tab">Configurações</TabsTrigger>
+            <TabsTrigger value="cancelados" className="studio-nav-tab">Cancelados</TabsTrigger>
           </TabsList>
+
+          {SEARCH_TABS.includes(activeTab) ? (
+          <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-stone-200 bg-white px-4">
+              <Search className="h-4 w-4 text-slate-500" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar cliente, serviço, local ou observações"
+                className="border-0 p-0 shadow-none focus-visible:ring-0"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-11 w-[180px] rounded-xl border-stone-200 bg-white">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todos">Todos os status</SelectItem>
+                  {EVENT_STATUS_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-11 w-[220px] rounded-xl border-stone-200 bg-white">
+                  <SelectValue placeholder="Serviço" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Todos">Todos os serviços</SelectItem>
+                  {eventTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              {activeTab === "agenda" ? (
+                <Button
+                  type="button"
+                  variant={showPastEvents ? "default" : "outline"}
+                  onClick={() => setShowPastEvents((current) => !current)}
+                  className={`h-11 rounded-xl ${
+                    showPastEvents
+                      ? "bg-[#7f274f] text-white hover:bg-[#692040]"
+                      : "border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                  }`}
+                >
+                  {showPastEvents ? "Ocultar realizados" : "Mostrar realizados"}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          ) : null}
 
           <TabsContent value="dashboard" className="mt-6">
             <div className="space-y-6">
+          <section>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <button type="button" aria-label="Mês anterior" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50" onClick={() => changeSelectedMonth(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <h2 className="min-w-[10rem] text-center text-lg font-semibold text-stone-900 first-letter:uppercase">{monthLabel}</h2>
+              <button type="button" aria-label="Próximo mês" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50" onClick={() => changeSelectedMonth(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <input
+                type="month"
+                aria-label="Escolher mês"
+                value={selectedMonth}
+                onChange={(event) => {
+                  setSelectedMonth(event.target.value);
+                  setSelectedDate(`${event.target.value}-01`);
+                }}
+                className="ml-auto hidden h-9 rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-600 sm:block"
+              />
+            </div>
+            <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-stone-200 bg-white md:grid-cols-4 [&>*]:border-stone-100">
+              <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="agenda confirmada" icon={Wallet} />
+              <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="pagamentos lançados" icon={CheckCircle2} />
+              <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="saldo pendente" icon={AlertTriangle} />
+              <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
+              <MetricCard title="Eventos ativos" value={metrics.totalEvents} subtitle="na agenda" icon={CalendarDays} />
+              <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="em andamento" icon={FileText} />
+              <MetricCard title="Clientes" value={metrics.totalClients} subtitle="cadastrados" icon={User} />
+              <MetricCard title="Serviços" value={metrics.totalServices} subtitle="na tabela" icon={Briefcase} />
+            </div>
+          </section>
               <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
                 <div className="overflow-hidden rounded-[34px] border border-rose-200/70 bg-gradient-to-br from-[#fff8fa] via-white to-[#fff4f7] p-6 shadow-[0_28px_70px_rgba(99,32,67,0.14)]">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
-                      Dashboard
-                    </span>
-                    <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
-                      Visão executiva
-                    </span>
-                  </div>
 
                   {nextUpcomingEvent ? (
                     <div className="mt-6 grid gap-6 lg:grid-cols-[1fr,280px]">
@@ -2708,19 +2628,11 @@ export default function App() {
           <TabsContent value="agenda" className="mt-6">
             <div className="space-y-6">
               <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
-                <div className="mb-5 flex items-center gap-2">
-                  <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
-                    Agenda
-                  </span>
-                  <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
-                    Operação do estúdio
-                  </span>
-                </div>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold text-slate-900">Todos os agendamentos</h2>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                      Acompanhe cada compromisso com uma leitura mais elegante, acesso rápido ao contrato, recibo, contato e PDF de confirmação.
+                      Contrato, recibo, contato e PDF de confirmação de cada agendamento.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -2795,14 +2707,6 @@ export default function App() {
           <TabsContent value="realizados" className="mt-6">
             <div className="space-y-6">
               <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
-                <div className="mb-5 flex items-center gap-2">
-                  <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
-                    Realizados
-                  </span>
-                  <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
-                    Histórico
-                  </span>
-                </div>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold text-slate-900">Trabalhos realizados</h2>
@@ -2885,14 +2789,6 @@ export default function App() {
           <TabsContent value="orcamentos" className="mt-6">
             <div className="space-y-6">
               <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
-                <div className="mb-5 flex items-center gap-2">
-                  <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
-                    Orçamentos
-                  </span>
-                  <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
-                    Propostas comerciais
-                  </span>
-                </div>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold text-slate-900">Central de orçamentos</h2>
@@ -3203,14 +3099,6 @@ export default function App() {
           <TabsContent value="contratos" className="mt-6">
             <div className="space-y-6">
               <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
-                <div className="mb-5 flex items-center gap-2">
-                  <span className="inline-flex rounded-full border border-rose-200 bg-white/90 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700">
-                    Contratos
-                  </span>
-                  <span className="inline-flex rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600">
-                    Rascunho comercial
-                  </span>
-                </div>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <h2 className="text-2xl font-semibold text-slate-900">Central de contratos</h2>
