@@ -1,3 +1,4 @@
+import { MONTHLY_THEME_IDEAS } from "@/lib/sessions";
 import { Save, X } from "lucide-react";
 import BudgetItemsEditor from "@/components/BudgetItemsEditor";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,11 @@ export default function EventModal({
   onSave,
   onCancel,
 }) {
-  const title = form.id
+  const title = form.sessionKind
+    ? form.id
+      ? "Editar sessão"
+      : "Agendar sessão"
+    : form.id
     ? form.recordType === "orcamento"
       ? "Editar orçamento"
       : "Editar agendamento"
@@ -46,7 +51,35 @@ export default function EventModal({
           <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
+          {form.sessionKind ? (
+            <div className="space-y-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 md:col-span-2">
+              <p className="text-sm text-stone-600">
+                {form.sessionKind === "mensal" ? "Sessão do acompanhamento mensal" : "Sessão incluída no contrato"} de <strong className="text-stone-900">{form.clientName || "cliente"}</strong>. Escolha a data e o horário abaixo.
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Nome da sessão</Label>
+                  <Input value={form.eventType || ""} onChange={(event) => setForm((current) => ({ ...current, eventType: event.target.value }))} className="rounded-2xl bg-white" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{form.sessionKind === "mensal" ? "Tema da sessão" : "Tema ou ideia (opcional)"}</Label>
+                  <Input
+                    list="session-theme-ideas"
+                    value={form.sessionTheme || ""}
+                    onChange={(event) => setForm((current) => ({ ...current, sessionTheme: event.target.value }))}
+                    placeholder={form.sessionKind === "mensal" ? "Ex.: Halloween, Natal, Primeiro banho…" : form.sessionKind === "book-15" ? "Ex.: Pôr do sol na praia" : "Ex.: Campo de girassóis"}
+                    className="rounded-2xl bg-white"
+                  />
+                  {form.sessionKind === "mensal" ? (
+                    <datalist id="session-theme-ideas">
+                      {MONTHLY_THEME_IDEAS.map((idea) => <option key={idea} value={idea} />)}
+                    </datalist>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className={`space-y-2 md:col-span-2 ${form.sessionKind ? "hidden" : ""}`}>
             <Label>Tipo de registro</Label>
             <Select value={form.recordType} onValueChange={(value) => setForm((current) => ({ ...current, recordType: value }))}>
               <SelectTrigger className="rounded-2xl">
@@ -85,7 +118,7 @@ export default function EventModal({
               </div>
             ) : null}
           </div>
-          <div className="space-y-2">
+          <div className={`space-y-2 ${form.sessionKind ? "hidden" : ""}`}>
             <Label>Tipo de trabalho</Label>
             <Select value={form.eventType || "__none__"} onValueChange={(value) => onApplyService(value === "__none__" ? "" : value)}>
               <SelectTrigger className="rounded-2xl">
