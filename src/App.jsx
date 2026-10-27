@@ -76,6 +76,7 @@ import { fetchRemoteVersion, loadAppState, saveAppState } from "@/lib/appState";
 import { buildContractText } from "@/utils/contractText";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { SESSION_KIND_LABEL, getSessionPlan } from "@/lib/sessions";
+import { PHOTOGRAPHER_OPTIONS, matchesPhotographer, photographerLabel } from "@/lib/team";
 import { BUDGET_PUBLIC_BASE, buildBudgetSnapshot } from "@/lib/budgetShare";
 import { makeDeliverySlug } from "@/lib/delivery";
 import { supabase } from "@/supabase";
@@ -212,6 +213,7 @@ export default function App() {
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [search, setSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [photographerFilter, setPhotographerFilter] = useState("todos");
   const [clientService, setClientService] = useState("Todos");
   const [clientSort, setClientSort] = useState("az");
   const [serviceSearch, setServiceSearch] = useState("");
@@ -481,14 +483,14 @@ export default function App() {
           if (!Number.isNaN(eventDate.getTime()) && eventDate < today) return false;
         }
 
-        return matchesSearch && matchesStatus && matchesType;
+        return matchesSearch && matchesStatus && matchesType && matchesPhotographer(record.photographer, photographerFilter);
       })
       .sort((a, b) => {
         const aDate = combineDateTime(a.eventDate, a.startTime || "00:00")?.getTime() || 0;
         const bDate = combineDateTime(b.eventDate, b.startTime || "00:00")?.getTime() || 0;
         return aDate - bDate;
       });
-  }, [onlyEvents, search, showPastEvents, statusFilter, typeFilter]);
+  }, [onlyEvents, search, showPastEvents, statusFilter, typeFilter, photographerFilter]);
 
   const pastEventsCount = useMemo(() => {
     const today = new Date(`${getTodayLocalISO()}T00:00:00`);
@@ -2154,6 +2156,13 @@ export default function App() {
               </span>
               <StatusBadge value={record.status} />
               <StatusBadge value={record.paymentStatus} />
+              {record.photographer ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-stone-900 px-2.5 py-1 text-xs font-medium text-white">
+                  <Camera className="h-3 w-3" />{photographerLabel(record.photographer)}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-500">Fotógrafo a definir</span>
+              )}
             </div>
             <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
             <p className="mt-1 text-sm text-slate-500">
@@ -2524,6 +2533,17 @@ export default function App() {
                 <SelectContent>
                   <SelectItem value="Todos">Todos os status</SelectItem>
                   {EVENT_STATUS_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              <Select value={photographerFilter} onValueChange={setPhotographerFilter}>
+                <SelectTrigger className="h-11 w-[170px] rounded-xl border-stone-200 bg-white">
+                  <SelectValue placeholder="Fotógrafo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os fotógrafos</SelectItem>
+                  {PHOTOGRAPHER_OPTIONS.filter((option) => option.value !== "ambos").map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                  <SelectItem value="sem">A definir</SelectItem>
                 </SelectContent>
               </Select>
 

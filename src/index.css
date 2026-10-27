@@ -277,10 +277,10 @@
 }
 
 .studio-primary {
-  background: var(--brand);
+  background: var(--brand, #5f233d);
 }
 .studio-primary:hover {
-  background: var(--hero-top);
+  background: var(--hero-top, #351523);
 }
 
 /* Abas como navegação com sublinhado */
