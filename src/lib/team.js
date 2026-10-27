@@ -23,3 +23,30 @@ export function matchesPhotographer(value, filter) {
   if (filter === "sem") return !value;
   return value === filter || value === "ambos";
 }
+
+function activeOn(events, date, excludeId) {
+  return (events || []).filter(
+    (event) => event && event.id !== excludeId && event.eventDate === date && event.status !== "Cancelado" && (event.recordType || "evento") === "evento",
+  );
+}
+
+// Quem já está ocupado no dia: { emerson: [eventos], isabel: [eventos] }
+export function busyOnDate(events, date, excludeId) {
+  const result = { emerson: [], isabel: [] };
+  if (!date) return result;
+  activeOn(events, date, excludeId).forEach((event) => {
+    if (event.photographer === "emerson" || event.photographer === "ambos") result.emerson.push(event);
+    if (event.photographer === "isabel" || event.photographer === "ambos") result.isabel.push(event);
+  });
+  return result;
+}
+
+export function isDayFull(events, date, excludeId) {
+  const busy = busyOnDate(events, date, excludeId);
+  return busy.emerson.length > 0 && busy.isabel.length > 0;
+}
+
+export function fullDays(events) {
+  const dates = new Set((events || []).map((event) => event?.eventDate).filter(Boolean));
+  return new Set([...dates].filter((date) => isDayFull(events, date)));
+}

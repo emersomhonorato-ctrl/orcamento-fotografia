@@ -4106,6 +4106,7 @@ export default function App() {
       </div>
 
       <EventModal
+        allEvents={onlyEvents}
         open={isEventModalOpen}
         onOpenChange={setIsEventModalOpen}
         form={form}

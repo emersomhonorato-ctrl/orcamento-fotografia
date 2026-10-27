@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/supabase";
 
 // Página pública: o cliente abre pelo link enviado no WhatsApp e pede um orçamento.
@@ -71,6 +71,18 @@ export default function PublicBudgetRequestForm() {
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMessage, setErrorMessage] = useState("");
   const today = new Date().toISOString().slice(0, 10);
+  const [dateFull, setDateFull] = useState(false);
+
+  useEffect(() => {
+    if (!form.event_date) return undefined;
+    let active = true;
+    supabase.rpc("studio_blocked_dates", { p_from: form.event_date, p_to: form.event_date }).then(({ data, error }) => {
+      if (active) setDateFull(!error && Array.isArray(data) && data.length > 0);
+    });
+    return () => {
+      active = false;
+    };
+  }, [form.event_date]);
 
   const update = (field) => (event) => {
     const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : event.target.value;
@@ -190,6 +202,11 @@ export default function PublicBudgetRequestForm() {
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Data do evento" required hint="Se ainda não tiver certeza, coloque a data aproximada">
                   <input className={inputClass} type="date" min={today} value={form.event_date} onChange={update("event_date")} />
+                  {dateFull && form.event_date ? (
+                    <span className="mt-1.5 block rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Essa data já está com a agenda cheia. Pode enviar o pedido mesmo assim que eu confiro se dá para encaixar, ou escolha outra data.
+                    </span>
+                  ) : null}
                 </Field>
                 <Field label="Horário" hint="Ex.: 16h, à tarde">
                   <input className={inputClass} value={form.event_time} onChange={update("event_time")} placeholder="opcional" />
