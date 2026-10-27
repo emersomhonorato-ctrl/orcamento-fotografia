@@ -5,7 +5,7 @@ export const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style
 export function installmentLabel(amount, max) {
   const n = Math.max(1, Number(max) || 1);
   if (n === 1) return `${brl(amount)} à vista`;
-  return `até ${n}x de ${brl(Number(amount) / n)}`;
+  return `em até ${n}x`;
 }
 
 export const PAYMENT_STATUS = {
