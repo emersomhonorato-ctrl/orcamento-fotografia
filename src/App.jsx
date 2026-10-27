@@ -2776,7 +2776,7 @@ export default function App() {
 
           <TabsContent value="selecao" className="mt-6">
             <SafeSection name="Seleção de fotos">
-              <PhotoSelectionAdmin records={records} />
+              <PhotoSelectionAdmin records={records} onOpenDeliveries={() => setActiveTab("entregas")} />
             </SafeSection>
           </TabsContent>
 

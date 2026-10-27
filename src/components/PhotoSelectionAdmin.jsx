@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Download, Eye, Heart, KeyRound, Link2, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { Copy, CreditCard, Download, Eye, Heart, KeyRound, Link2, Pencil, Plus, Printer, RefreshCw, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,31 @@ import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR, makeDeliverySlug, slugify } from "@/lib/delivery";
 import { listDriveImages } from "@/lib/driveList";
 import { baseFileName, buildLightroomCollection, downloadTextFile } from "@/lib/lightroom";
+import { PAY_PUBLIC_BASE } from "@/lib/payments";
+
+const DEFAULT_PRINT_SIZES = [
+  { size: "10x15", price: 5 },
+  { size: "15x21", price: 15 },
+  { size: "20x30", price: 35 },
+];
+
+// Valor das revelações: as N inclusas saem das mais baratas
+export function printTotals(item) {
+  const sizes = Array.isArray(item?.print_sizes) ? item.print_sizes : [];
+  const priceOf = Object.fromEntries(sizes.map((z) => [z.size, Number(z.price) || 0]));
+  const prints = Array.isArray(item?.prints) ? item.prints : [];
+  const units = [];
+  for (const row of prints) for (let i = 0; i < (Number(row.qty) || 0); i += 1) units.push(priceOf[row.size] || 0);
+  units.sort((a, b) => a - b);
+  const cost = units.slice(Number(item?.prints_included || 0)).reduce((sum, value) => sum + value, 0);
+  const bySize = sizes
+    .map((z) => {
+      const rows = prints.filter((row) => row.size === z.size);
+      return { size: z.size, qty: rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0), rows };
+    })
+    .filter((row) => row.qty > 0);
+  return { units: units.length, cost, bySize };
+}
 
 export const SELECTION_PUBLIC_BASE = "https://orcamento.emersonhonoratoretratos.com.br/selecao/";
 
@@ -32,12 +57,17 @@ const EMPTY = {
   included_count: "",
   extra_price: "",
   max_count: "",
+  prints_enabled: false,
+  print_sizes: [],
+  prints_included: "",
+  save_default_sizes: false,
+  final_drive_url: "",
   pin: "",
   expires_at: "",
   message: "",
 };
 
-export default function PhotoSelectionAdmin({ records = [] }) {
+export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) {
   const [items, setItems] = useState([]);
   const [state, setState] = useState("loading");
   const [apiKey, setApiKey] = useState("");
@@ -47,18 +77,22 @@ export default function PhotoSelectionAdmin({ records = [] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState("");
+  const [defaultSizes, setDefaultSizes] = useState(DEFAULT_PRINT_SIZES);
 
   const load = useCallback(async () => {
     const [{ data, error }, settingsRes] = await Promise.all([
       supabase.from("photo_selections").select("*").order("created_at", { ascending: false }).limit(300),
-      supabase.from("studio_settings").select("google_api_key").eq("id", 1).maybeSingle(),
+      supabase.from("studio_settings").select("*").eq("id", 1).maybeSingle(),
     ]);
     if (error) {
       setState(/does not exist|PGRST205|42P01/i.test(`${error.code} ${error.message}`) ? "missing" : "error");
       return;
     }
     setItems(data || []);
-    if (!settingsRes.error) setApiKey(settingsRes.data?.google_api_key || "");
+    if (!settingsRes.error) {
+      setApiKey(settingsRes.data?.google_api_key || "");
+      if (Array.isArray(settingsRes.data?.print_sizes) && settingsRes.data.print_sizes.length) setDefaultSizes(settingsRes.data.print_sizes);
+    }
     setState("ready");
   }, []);
 
@@ -87,7 +121,11 @@ export default function PhotoSelectionAdmin({ records = [] }) {
 
   function startNew() {
     setMessage("");
-    setForm({ ...EMPTY, expires_at: addDays(15) });
+    setForm({
+      ...EMPTY,
+      expires_at: addDays(15),
+      print_sizes: defaultSizes.map((z) => ({ size: z.size, price: String(z.price) })),
+    });
   }
 
   function startEdit(item) {
@@ -98,6 +136,11 @@ export default function PhotoSelectionAdmin({ records = [] }) {
       included_count: String(item.included_count ?? ""),
       extra_price: String(item.extra_price ?? ""),
       max_count: item.max_count ? String(item.max_count) : "",
+      prints_enabled: Array.isArray(item.print_sizes) && item.print_sizes.length > 0,
+      print_sizes: (Array.isArray(item.print_sizes) && item.print_sizes.length ? item.print_sizes : defaultSizes).map((z) => ({ size: z.size, price: String(z.price) })),
+      prints_included: item.prints_included ? String(item.prints_included) : "",
+      save_default_sizes: false,
+      final_drive_url: item.final_drive_url || "",
     });
   }
 
@@ -122,6 +165,12 @@ export default function PhotoSelectionAdmin({ records = [] }) {
     if (!clean(form.client_name)) return setMessage("Informe o nome do cliente.");
     if (!clean(form.title)) return setMessage("Dê um título (ex.: Casamento Ana e Juan).");
     if (!clean(form.drive_url)) return setMessage("Cole o link da pasta do Drive com as fotos em baixa.");
+    const printSizes = form.prints_enabled
+      ? (form.print_sizes || [])
+          .map((z) => ({ size: clean(z.size).replace(/\s+/g, "").replace(/×/g, "x"), price: Math.max(0, num(z.price)) }))
+          .filter((z, index, list) => z.size && list.findIndex((other) => other.size === z.size) === index)
+      : [];
+    if (form.prints_enabled && !printSizes.length) return setMessage("Coloque pelo menos um tamanho de revelação (ex.: 15x21).");
     setBusy(true);
     setMessage("Lendo as fotos do Drive…");
     let photos;
@@ -152,8 +201,15 @@ export default function PhotoSelectionAdmin({ records = [] }) {
       pin: clean(form.pin) || null,
       expires_at: form.expires_at || null,
       message: clean(form.message) || null,
+      print_sizes: printSizes,
+      prints_included: form.prints_enabled ? Math.max(0, Math.round(num(form.prints_included))) : 0,
+      final_drive_url: clean(form.final_drive_url) || null,
       updated_at: new Date().toISOString(),
     };
+    if (form.prints_enabled && form.save_default_sizes && printSizes.length) {
+      await supabase.from("studio_settings").update({ print_sizes: printSizes }).eq("id", 1);
+      setDefaultSizes(printSizes);
+    }
     const { error } = form.id
       ? await supabase.from("photo_selections").update(payload).eq("id", form.id)
       : await supabase.from("photo_selections").insert({ ...payload, slug: makeDeliverySlug(payload.client_name) });
@@ -181,9 +237,25 @@ export default function PhotoSelectionAdmin({ records = [] }) {
   }
 
   async function reopen(item) {
-    if (!window.confirm(`Liberar ${item.client_name} para mudar a escolha? As fotos já marcadas continuam marcadas.`)) return;
-    await supabase.from("photo_selections").update({ status: "aberta", updated_at: new Date().toISOString() }).eq("id", item.id);
+    if (!window.confirm(`Reabrir a seleção de ${item.client_name}? As fotos e revelações já marcadas continuam marcadas, e o cliente pode mudar e enviar de novo.`)) return;
+    const now = new Date();
+    const patch = { status: "aberta", reopened_at: now.toISOString(), updated_at: now.toISOString() };
+    if (item.expires_at && item.expires_at < now.toISOString().slice(0, 10)) patch.expires_at = addDays(7);
+    const { error } = await supabase.from("photo_selections").update(patch).eq("id", item.id);
+    if (error) return setMessage(`Erro ao reabrir: ${error.message}`);
+    setMessage(`Seleção de ${item.client_name} reaberta${patch.expires_at ? " (prazo estendido por 7 dias)" : ""}.`);
     load();
+    if (window.confirm("Avisar o cliente pelo WhatsApp que a seleção foi reaberta?")) {
+      const first = String(item.client_name).trim().split(/\s+/)[0];
+      const text = [
+        `Oi, ${first}! Reabri a sua seleção de fotos 😊`,
+        "Pode ajustar à vontade — as que você já tinha escolhido continuam marcadas. Quando terminar, é só tocar em *Enviar minha escolha* de novo:",
+        linkFor(item),
+        item.pin ? `🔑 Senha: ${item.pin}` : "",
+      ].filter(Boolean).join("\n\n");
+      const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      window.open(url, "_blank", "noopener");
+    }
   }
 
   async function remove(item) {
@@ -225,11 +297,75 @@ export default function PhotoSelectionAdmin({ records = [] }) {
     window.open(url, "_blank", "noopener");
   }
 
-  function chargeExtras(item, extras) {
+  async function chargeExtras(item, extras) {
     const first = String(item.client_name).trim().split(/\s+/)[0];
-    const text = `Oi, ${first}! Recebi sua escolha 💛 Você escolheu ${(item.selected || []).length} fotos — ${item.included_count} do pacote + ${extras} extra${extras > 1 ? "s" : ""} (${extras} × ${brl(item.extra_price)} = *${brl(extras * Number(item.extra_price))}*). Posso te mandar o Pix?`;
+    const prints = printTotals(item);
+    const extrasCost = extras * Number(item.extra_price || 0);
+    const total = Math.round((extrasCost + prints.cost) * 100) / 100;
+    if (total <= 0) return;
+    const parts = [
+      extrasCost > 0 ? `${extras} foto${extras > 1 ? "s" : ""} extra${extras > 1 ? "s" : ""} (${extras} × ${brl(item.extra_price)} = ${brl(extrasCost)})` : "",
+      prints.cost > 0 ? `revelação: ${prints.bySize.map((row) => `${row.qty}× ${row.size}`).join(", ")} = ${brl(prints.cost)}` : "",
+    ].filter(Boolean);
+    const { data: cardOn } = await supabase.rpc("card_payments_enabled");
+    let payLink = "";
+    if (cardOn) {
+      const description = [extrasCost > 0 ? "Fotos extras" : "", prints.cost > 0 ? "Revelação" : ""].filter(Boolean).join(" e ") + ` — ${item.title}`;
+      const { data: payment, error } = await supabase
+        .from("payments")
+        .insert({
+          kind: "avulso",
+          event_id: item.event_id || null,
+          client_name: item.client_name,
+          client_whatsapp: item.client_whatsapp || null,
+          description: description.slice(0, 250),
+          amount: total,
+          max_installments: total >= 300 ? 6 : total >= 100 ? 3 : 1,
+          expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+        })
+        .select("slug")
+        .single();
+      if (error) setMessage(`Não consegui criar o link de pagamento: ${error.message}`);
+      else payLink = `${PAY_PUBLIC_BASE}${payment.slug}`;
+    }
+    const text = [
+      `Oi, ${first}! Recebi sua escolha 💛`,
+      `Ficou assim: ${parts.join(" + ")}.`,
+      `*Total: ${brl(total)}*`,
+      payLink ? `Você pode pagar no cartão ou Pix por aqui:\n${payLink}` : "Posso te mandar o Pix?",
+    ].join("\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank", "noopener");
+  }
+
+  async function downloadPrints(item) {
+    const prints = printTotals(item);
+    if (!prints.units) return setMessage("Esse cliente não pediu revelação.");
+    const clientSlug = slugify(item.client_name) || "cliente";
+    const lines = [
+      `PEDIDO DE REVELAÇÃO — ${item.client_name}`,
+      item.title,
+      `Total: ${prints.units} cópia${prints.units > 1 ? "s" : ""}`,
+      "",
+    ];
+    for (const group of prints.bySize) {
+      lines.push(`== ${group.size} — ${group.qty} cópia${group.qty > 1 ? "s" : ""} ==`);
+      for (const row of group.rows.slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { numeric: true }))) {
+        lines.push(`${baseFileName(row.name)}  x${row.qty}`);
+      }
+      lines.push("");
+    }
+    downloadTextFile(`revelacao-${clientSlug}.txt`, lines.join("\n"));
+    prints.bySize.forEach((group, index) => {
+      const names = [...new Set(group.rows.map((row) => row.name))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+      setTimeout(() => {
+        downloadTextFile(
+          `revelacao-${group.size}-${clientSlug}.lrsmcol`,
+          buildLightroomCollection(`${item.client_name} — Revelação ${group.size}`, names),
+        );
+      }, 400 * (index + 1));
+    });
+    setMessage(`Baixando: lista para o laboratório + ${prints.bySize.length} coleç${prints.bySize.length > 1 ? "ões" : "ão"} do Lightroom (uma por tamanho). Se o navegador perguntar, permita vários downloads.`);
   }
 
   function downloadLightroom(item) {
@@ -322,6 +458,38 @@ export default function PhotoSelectionAdmin({ records = [] }) {
               <div className="space-y-1"><Label>Máximo (opcional)</Label><Input type="number" min="0" className="rounded-2xl" placeholder="sem máximo" value={form.max_count} onChange={(e) => setForm({ ...form, max_count: e.target.value })} /></div>
               <div className="space-y-1"><Label>Escolher até</Label><Input type="date" className="rounded-2xl" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} /></div>
             </div>
+            <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={form.prints_enabled} onChange={(e) => setForm({ ...form, prints_enabled: e.target.checked })} />
+                <Printer className="h-4 w-4 text-slate-500" /> Oferecer fotos para revelação (o cliente escolhe tamanho e quantidade)
+              </label>
+              {form.prints_enabled ? (
+                <>
+                  <div className="space-y-2">
+                    {(form.print_sizes || []).map((z, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <Input className="w-32 rounded-2xl" placeholder="15x21" value={z.size} onChange={(e) => setForm({ ...form, print_sizes: form.print_sizes.map((row, i) => (i === index ? { ...row, size: e.target.value } : row)) })} />
+                        <span className="text-sm text-slate-500">R$</span>
+                        <Input inputMode="decimal" className="w-28 rounded-2xl" placeholder="15" value={z.price} onChange={(e) => setForm({ ...form, print_sizes: form.print_sizes.map((row, i) => (i === index ? { ...row, price: e.target.value } : row)) })} />
+                        <span className="text-xs text-slate-500">por cópia</span>
+                        <button type="button" className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600" onClick={() => setForm({ ...form, print_sizes: form.print_sizes.filter((_, i) => i !== index) })}><X className="h-4 w-4" /></button>
+                      </div>
+                    ))}
+                    <Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={() => setForm({ ...form, print_sizes: [...(form.print_sizes || []), { size: "", price: "" }] })}><Plus className="mr-1 h-3.5 w-3.5" />Tamanho</Button>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="space-y-1"><Label>Revelações inclusas no pacote</Label><Input type="number" min="0" className="w-40 rounded-2xl" placeholder="0 = todas pagas" value={form.prints_included} onChange={(e) => setForm({ ...form, prints_included: e.target.value })} /></div>
+                    <label className="flex items-center gap-2 pb-2 text-xs text-slate-600"><input type="checkbox" checked={form.save_default_sizes} onChange={(e) => setForm({ ...form, save_default_sizes: e.target.checked })} />Usar estes tamanhos e preços como padrão</label>
+                  </div>
+                  <p className="text-xs text-slate-500">As inclusas são descontadas das cópias mais baratas. Você baixa uma coleção do Lightroom por tamanho + a lista com as quantidades para o laboratório.</p>
+                </>
+              ) : null}
+            </div>
+            <div className="space-y-1">
+              <Label>Pasta das fotos tratadas para a entrega (opcional — dá para colocar depois)</Label>
+              <div className="flex items-center gap-2"><Link2 className="h-4 w-4 shrink-0 text-slate-400" /><Input className="rounded-2xl" placeholder="https://drive.google.com/drive/folders/..." value={form.final_drive_url} onChange={(e) => setForm({ ...form, final_drive_url: e.target.value })} /></div>
+              <p className="text-xs text-slate-500">Quando o cliente enviar a escolha, a galeria de entrega é criada sozinha (como rascunho) na aba Entregas, com os dados do cliente e a mesma senha.</p>
+            </div>
             <div className="grid gap-3 md:grid-cols-[1fr_220px]">
               <div className="space-y-1"><Label>Mensagem para o cliente</Label><Textarea className="min-h-[80px] rounded-2xl" placeholder="Ex.: Escolha as fotos que mais emocionaram vocês…" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></div>
               <div className="space-y-1">
@@ -349,6 +517,8 @@ export default function PhotoSelectionAdmin({ records = [] }) {
           const total = Array.isArray(item.photos) ? item.photos.length : 0;
           const count = Array.isArray(item.selected) ? item.selected.length : 0;
           const extras = item.included_count > 0 ? Math.max(0, count - item.included_count) : 0;
+          const printInfo = printTotals(item);
+          const amountDue = extras * Number(item.extra_price || 0) + printInfo.cost;
           const cover = Array.isArray(item.photos) && item.photos.length ? item.photos[Math.floor(item.photos.length / 3)] : null;
           const sent = item.status === "enviada";
           const expired = !sent && item.expires_at && item.expires_at < today;
@@ -379,6 +549,19 @@ export default function PhotoSelectionAdmin({ records = [] }) {
                   <span className="text-slate-500">de {total} fotos{item.included_count ? ` • ${item.included_count} inclusas` : ""}</span>
                 </div>
                 {extras > 0 ? <p className="text-xs font-medium text-amber-700">{extras} extra{extras > 1 ? "s" : ""}{Number(item.extra_price) ? ` = ${brl(extras * Number(item.extra_price))}` : ""}</p> : null}
+                {printInfo.units > 0 ? (
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                    <Printer className="h-3.5 w-3.5 text-slate-500" />
+                    {printInfo.units} revelaç{printInfo.units > 1 ? "ões" : "ão"}: {printInfo.bySize.map((row) => `${row.qty}× ${row.size}`).join(" • ")}
+                    {printInfo.cost > 0 ? <span className="text-amber-700"> = {brl(printInfo.cost)}</span> : <span className="text-emerald-700"> (inclusas)</span>}
+                  </p>
+                ) : null}
+                {item.delivery_id ? (
+                  <button type="button" className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-left text-xs text-emerald-800 hover:bg-emerald-100" onClick={() => onOpenDeliveries?.()}>
+                    <span>✅ Galeria de entrega criada (rascunho). Quando as fotos estiverem prontas, abra em <strong>Entregas</strong>, confira a pasta e ative.</span>
+                  </button>
+                ) : null}
+                {item.reopened_at && !sent ? <p className="text-[11px] font-medium text-sky-700">Reaberta em {new Date(item.reopened_at).toLocaleString("pt-BR")}</p> : null}
                 {item.client_note ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">“{item.client_note}”</p> : null}
                 <p className="text-[11px] text-slate-500">{item.pin ? `🔑 ${item.pin} • ` : ""}{item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}{item.submitted_at ? ` • enviada em ${new Date(item.submitted_at).toLocaleString("pt-BR")}` : ""}</p>
                 <div className="flex flex-wrap gap-2">
@@ -387,8 +570,14 @@ export default function PhotoSelectionAdmin({ records = [] }) {
                   ) : (
                     <Button size="sm" className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => sendLink(item)}><Send className="mr-1.5 h-3.5 w-3.5" />Enviar</Button>
                   )}
-                  {sent && extras > 0 && Number(item.extra_price) ? (
-                    <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800" onClick={() => chargeExtras(item, extras)}>Cobrar extras</Button>
+                  {sent && printInfo.units > 0 ? (
+                    <Button size="sm" variant="outline" className="rounded-xl" title="Lista para o laboratório + coleção do Lightroom por tamanho" onClick={() => downloadPrints(item)}><Printer className="mr-1.5 h-3.5 w-3.5" />Revelação</Button>
+                  ) : null}
+                  {sent && amountDue > 0 ? (
+                    <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800" onClick={() => chargeExtras(item, extras)}><CreditCard className="mr-1.5 h-3.5 w-3.5" />Cobrar {brl(amountDue)}</Button>
+                  ) : null}
+                  {sent ? (
+                    <Button size="sm" variant="outline" className="rounded-xl border-sky-200 text-sky-800" title="O cliente pediu para mudar? Libera de novo." onClick={() => reopen(item)}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reabrir seleção</Button>
                   ) : null}
                   {!sent && count > 0 ? (
                     <Button size="sm" variant="outline" className="rounded-xl" title="Baixar o que já foi escolhido até agora" onClick={() => downloadLightroom(item)}><Download className="mr-1.5 h-3.5 w-3.5" />Parcial</Button>
@@ -398,7 +587,6 @@ export default function PhotoSelectionAdmin({ records = [] }) {
                     <Button size="sm" variant="outline" className="rounded-xl" title="Copia os nomes separados por vírgula (para colar na busca do Lightroom ou do computador)" onClick={() => copy((item.selected || []).map(baseFileName).join(", "), `n-${item.id}`)}>{copied === `n-${item.id}` ? "Copiado!" : "Nomes"}</Button>
                   ) : null}
                   <Button size="sm" variant="ghost" className="rounded-xl" title="Ver como o cliente vê" onClick={() => window.open(`${window.location.origin}/selecao/${item.slug}`, "_blank", "noopener")}><Eye className="h-3.5 w-3.5" /></Button>
-                  {sent ? <Button size="sm" variant="ghost" className="rounded-xl" title="Liberar para o cliente mudar" onClick={() => reopen(item)}><RotateCcw className="h-3.5 w-3.5" /></Button> : null}
                   <Button size="sm" variant="ghost" className="rounded-xl" title="Atualizar fotos do Drive" disabled={busy} onClick={() => refreshPhotos(item)}><RefreshCw className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl" onClick={() => startEdit(item)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl text-red-600" onClick={() => remove(item)}><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -412,6 +600,7 @@ export default function PhotoSelectionAdmin({ records = [] }) {
       <div className="rounded-3xl border border-slate-200 bg-white/80 p-5 text-sm text-slate-600">
         <p className="font-semibold text-slate-900">Como usar o arquivo no Lightroom Classic</p>
         <p className="mt-1">No módulo <strong>Biblioteca</strong>, no painel <strong>Coleções</strong>, clique no <strong>+</strong> → <strong>Importar predefinição de coleção inteligente…</strong> e escolha o arquivo baixado. A coleção aparece com o nome do cliente e as fotos escolhidas.</p>
+        <p className="mt-2">O botão <strong>Revelação</strong> baixa uma coleção por tamanho (ex.: “Ana — Revelação 15x21”) — importe do mesmo jeito — e uma lista .txt com as quantidades para mandar ao laboratório.</p>
       </div>
     </div>
   );

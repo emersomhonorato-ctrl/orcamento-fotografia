@@ -61,7 +61,8 @@ export default function PublicPhotoSelection({ slug }) {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const saveTimer = useRef(null);
-  const latest = useRef({ selected: [], note: "" });
+  const [prints, setPrints] = useState([]);
+  const latest = useRef({ selected: [], note: "", prints: [] });
 
   const load = useCallback(async (pinTry) => {
     const { data: result, error: rpcError } = await supabase.rpc("get_selection", { p_slug: slug, p_pin: pinTry || null });
@@ -72,6 +73,7 @@ export default function PublicPhotoSelection({ slug }) {
     setData(result);
     setState(result.status);
     if (Array.isArray(result.selected)) setSelected(result.selected);
+    if (Array.isArray(result.prints)) setPrints(result.prints);
     if (result.client_note) setNote(result.client_note);
     if (pinTry) setPinValue(pinTry);
   }, [slug]);
@@ -87,15 +89,45 @@ export default function PublicPhotoSelection({ slug }) {
 
   const photos = useMemo(() => (Array.isArray(data?.photos) ? data.photos : []), [data]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const visible = filter === "escolhidas" ? photos.filter((p) => selectedSet.has(p.name)) : photos;
+  const visible =
+    filter === "escolhidas"
+      ? photos.filter((p) => selectedSet.has(p.name))
+      : filter === "revelacao"
+        ? photos.filter((p) => prints.some((item) => item.name === p.name))
+        : photos;
   const included = Number(data?.included_count || 0);
   const extraPrice = Number(data?.extra_price || 0);
   const maxCount = Number(data?.max_count || 0);
   const extras = included > 0 ? Math.max(0, selected.length - included) : 0;
   const locked = state !== "aberta";
+  const printSizes = useMemo(() => (Array.isArray(data?.print_sizes) ? data.print_sizes.filter((z) => z && z.size) : []), [data]);
+  const printsEnabled = printSizes.length > 0;
+  const printsIncluded = Number(data?.prints_included || 0);
+  const printMap = useMemo(() => {
+    const map = new Map();
+    for (const item of prints) {
+      const key = item.name;
+      if (!map.has(key)) map.set(key, {});
+      map.get(key)[item.size] = Number(item.qty) || 0;
+    }
+    return map;
+  }, [prints]);
+  const printUnits = prints.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+  const printCost = useMemo(() => {
+    const priceOf = Object.fromEntries(printSizes.map((z) => [z.size, Number(z.price) || 0]));
+    const units = [];
+    for (const item of prints) for (let i = 0; i < (Number(item.qty) || 0); i += 1) units.push(priceOf[item.size] || 0);
+    units.sort((a, b) => a - b);
+    return units.slice(printsIncluded).reduce((sum, value) => sum + value, 0);
+  }, [prints, printSizes, printsIncluded]);
+  const printsBySize = printSizes
+    .map((z) => ({ size: z.size, qty: prints.filter((item) => item.size === z.size).reduce((sum, item) => sum + (Number(item.qty) || 0), 0) }))
+    .filter((row) => row.qty > 0);
+  const extrasCost = extras * extraPrice;
+  const totalToPay = extrasCost + printCost;
 
-  const scheduleSave = useCallback((nextSelected, nextNote) => {
-    latest.current = { selected: nextSelected, note: nextNote };
+  const scheduleSave = useCallback((nextSelected, nextNote, nextPrints) => {
+    latest.current = { selected: nextSelected, note: nextNote, prints: nextPrints };
     setSaveState("salvando");
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -105,6 +137,7 @@ export default function PublicPhotoSelection({ slug }) {
         p_selected: latest.current.selected,
         p_note: latest.current.note || null,
         p_submit: false,
+        p_prints: latest.current.prints || [],
       });
       setSaveState(rpcError ? "erro" : "salvo");
       if (rpcError) setError(rpcError.message);
@@ -121,7 +154,17 @@ export default function PublicPhotoSelection({ slug }) {
     }
     const next = has ? selected.filter((n) => n !== name) : [...selected, name];
     setSelected(next);
-    scheduleSave(next, note);
+    scheduleSave(next, note, prints);
+  }
+
+  function setPrintQty(name, size, qty) {
+    if (locked) return;
+    setError("");
+    const value = Math.max(0, Math.min(50, Number(qty) || 0));
+    const rest = prints.filter((item) => !(item.name === name && item.size === size));
+    const next = value > 0 ? [...rest, { name, size, qty: value }] : rest;
+    setPrints(next);
+    scheduleSave(selected, note, next);
   }
 
   // teclado no visualizador
@@ -151,6 +194,7 @@ export default function PublicPhotoSelection({ slug }) {
       p_selected: selected,
       p_note: note || null,
       p_submit: true,
+      p_prints: prints,
     });
     setSending(false);
     if (rpcError) {
@@ -215,7 +259,7 @@ export default function PublicPhotoSelection({ slug }) {
         {state === "enviada" ? (
           <div className="mx-auto mt-6 max-w-lg rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-5">
             <p className="text-lg font-semibold">Recebi sua escolha, {first}! 💛</p>
-            <p className="mt-1 text-sm text-white/75">{selected.length} fotos escolhidas{data.submitted_at ? ` em ${new Date(data.submitted_at).toLocaleString("pt-BR")}` : ""}. Agora é comigo: vou tratar cada uma com carinho.</p>
+            <p className="mt-1 text-sm text-white/75">{selected.length} fotos escolhidas{printUnits ? ` e ${printUnits} revelaç${printUnits > 1 ? "ões" : "ão"}` : ""}{data.submitted_at ? ` em ${new Date(data.submitted_at).toLocaleString("pt-BR")}` : ""}. Agora é comigo: vou tratar cada uma com carinho.</p>
             <a href={wa(`Olá, Emerson! Enviei minha escolha de fotos (${data.title}).`)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold">Falar no WhatsApp</a>
           </div>
         ) : state === "expired" ? (
@@ -231,13 +275,20 @@ export default function PublicPhotoSelection({ slug }) {
               {included > 0 && extraPrice > 0 ? `; cada foto a mais custa ${brl(extraPrice)}` : ""}.
               {data.expires_at ? ` Escolha até ${formatDateBR(data.expires_at)}.` : ""} Sua escolha fica salva sozinha — pode voltar depois.
             </p>
+            {printsEnabled ? (
+              <p className="mt-2 text-sm text-white/60">
+                🖨️ Quer fotos <strong className="text-white/85">reveladas</strong>? Abra a foto e escolha o tamanho e a quantidade
+                {printsIncluded > 0 ? ` (${printsIncluded} revelaç${printsIncluded > 1 ? "ões inclusas" : "ão inclusa"} no pacote)` : ""}:{" "}
+                {printSizes.map((z) => `${z.size} ${brl(z.price)}`).join(" • ")}.
+              </p>
+            ) : null}
           </div>
         )}
       </header>
 
       <div className="sticky top-0 z-20 border-y border-white/10 bg-[#0f0d0b]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2.5 text-sm">
-          {[["todas", `Todas (${photos.length})`], ["escolhidas", `Escolhidas (${selected.length})`]].map(([key, label]) => (
+          {[["todas", `Todas (${photos.length})`], ["escolhidas", `Escolhidas (${selected.length})`], ...(printsEnabled ? [["revelacao", `Revelação (${printUnits})`]] : [])].map(([key, label]) => (
             <button key={key} type="button" onClick={() => setFilter(key)} className={`rounded-full px-4 py-1.5 font-medium transition ${filter === key ? "bg-white text-[#1b1610]" : "text-white/70 hover:bg-white/10"}`}>{label}</button>
           ))}
           <span className="ml-auto text-xs text-white/50">{saveState === "salvando" ? "Salvando…" : saveState === "salvo" ? "Salvo ✓" : saveState === "erro" ? "Não salvou — verifique a internet" : ""}</span>
@@ -246,7 +297,7 @@ export default function PublicPhotoSelection({ slug }) {
 
       <main className="mx-auto max-w-6xl px-2 pt-3 sm:px-4">
         {visible.length === 0 ? (
-          <p className="py-16 text-center text-white/60">{filter === "escolhidas" ? "Você ainda não escolheu nenhuma foto." : "Nenhuma foto nesta galeria."}</p>
+          <p className="py-16 text-center text-white/60">{filter === "escolhidas" ? "Você ainda não escolheu nenhuma foto." : filter === "revelacao" ? "Nenhuma foto para revelar ainda. Abra uma foto e escolha o tamanho." : "Nenhuma foto nesta galeria."}</p>
         ) : (
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-4">
             {visible.map((photo, index) => {
@@ -266,6 +317,11 @@ export default function PublicPhotoSelection({ slug }) {
                     <Heart filled={isSel} />
                   </button>
                   <span className="pointer-events-none absolute bottom-1.5 left-2 text-[10px] font-medium text-white/80 drop-shadow">{shortName(photo.name)}</span>
+                  {printMap.has(photo.name) ? (
+                    <span className="pointer-events-none absolute bottom-1.5 right-2 rounded-full bg-[#e9c77b] px-2 py-0.5 text-[10px] font-bold text-[#1b1610] shadow">
+                      🖨️ {Object.values(printMap.get(photo.name)).reduce((a, b) => a + b, 0)}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
@@ -286,6 +342,11 @@ export default function PublicPhotoSelection({ slug }) {
                 <p className="text-xs text-amber-300">{extras} extra{extras > 1 ? "s" : ""}{extraPrice > 0 ? ` × ${brl(extraPrice)} = ${brl(extras * extraPrice)}` : ""}</p>
               ) : included > 0 ? (
                 <div className="mt-1 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.min(100, (selected.length / included) * 100)}%` }} /></div>
+              ) : null}
+              {printUnits > 0 ? (
+                <p className="text-xs text-[#e9c77b]">
+                  🖨️ {printUnits} revelaç{printUnits > 1 ? "ões" : "ão"}{printCost > 0 ? ` = ${brl(printCost)}` : printsIncluded ? " (inclusas)" : ""}
+                </p>
               ) : null}
               {error ? <p className="mt-1 text-xs text-red-300">{error}</p> : null}
             </div>
@@ -317,6 +378,33 @@ export default function PublicPhotoSelection({ slug }) {
             ) : null}
             <span className="hidden text-xs text-white/40 sm:inline">← → para navegar • espaço para escolher</span>
           </div>
+          {printsEnabled && (!locked || printMap.has(current.name)) ? (
+            <div className="mx-auto mb-4 w-full max-w-xl px-4">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#e9c77b]">🖨️ Revelar esta foto</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {printSizes.map((z) => {
+                    const qty = printMap.get(current.name)?.[z.size] || 0;
+                    return (
+                      <div key={z.size} className={`flex items-center gap-1 rounded-xl px-2 py-1.5 text-sm ${qty ? "bg-[#e9c77b] text-[#1b1610]" : "bg-black/30 text-white"}`}>
+                        <span className="px-1 font-semibold">{z.size}</span>
+                        <span className={`text-xs ${qty ? "text-[#1b1610]/70" : "text-white/50"}`}>{brl(z.price)}</span>
+                        {!locked ? (
+                          <>
+                            <button type="button" aria-label={`Menos ${z.size}`} onClick={() => setPrintQty(current.name, z.size, qty - 1)} disabled={!qty} className="ml-1 h-7 w-7 rounded-lg bg-black/20 text-base font-bold disabled:opacity-30">−</button>
+                            <span className="w-6 text-center font-bold">{qty}</span>
+                            <button type="button" aria-label={`Mais ${z.size}`} onClick={() => setPrintQty(current.name, z.size, qty + 1)} className="h-7 w-7 rounded-lg bg-black/20 text-base font-bold">+</button>
+                          </>
+                        ) : (
+                          <span className="ml-1 font-bold">× {qty}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -328,9 +416,17 @@ export default function PublicPhotoSelection({ slug }) {
             <p className="mt-2 text-sm leading-6 text-[#4a4036]">
               Você escolheu <strong>{selected.length} fotos</strong>
               {included > 0 ? ` (${Math.min(selected.length, included)} do pacote${extras ? ` + ${extras} extra${extras > 1 ? "s" : ""}` : ""})` : ""}.
-              {extras > 0 && extraPrice > 0 ? <> Valor das extras: <strong>{brl(extras * extraPrice)}</strong>.</> : null}
+              {extras > 0 && extraPrice > 0 ? <> Valor das extras: <strong>{brl(extrasCost)}</strong>.</> : null}
               {included > 0 && selected.length < included ? <> Ainda dá para escolher mais {included - selected.length} sem custo.</> : null}
             </p>
+            {printUnits > 0 ? (
+              <div className="mt-3 rounded-2xl bg-[#f6f1ea] p-3 text-sm text-[#4a4036]">
+                <p className="font-semibold">🖨️ Revelação: {printUnits} foto{printUnits > 1 ? "s" : ""}</p>
+                <p className="mt-0.5">{printsBySize.map((row) => `${row.qty}× ${row.size}`).join(" • ")}</p>
+                <p className="mt-0.5">{printCost > 0 ? <>Valor: <strong>{brl(printCost)}</strong>{printsIncluded ? ` (já descontadas ${printsIncluded} inclusas)` : ""}</> : "Inclusas no pacote 💛"}</p>
+              </div>
+            ) : null}
+            {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — combino o pagamento com você depois.</p> : null}
             <label className="mt-4 block text-sm font-medium">
               Algum pedido especial? (opcional)
               <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} placeholder="Ex.: a foto EME_1230 em preto e branco…" className="mt-1 min-h-[90px] w-full rounded-2xl border border-[#e4dbd0] px-4 py-3 text-sm focus:border-[#a8875a] focus:outline-none" />

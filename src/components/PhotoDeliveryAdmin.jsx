@@ -284,6 +284,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const statusOf = (item) => {
+    if (!item.active && item.selection_id) return ["Rascunho da seleção — confira a pasta e ative", "bg-amber-100 text-amber-800"];
     if (!item.active) return ["Desativada", "bg-slate-100 text-slate-600"];
     if (item.expires_at && item.expires_at < today) return ["Expirada", "bg-amber-100 text-amber-800"];
     if (item.views > 0) return [`Visto ${item.views}x`, "bg-emerald-100 text-emerald-800"];
