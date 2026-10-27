@@ -210,6 +210,9 @@ export default function App() {
   const [clientForm, setClientForm] = useState(emptyClient);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [search, setSearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientService, setClientService] = useState("Todos");
+  const [clientSort, setClientSort] = useState("az");
   const [selectedDate, setSelectedDate] = useState(getTodayLocalISO());
   const [selectedMonth, setSelectedMonth] = useState(getTodayLocalISO().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -704,6 +707,55 @@ export default function App() {
         };
       });
   }, [clients, records]);
+
+  // Clientes: busca, filtro por serviço e ordem alfabética
+  const clientJobs = useMemo(() => {
+    const digits = (value) => String(value || "").replace(/\D/g, "").slice(-9);
+    const lower = (value) => String(value || "").trim().toLowerCase();
+    const map = new Map();
+    const safeRecords = (Array.isArray(records) ? records : []).filter((record) => record && record.status !== "Cancelado");
+    uniqueClientsFromEvents.forEach((client) => {
+      const phones = new Set([digits(client.phone), digits(client.whatsapp)].filter((value) => value.length >= 8));
+      const email = lower(client.email);
+      const name = lower(client.name);
+      const jobs = safeRecords.filter((record) =>
+        (client.id && record.clientId === client.id) ||
+        (email && lower(record.email) === email) ||
+        (phones.size && (phones.has(digits(record.phone)) || phones.has(digits(record.whatsapp)))) ||
+        (name && lower(record.clientName) === name),
+      );
+      const services = [...new Set(jobs.map((record) => record.eventType).filter(Boolean))];
+      const lastDate = jobs.map((record) => record.eventDate || "").filter(Boolean).sort().pop() || "";
+      map.set(client.id, { services, lastDate, count: jobs.length });
+    });
+    return map;
+  }, [uniqueClientsFromEvents, records]);
+
+  const clientServiceOptions = useMemo(() => {
+    const names = new Set();
+    clientJobs.forEach((info) => info.services.forEach((name) => names.add(name)));
+    return [...names].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [clientJobs]);
+
+  const filteredClients = useMemo(() => {
+    const strip = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const term = strip(clientSearch.trim());
+    const termDigits = clientSearch.replace(/\D/g, "");
+    const list = uniqueClientsFromEvents.filter((client) => {
+      const info = clientJobs.get(client.id) || { services: [] };
+      if (clientService !== "Todos" && !info.services.includes(clientService)) return false;
+      if (!term) return true;
+      const text = strip([client.name, client.email, client.city, client.instagram, client.cpf, info.services.join(" ")].join(" "));
+      if (text.includes(term)) return true;
+      return termDigits.length >= 4 && `${client.phone} ${client.whatsapp}`.replace(/\D/g, "").includes(termDigits);
+    });
+    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" });
+    if (clientSort === "za") return list.sort((a, b) => byName(b, a));
+    if (clientSort === "recentes") {
+      return list.sort((a, b) => String(clientJobs.get(b.id)?.lastDate || "").localeCompare(String(clientJobs.get(a.id)?.lastDate || "")) || byName(a, b));
+    }
+    return list.sort(byName);
+  }, [uniqueClientsFromEvents, clientJobs, clientSearch, clientService, clientSort]);
 
   // Logo e assinatura reduzidos para os PDFs (evita arquivos de vários MB)
   const [pdfImages, setPdfImages] = useState({ key: "", logoDataUrl: "", signatureDataUrl: "" });
@@ -3030,6 +3082,54 @@ export default function App() {
                 <Button onClick={openNewClientModal} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo cliente</Button>
               </CardHeader>
               <CardContent>
+                {uniqueClientsFromEvents.length ? (
+                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center">
+                    <div className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-stone-200 bg-white px-4">
+                      <Search className="h-4 w-4 text-stone-400" />
+                      <Input
+                        value={clientSearch}
+                        onChange={(event) => setClientSearch(event.target.value)}
+                        placeholder="Buscar por nome, telefone, e-mail ou cidade"
+                        className="border-0 p-0 shadow-none focus-visible:ring-0"
+                      />
+                      {clientSearch ? (
+                        <button type="button" aria-label="Limpar busca" className="rounded-full p-1 text-stone-400 hover:bg-stone-100" onClick={() => setClientSearch("")}><X className="h-4 w-4" /></button>
+                      ) : null}
+                    </div>
+                    <Select value={clientService} onValueChange={setClientService}>
+                      <SelectTrigger className="h-11 w-full rounded-xl border-stone-200 bg-white md:w-[240px]">
+                        <SelectValue placeholder="Serviço" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Todos">Todos os serviços</SelectItem>
+                        {clientServiceOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={clientSort} onValueChange={setClientSort}>
+                      <SelectTrigger className="h-11 w-full rounded-xl border-stone-200 bg-white md:w-[190px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="az">Nome de A a Z</SelectItem>
+                        <SelectItem value="za">Nome de Z a A</SelectItem>
+                        <SelectItem value="recentes">Trabalho mais recente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                {uniqueClientsFromEvents.length ? (
+                  <p className="mb-3 text-sm text-stone-500">
+                    {filteredClients.length === uniqueClientsFromEvents.length
+                      ? `${filteredClients.length} cliente${filteredClients.length === 1 ? "" : "s"}`
+                      : `${filteredClients.length} de ${uniqueClientsFromEvents.length} clientes`}
+                  </p>
+                ) : null}
+                {uniqueClientsFromEvents.length > 0 && filteredClients.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
+                    Nenhum cliente encontrado com esse filtro.{" "}
+                    <button type="button" className="font-medium text-stone-800 underline" onClick={() => { setClientSearch(""); setClientService("Todos"); }}>Limpar filtros</button>
+                  </div>
+                ) : null}
                 {uniqueClientsFromEvents.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
                     <p className="font-medium text-slate-700">Nenhum cliente cadastrado</p>
@@ -3041,8 +3141,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {uniqueClientsFromEvents.map((client) => {
+                    {filteredClients.map((client) => {
                       const isRegistered = Boolean(client.isRegistered);
+                      const jobInfo = clientJobs.get(client.id) || { services: [], lastDate: "", count: 0 };
 
                       return (
                         <div key={client.id} className="rounded-3xl border border-slate-200 p-4">
@@ -3061,6 +3162,22 @@ export default function App() {
                                 <span className="inline-flex items-center gap-2"><Phone className="h-4 w-4" />{client.phone || client.whatsapp || "Sem telefone"}</span>
                                 <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4" />{client.city || "Cidade não informada"}</span>
                               </div>
+                              {jobInfo.services.length ? (
+                                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                                  {jobInfo.services.map((name) => (
+                                    <button
+                                      key={name}
+                                      type="button"
+                                      title="Filtrar por este serviço"
+                                      onClick={() => setClientService(name)}
+                                      className={`rounded-full px-2.5 py-0.5 text-xs ${clientService === name ? "studio-primary text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}
+                                    >
+                                      {name}
+                                    </button>
+                                  ))}
+                                  {jobInfo.lastDate ? <span className="ml-1 text-xs text-stone-400">último em {formatDateBR(jobInfo.lastDate)}</span> : null}
+                                </div>
+                              ) : null}
                               {client.notes ? <p className="mt-3 text-sm text-slate-500">{client.notes}</p> : null}
                             </div>
 
