@@ -519,7 +519,9 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
           const extras = item.included_count > 0 ? Math.max(0, count - item.included_count) : 0;
           const printInfo = printTotals(item);
           const amountDue = extras * Number(item.extra_price || 0) + printInfo.cost;
-          const cover = Array.isArray(item.photos) && item.photos.length ? item.photos[Math.floor(item.photos.length / 3)] : null;
+          const photoList = Array.isArray(item.photos) ? item.photos : [];
+          const firstChosen = Array.isArray(item.selected) && item.selected.length ? photoList.find((photo) => photo.name === item.selected[0]) : null;
+          const cover = firstChosen || (photoList.length ? photoList[Math.floor(photoList.length / 3)] : null);
           const sent = item.status === "enviada";
           const expired = !sent && item.expires_at && item.expires_at < today;
           const [label, tone] = sent
@@ -533,8 +535,8 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   : ["Ainda não abriu", "bg-slate-100 text-slate-600"];
           return (
             <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="relative h-36 bg-[#1b1610]">
-                {cover ? <img src={`https://drive.google.com/thumbnail?id=${cover.id}&sz=w600`} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover opacity-80" /> : null}
+              <div className="relative h-48 bg-[#1b1610]">
+                {cover ? <img src={`https://drive.google.com/thumbnail?id=${cover.id}&sz=w800`} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%" }} onError={(event) => { if (!event.currentTarget.src.includes("lh3.")) event.currentTarget.src = `https://lh3.googleusercontent.com/d/${cover.id}=w800`; }} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
                 <span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
                 <div className="absolute bottom-3 left-4 right-4 text-white">

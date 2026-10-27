@@ -14,8 +14,7 @@ import {
   driveFolderId,
   formatDateBR,
   isDriveFolder,
-  makeDeliverySlug,
-} from "@/lib/delivery";
+  makeDeliverySlug, DEFAULT_COVER_FOCUS, coverFocusStyle, focusFromClick } from "@/lib/delivery";
 
 function addDays(days) {
   const date = new Date();
@@ -35,6 +34,7 @@ const EMPTY_FORM = {
   drive_url: "",
   cover_url: "",
   cover_path: "",
+  cover_focus: DEFAULT_COVER_FOCUS,
   message: "",
   pin: "",
   expires_at: "",
@@ -215,6 +215,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       drive_url: clean(form.drive_url),
       cover_url: form.cover_url || null,
       cover_path: form.cover_path || null,
+      cover_focus: form.cover_focus || DEFAULT_COVER_FOCUS,
       message: clean(form.message) || null,
       pin: clean(form.pin) || null,
       expires_at: form.expires_at || null,
@@ -433,7 +434,19 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 <div className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50">
                   {form.cover_url ? (
                     <>
-                      <img src={form.cover_url} alt="Capa" className="h-full w-full object-cover" />
+                      <img
+                        src={form.cover_url}
+                        alt="Capa — clique no rosto ou no assunto principal"
+                        title="Clique no rosto ou no assunto principal para centralizar"
+                        className="h-full w-full cursor-crosshair object-cover"
+                        style={coverFocusStyle(form.cover_focus)}
+                        onClick={(event) => setForm({ ...form, cover_focus: focusFromClick(event) })}
+                      />
+                      <span
+                        className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_2px_rgba(0,0,0,0.35)]"
+                        style={{ left: (form.cover_focus || DEFAULT_COVER_FOCUS).split(" ")[0], top: (form.cover_focus || DEFAULT_COVER_FOCUS).split(" ")[1] }}
+                      />
+                      <span className="pointer-events-none absolute inset-x-2 bottom-2 rounded-lg bg-black/60 px-2 py-1 text-center text-[11px] text-white">Clique no rosto para centralizar</span>
                       <button type="button" title="Remover capa" className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white" onClick={() => setForm({ ...form, cover_url: "", cover_path: "" })}><X className="h-3.5 w-3.5" /></button>
                     </>
                   ) : (
@@ -490,8 +503,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
           const [label, tone] = statusOf(item);
           return (
             <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="relative h-40 bg-[#1b1610]">
-                {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
+              <div className="relative h-48 bg-[#1b1610]">
+                {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" style={coverFocusStyle(item.cover_focus)} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
                 <div className="absolute bottom-3 left-4 right-4 text-white">
