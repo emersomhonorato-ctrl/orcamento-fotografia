@@ -74,6 +74,7 @@ import {
 import { fetchRemoteVersion, loadAppState, saveAppState } from "@/lib/appState";
 import { buildContractText } from "@/utils/contractText";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
+import { SESSION_KIND_LABEL, getSessionPlan } from "@/lib/sessions";
 import { BUDGET_PUBLIC_BASE, buildBudgetSnapshot } from "@/lib/budgetShare";
 import { makeDeliverySlug } from "@/lib/delivery";
 import { supabase } from "@/supabase";
@@ -1341,6 +1342,41 @@ export default function App() {
     });
   }
 
+  // Agenda o pré-wedding / book de 15 anos / sessão mensal ligado ao contrato
+  function openSessionModal(parent, plan) {
+    const siblings = appState.events.filter((item) => item.parentEventId === parent.id && item.status !== "Cancelado");
+    const number = siblings.length + 1;
+    setForm({
+      ...defaultForm,
+      recordType: "evento",
+      clientId: parent.clientId || "",
+      clientName: parent.clientName || "",
+      clientCpf: parent.clientCpf || "",
+      clientAddress: parent.clientAddress || "",
+      email: parent.email || "",
+      phone: parent.phone || "",
+      whatsapp: parent.whatsapp || "",
+      eventType: plan.multiple ? `${plan.label} ${number}` : plan.label,
+      eventDate: "",
+      startTime: "",
+      endTime: "",
+      location: "",
+      amount: "",
+      amountPaid: "",
+      items: [],
+      status: "Confirmado",
+      paymentStatus: "Pago",
+      parentEventId: parent.id,
+      sessionKind: plan.kind,
+      sessionNumber: number,
+      sessionTheme: "",
+      notes: `Incluído no contrato: ${parent.eventType || "trabalho"}${parent.eventDate ? ` (${formatDateBR(parent.eventDate)})` : ""}.`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setIsEventModalOpen(true);
+  }
+
   function editEvent(record) {
     setForm({
       ...defaultForm,
@@ -1984,6 +2020,53 @@ export default function App() {
     setSyncMessage("Faça login novamente para acessar o sistema.");
   }
 
+  function renderSessionsBlock(record) {
+    const plan = getSessionPlan(record);
+    if (!plan) return null;
+    const sessions = appState.events
+      .filter((item) => item.parentEventId === record.id && item.status !== "Cancelado")
+      .sort((a, b) => String(a.eventDate || "9999").localeCompare(String(b.eventDate || "9999")));
+    const canAdd = plan.multiple || sessions.length === 0;
+    return (
+      <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Camera className="h-4 w-4 text-stone-500" />
+          <p className="text-sm font-semibold text-stone-900">
+            {plan.kind === "mensal" ? `Sessões mensais${sessions.length ? ` (${sessions.length})` : ""}` : plan.label}
+          </p>
+          <div className="flex-1" />
+          {canAdd ? (
+            <button type="button" onClick={() => openSessionModal(record, plan)} className="studio-primary inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white">
+              <Plus className="h-4 w-4" />
+              {plan.action}
+            </button>
+          ) : null}
+        </div>
+        {sessions.length ? (
+          <ul className="mt-3 divide-y divide-stone-100">
+            {sessions.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                <span className="w-24 shrink-0 tabular-nums text-stone-900">{item.eventDate ? formatDateBR(item.eventDate) : "Sem data"}</span>
+                <span className="text-stone-500">{item.startTime || ""}</span>
+                <span className="min-w-0 flex-1 truncate text-stone-700">
+                  {item.eventType}
+                  {item.sessionTheme ? <span className="text-stone-500"> — {item.sessionTheme}</span> : null}
+                </span>
+                <button type="button" onClick={() => editEvent(item)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100">
+                  <Pencil className="h-3.5 w-3.5" />Editar
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-stone-500">
+            {plan.kind === "mensal" ? "Nenhuma sessão agendada ainda. Agende a do mês e escolha o tema." : `Ainda sem data. Agende o ${plan.label.toLowerCase()} incluído no contrato.`}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   function renderEventCard(record) {
     return (
       <div key={record.id} className="overflow-hidden rounded-[30px] border border-rose-100/80 bg-gradient-to-r from-white via-[#fffafb] to-[#fff7f8] p-5 shadow-[0_16px_38px_rgba(99,32,67,0.08)]">
@@ -1997,7 +2080,19 @@ export default function App() {
               <StatusBadge value={record.paymentStatus} />
             </div>
             <h3 className="mt-3 text-xl font-semibold text-slate-900">{record.clientName}</h3>
-            <p className="mt-1 text-sm text-slate-500">{record.eventType}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {record.eventType}
+              {record.sessionTheme ? <span className="text-stone-700"> — tema: {record.sessionTheme}</span> : null}
+            </p>
+            {record.parentEventId ? (() => {
+              const parent = appState.events.find((item) => item.id === record.parentEventId);
+              return (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-600">
+                  <Camera className="h-3.5 w-3.5" />
+                  {SESSION_KIND_LABEL[record.sessionKind] || "Sessão"} do contrato {parent ? `${parent.eventType}${parent.eventDate ? ` • ${formatDateBR(parent.eventDate)}` : ""}` : "(contrato removido)"}
+                </p>
+              );
+            })() : null}
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-[22px] border border-rose-100/80 bg-white/90 px-4 py-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-400">Horário</p>
@@ -2016,6 +2111,7 @@ export default function App() {
                 <p className="mt-2 text-sm font-medium text-slate-800">{formatCurrency(record.amountPaid || 0)}</p>
               </div>
             </div>
+            {renderSessionsBlock(record)}
           </div>
 
           <div className="flex flex-wrap gap-2 xl:max-w-[280px] xl:justify-end">
