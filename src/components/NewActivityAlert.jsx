@@ -42,9 +42,10 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   const [bookings, setBookings] = useState([]);
   const [campaignTitle, setCampaignTitle] = useState("");
   const [shares, setShares] = useState([]);
+  const [selections, setSelections] = useState([]);
 
   const poll = useCallback(async () => {
-    const [requestRes, bookingRes, campaignRes, shareRes] = await Promise.all([
+    const [requestRes, bookingRes, campaignRes, shareRes, selectionRes] = await Promise.all([
       supabase
         .from("budget_requests")
         .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found")
@@ -57,7 +58,9 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
         .select("id, slug, event_id, status, views, last_viewed_at, responded_at, approved_name, approved_cpf, response_note, created_at, expires_at, snapshot->>clientName, snapshot->>eventType")
         .order("created_at", { ascending: false })
         .limit(1000),
+      supabase.from("photo_selections").select("id, client_name, title, submitted_at, selected").not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(50),
     ]);
+    if (!selectionRes.error && selectionRes.data) setSelections(selectionRes.data);
     if (!shareRes.error && shareRes.data) {
       setShares(shareRes.data);
       onSharesData?.(shareRes.data);
@@ -89,7 +92,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   const newRequests = requests.filter((item) => item.created_at > seenAt);
   const newBookings = bookings.filter((item) => item.created_at > seenAt && item.status !== "cancelado");
   const newResponses = shares.filter((item) => item.responded_at && item.responded_at > seenAt);
-  const total = newRequests.length + newBookings.length + newResponses.length;
+  const newSelections = selections.filter((item) => item.submitted_at && item.submitted_at > seenAt);
+  const total = newRequests.length + newBookings.length + newResponses.length + newSelections.length;
 
   useEffect(() => {
     const base = "Emerson Honorato Retratos";
@@ -126,6 +130,13 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       title: item.clientName || item.approved_name || "Cliente",
       detail: `${item.eventType || "Orçamento"} • ${item.status === "aprovado" ? "aprovou pelo link e já virou agendamento ✅" : `recusou${item.response_note ? `: ${item.response_note}` : ""}`}`,
     })),
+    ...newSelections.map((item) => ({
+      id: `p-${item.id}`,
+      kind: "selection",
+      createdAt: item.submitted_at,
+      title: item.client_name || "Cliente",
+      detail: `${item.title} • escolheu ${Array.isArray(item.selected) ? item.selected.length : 0} fotos — baixe o arquivo do Lightroom na aba Seleção`,
+    })),
   ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
@@ -140,6 +151,7 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
             newRequests.length ? `${newRequests.length} pedido${newRequests.length > 1 ? "s" : ""} de orçamento` : "",
             newBookings.length ? `${newBookings.length} agendamento${newBookings.length > 1 ? "s" : ""} novo${newBookings.length > 1 ? "s" : ""}` : "",
             newResponses.length ? `${newResponses.length} resposta${newResponses.length > 1 ? "s" : ""} de orçamento` : "",
+            newSelections.length ? `${newSelections.length} escolha${newSelections.length > 1 ? "s" : ""} de fotos` : "",
           ].filter(Boolean).join(" e ")}
         </p>
         {newRequests.length ? (
@@ -159,8 +171,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       <ul className="divide-y divide-amber-100/70">
         {items.slice(0, 5).map((item) => (
           <li key={item.id} className="flex items-center gap-3 px-5 py-2 text-sm">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : item.kind === "declined" ? "bg-slate-100 text-slate-700" : item.kind === "approved" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-              {item.kind === "request" ? "Pedido" : item.kind === "approved" ? "Aprovado" : item.kind === "declined" ? "Recusado" : "Agendamento"}
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.kind === "request" ? "bg-sky-100 text-sky-800" : item.kind === "declined" ? "bg-slate-100 text-slate-700" : item.kind === "approved" ? "bg-amber-100 text-amber-800" : item.kind === "selection" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"}`}>
+              {item.kind === "request" ? "Pedido" : item.kind === "approved" ? "Aprovado" : item.kind === "declined" ? "Recusado" : item.kind === "selection" ? "Seleção" : "Agendamento"}
             </span>
             <span className="font-medium text-slate-900">{item.title}</span>
             <span className="hidden truncate text-slate-500 sm:inline">{item.detail}</span>

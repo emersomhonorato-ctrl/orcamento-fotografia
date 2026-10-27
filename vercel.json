@@ -47,6 +47,14 @@
     {
       "source": "/orcamento/:codigo/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/selecao/:codigo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/selecao/:codigo/",
+      "destination": "/index.html"
     }
   ],
   "headers": [
