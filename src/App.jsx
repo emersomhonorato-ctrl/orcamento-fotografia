@@ -2278,9 +2278,6 @@ export default function App() {
                     {isSubmittingLogin ? "Entrando..." : "Entrar"}
                   </Button>
                 </form>
-                <p className="text-sm text-slate-500">
-                  Para ativar o acesso por usuário e senha, defina `VITE_AUTH_ENABLED=true` e crie o usuário administrador no Supabase em `Authentication` &gt; `Users`.
-                </p>
               </CardContent>
             </Card>
           </div>
