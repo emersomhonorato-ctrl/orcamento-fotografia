@@ -77,6 +77,7 @@ import { buildContractText } from "@/utils/contractText";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { SESSION_KIND_LABEL, getSessionPlan } from "@/lib/sessions";
 import { PHOTOGRAPHER_OPTIONS, matchesPhotographer, photographerLabel } from "@/lib/team";
+import { findDuplicateGroups, mergeClientData, recordBelongsTo } from "@/lib/duplicates";
 import { BUDGET_PUBLIC_BASE, buildBudgetSnapshot } from "@/lib/budgetShare";
 import { makeDeliverySlug } from "@/lib/delivery";
 import { supabase } from "@/supabase";
@@ -214,6 +215,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [photographerFilter, setPhotographerFilter] = useState("todos");
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [duplicateKeep, setDuplicateKeep] = useState({});
   const [clientService, setClientService] = useState("Todos");
   const [clientSort, setClientSort] = useState("az");
   const [serviceSearch, setServiceSearch] = useState("");
@@ -713,6 +716,41 @@ export default function App() {
         };
       });
   }, [clients, records]);
+
+  // Clientes em duplicidade
+  const duplicateGroups = useMemo(
+    () => findDuplicateGroups(uniqueClientsFromEvents, settings.duplicateIgnored || []),
+    [uniqueClientsFromEvents, settings.duplicateIgnored],
+  );
+
+  function ignoreDuplicateGroup(group) {
+    updateAppState({ settings: { ...settings, duplicateIgnored: [...(settings.duplicateIgnored || []), group.id].slice(-500) } });
+  }
+
+  function mergeDuplicateGroup(group) {
+    const keepId = duplicateKeep[group.id] || (group.clients.find((client) => client.isRegistered) || group.clients[0]).id;
+    const keep = group.clients.find((client) => client.id === keepId) || group.clients[0];
+    const others = group.clients.filter((client) => client.id !== keep.id);
+    if (!window.confirm(`Juntar ${group.clients.length} cadastros em "${keep.name}"? Os trabalhos dos outros passam para esse cliente e os cadastros repetidos são apagados.`)) return;
+    const merged = normalizeClient({ ...mergeClientData(keep, others), id: keep.isRegistered ? keep.id : crypto.randomUUID() });
+    const groupIds = new Set(group.clients.map((client) => client.id));
+    const nextClients = appState.clients.filter((client) => !groupIds.has(client.id));
+    nextClients.push(merged);
+    const nextEvents = appState.events.map((record) => {
+      if (!group.clients.some((client) => recordBelongsTo(record, client))) return record;
+      return {
+        ...record,
+        clientId: merged.id,
+        clientName: merged.name || record.clientName,
+        email: record.email || merged.email,
+        phone: record.phone || merged.phone,
+        whatsapp: record.whatsapp || merged.whatsapp,
+        clientCpf: record.clientCpf || merged.cpf,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateAppState({ clients: nextClients, events: nextEvents });
+  }
 
   // Serviços: busca, categoria e ordem
   const serviceCategoryOptions = useMemo(
@@ -3129,6 +3167,59 @@ export default function App() {
                 <Button onClick={openNewClientModal} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo cliente</Button>
               </CardHeader>
               <CardContent>
+                {duplicateGroups.length ? (
+                  <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="flex-1 text-sm text-amber-900">
+                        <strong>{duplicateGroups.length} possíve{duplicateGroups.length === 1 ? "l cliente duplicado" : "is clientes duplicados"}</strong>
+                        {" "}— cadastros com o mesmo telefone, e-mail, CPF ou nome.
+                      </p>
+                      <button type="button" className="h-9 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 hover:bg-amber-100" onClick={() => setShowDuplicates((value) => !value)}>
+                        {showDuplicates ? "Esconder" : "Revisar"}
+                      </button>
+                    </div>
+                    {showDuplicates ? (
+                      <div className="mt-3 space-y-3">
+                        {duplicateGroups.map((group) => {
+                          const keepId = duplicateKeep[group.id] || (group.clients.find((client) => client.isRegistered) || group.clients[0]).id;
+                          return (
+                            <div key={group.id} className="rounded-xl border border-stone-200 bg-white p-3">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {group.reasons.map((reason) => (
+                                  <span key={reason} className={`rounded-full px-2 py-0.5 text-xs font-medium ${reason === "nome parecido" ? "bg-stone-100 text-stone-600" : "bg-amber-100 text-amber-900"}`}>{reason}</span>
+                                ))}
+                                {!group.strong ? <span className="text-xs text-stone-500">confira antes de juntar</span> : null}
+                              </div>
+                              <ul className="mt-2 divide-y divide-stone-100">
+                                {group.clients.map((client) => {
+                                  const info = clientJobs.get(client.id) || { count: 0, services: [] };
+                                  return (
+                                    <li key={client.id}>
+                                      <label className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm">
+                                        <input type="radio" name={`keep-${group.id}`} checked={keepId === client.id} onChange={() => setDuplicateKeep((current) => ({ ...current, [group.id]: client.id }))} />
+                                        <span className="font-medium text-stone-900">{client.name || "Sem nome"}</span>
+                                        <span className="text-stone-500">{client.phone || client.whatsapp || "sem telefone"}</span>
+                                        <span className="text-stone-500">{client.email || "sem e-mail"}</span>
+                                        {client.cpf ? <span className="text-stone-500">CPF {client.cpf}</span> : null}
+                                        <span className="text-xs text-stone-400">{info.count} trabalho{info.count === 1 ? "" : "s"}{client.isRegistered ? "" : " • vindo dos eventos"}</span>
+                                      </label>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-stone-500">Marque o cadastro que fica. Os dados que faltarem nele são completados pelos outros.</span>
+                                <div className="flex-1" />
+                                <button type="button" className="h-9 rounded-lg px-3 text-sm text-stone-600 hover:bg-stone-100" onClick={() => ignoreDuplicateGroup(group)}>Não é a mesma pessoa</button>
+                                <button type="button" className="studio-primary h-9 rounded-lg px-3 text-sm font-medium text-white" onClick={() => mergeDuplicateGroup(group)}>Juntar cadastros</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {uniqueClientsFromEvents.length ? (
                   <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center">
                     <div className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-stone-200 bg-white px-4">
