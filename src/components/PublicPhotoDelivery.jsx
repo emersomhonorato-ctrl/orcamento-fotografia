@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/supabase";
-import { STUDIO_WHATSAPP, driveEmbedUrl, formatDateBR } from "@/lib/delivery";
+import { STUDIO_WHATSAPP, driveEmbedUrl, formatDateBR, coverFocusStyle } from "@/lib/delivery";
 
 const LOGO = "/Emerson%20Honorato%20Retratos%20Logo.png";
 const SERIF = { fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif" };
@@ -156,7 +156,7 @@ export default function PublicPhotoDelivery({ slug }) {
       {/* Capa */}
       <header className="relative flex min-h-[78vh] items-end overflow-hidden bg-[#0f0d0b] text-white sm:min-h-[86vh]">
         {data.cover_url ? (
-          <img src={data.cover_url} alt={data.title} fetchpriority="high" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={data.cover_url} alt={data.title} fetchpriority="high" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" style={coverFocusStyle(data.cover_focus)} />
         ) : (
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#3a2f22,#0f0d0b_70%)]" />
         )}

@@ -344,7 +344,7 @@
 }
 
 /* Degradês decorativos viram fundo liso (blocos escuros com texto branco ficam na cor da marca) */
-.studio-shell [class*="bg-gradient-to"]:not(.text-white) {
+.studio-shell [class*="bg-gradient-to"]:not(.text-white):not(.absolute):not([class*="from-black"]) {
   background-image: none !important;
   background-color: #ffffff;
 }

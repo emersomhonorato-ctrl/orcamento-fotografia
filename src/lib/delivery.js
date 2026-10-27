@@ -75,3 +75,16 @@ export function compressImage(file, maxSize = 1800, quality = 0.82) {
     img.src = url;
   });
 }
+
+// Ponto da foto que fica sempre visível no recorte (ex.: o rosto). Formato "50% 35%".
+export const DEFAULT_COVER_FOCUS = "50% 35%";
+export function coverFocusStyle(focus) {
+  const value = /^\d{1,3}% \d{1,3}%$/.test(String(focus || "")) ? focus : DEFAULT_COVER_FOCUS;
+  return { objectPosition: value };
+}
+export function focusFromClick(event) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = Math.round(Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)));
+  const y = Math.round(Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100)));
+  return `${x}% ${y}%`;
+}
