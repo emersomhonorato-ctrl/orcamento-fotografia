@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { addPdfImageFit } from "./pdfDocuments";
+import { photographerLabel } from "../lib/team";
 
 const W = 297;
 const H = 210;
@@ -80,11 +81,11 @@ function footer(doc, page, total) {
   doc.text(`Página ${page} de ${total}`, W - M, H - 5, { align: "right" });
 }
 
-export function buildMonthCalendarPdf({ events, year, month, settings = {}, includeValues = false, includePhones = false }) {
+export function buildMonthCalendarPdf({ events, year, month, settings = {}, includeValues = false, includePhones = false, forWho = "" }) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const list = eventsOfMonth(events, year, month);
   const title = monthTitle(year, month);
-  const subtitle = `${list.length} compromisso${list.length === 1 ? "" : "s"}`;
+  const subtitle = `${forWho ? `${forWho} • ` : ""}${list.length} compromisso${list.length === 1 ? "" : "s"}`;
 
   // ---------- Página 1: calendário ----------
   header(doc, settings, `Agenda — ${title}`, subtitle);
@@ -141,7 +142,7 @@ export function buildMonthCalendarPdf({ events, year, month, settings = {}, incl
     }
 
     const items = byDay.get(iso) || [];
-    const chipH = 6.6;
+    const chipH = 8.6;
     const room = Math.max(0, Math.floor((rowH - 8.5) / (chipH + 0.8)));
     const shown = items.length > room ? Math.max(0, room - 1) : items.length;
     items.slice(0, shown).forEach((event, index) => {
@@ -160,7 +161,12 @@ export function buildMonthCalendarPdf({ events, year, month, settings = {}, incl
       doc.setFontSize(5.8);
       doc.setTextColor(...INK);
       const detail = [event.eventType, event.sessionTheme].filter(Boolean).join(" — ");
-      doc.text(fit(doc, detail, colW - 5), x + 2.6, cy + 5.4);
+      doc.text(fit(doc, detail, colW - 5), x + 2.6, cy + 5.2);
+      const who = photographerLabel(event.photographer);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(5.6);
+      doc.setTextColor(...MUTED);
+      doc.text(fit(doc, who ? `Foto: ${who}` : "Foto: a definir", colW - 5), x + 2.6, cy + 7.6);
     });
     if (items.length > shown) {
       doc.setFont("helvetica", "bold");
@@ -175,7 +181,8 @@ export function buildMonthCalendarPdf({ events, year, month, settings = {}, incl
     { key: "date", label: "Data", w: 24 },
     { key: "time", label: "Horário", w: 22 },
     { key: "client", label: "Cliente", w: 52 },
-    { key: "type", label: "Trabalho", w: 58 },
+    { key: "type", label: "Trabalho", w: 52 },
+    { key: "who", label: "Fotógrafo", w: 34 },
     { key: "place", label: "Local", w: 0 },
   ];
   if (includePhones) columns.push({ key: "phone", label: "WhatsApp", w: 32 });
@@ -185,7 +192,7 @@ export function buildMonthCalendarPdf({ events, year, month, settings = {}, incl
 
   const startList = () => {
     doc.addPage("a4", "landscape");
-    header(doc, settings, `Agenda — ${title}`, "Lista dos compromissos");
+    header(doc, settings, `Agenda — ${title}`, forWho ? `Lista dos compromissos • ${forWho}` : "Lista dos compromissos");
     let cx = M;
     doc.setFillColor(...SOFT);
     doc.rect(M, 22, gridW, 7, "F");
@@ -223,6 +230,7 @@ export function buildMonthCalendarPdf({ events, year, month, settings = {}, incl
       client: event.clientName || "",
       type: [event.eventType, event.sessionTheme].filter(Boolean).join(" — "),
       place: event.location || "A combinar",
+      who: photographerLabel(event.photographer) || "A definir",
       phone: event.whatsapp || event.phone || "",
       value: brl(event.computedAmount ?? event.amount),
       paid: brl(event.amountPaid),

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Share2 } from "lucide-react";
 import { buildMonthCalendarPdf, eventsOfMonth, monthTitle } from "@/utils/monthCalendarPdf";
+import { matchesPhotographer, photographerLabel } from "@/lib/team";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const CHIP = [
@@ -26,9 +27,11 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
   const [includeValues, setIncludeValues] = useState(false);
   const [includePhones, setIncludePhones] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [who, setWho] = useState("todos");
   const { year, month } = cursor;
 
-  const list = useMemo(() => eventsOfMonth(events, year, month), [events, year, month]);
+  const shownEvents = useMemo(() => events.filter((event) => matchesPhotographer(event.photographer, who)), [events, who]);
+  const list = useMemo(() => eventsOfMonth(shownEvents, year, month), [shownEvents, year, month]);
   const byDay = useMemo(() => {
     const map = new Map();
     list.forEach((event) => {
@@ -51,7 +54,8 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
   }
 
   function makePdf() {
-    return buildMonthCalendarPdf({ events, year, month, settings, includeValues, includePhones });
+    const forWho = who === "emerson" ? "Emerson Honorato" : who === "isabel" ? "Isabel Honorato" : who === "sem" ? "Fotógrafo a definir" : "";
+    return buildMonthCalendarPdf({ events: shownEvents, year, month, settings, includeValues, includePhones, forWho });
   }
 
   function download() {
@@ -96,6 +100,12 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
         <button type="button" onClick={() => setCursor({ year: now.getFullYear(), month: now.getMonth() })} className="h-9 rounded-lg px-3 text-sm text-stone-600 hover:bg-stone-100">Hoje</button>
         <span className="text-sm text-stone-500">{list.length} compromisso{list.length === 1 ? "" : "s"}</span>
         <div className="flex-1" />
+        <select aria-label="Fotógrafo" value={who} onChange={(e) => setWho(e.target.value)} className="h-9 rounded-lg border border-stone-200 bg-white px-2 text-sm text-stone-700">
+          <option value="todos">Todos os fotógrafos</option>
+          <option value="emerson">Só Emerson</option>
+          <option value="isabel">Só Isabel</option>
+          <option value="sem">Fotógrafo a definir</option>
+        </select>
         <label className="flex items-center gap-1.5 text-sm text-stone-600"><input type="checkbox" checked={includePhones} onChange={(e) => setIncludePhones(e.target.checked)} />WhatsApp</label>
         <label className="flex items-center gap-1.5 text-sm text-stone-600"><input type="checkbox" checked={includeValues} onChange={(e) => setIncludeValues(e.target.checked)} />Valores</label>
         <button type="button" disabled={busy} onClick={download} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60">
@@ -130,11 +140,12 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
                           key={event.id}
                           type="button"
                           onClick={() => onOpenEvent?.(event)}
-                          title={[event.startTime, event.clientName, event.eventType, event.location].filter(Boolean).join(" • ")}
+                          title={[event.startTime, event.clientName, event.eventType, event.location, photographerLabel(event.photographer)].filter(Boolean).join(" • ")}
                           className={`block w-full truncate rounded-md border-l-2 px-1.5 py-1 text-left text-[11px] leading-tight ${chipClass(event.eventType)}`}
                         >
                           <span className="font-semibold">{event.startTime ? `${event.startTime} ` : ""}{event.clientName}</span>
                           <span className="block truncate opacity-80">{[event.eventType, event.sessionTheme].filter(Boolean).join(" — ")}</span>
+                          {event.photographer ? <span className="block truncate text-[10px] font-medium opacity-90">📷 {photographerLabel(event.photographer)}</span> : null}
                         </button>
                       ))}
                       {items.length > 4 ? <p className="px-1 text-[11px] text-stone-500">+{items.length - 4} mais</p> : null}

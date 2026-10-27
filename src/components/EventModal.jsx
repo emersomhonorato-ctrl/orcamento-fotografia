@@ -1,3 +1,4 @@
+import { PHOTOGRAPHER_OPTIONS } from "@/lib/team";
 import { MONTHLY_THEME_IDEAS } from "@/lib/sessions";
 import { Save, X } from "lucide-react";
 import BudgetItemsEditor from "@/components/BudgetItemsEditor";
@@ -237,6 +238,26 @@ export default function EventModal({
                   onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))}
                   className="rounded-2xl"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Quem vai fotografar</Label>
+                <div className="flex gap-1 rounded-2xl border border-stone-200 bg-white p-1" role="radiogroup" aria-label="Quem vai fotografar">
+                  {PHOTOGRAPHER_OPTIONS.map((option) => {
+                    const active = form.photographer === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setForm((current) => ({ ...current, photographer: active ? "" : option.value }))}
+                        className={`h-8 flex-1 rounded-xl text-sm font-medium transition-colors ${active ? "studio-primary text-white" : "text-stone-600 hover:bg-stone-100"}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Local</Label>
