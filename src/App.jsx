@@ -51,6 +51,7 @@ import SafeSection from "@/components/SafeSection";
 import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
+import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
   EVENT_STATUS_OPTIONS,
@@ -2798,6 +2799,9 @@ export default function App() {
 
           <TabsContent value="agenda" className="mt-6">
             <div className="space-y-6">
+              <SafeSection name="Calendário do mês">
+                <MonthAgendaCalendar events={onlyEvents} settings={pdfSettings} onOpenEvent={editEvent} />
+              </SafeSection>
               <div className="overflow-hidden rounded-[32px] border border-rose-200/70 bg-gradient-to-r from-[#fff7f8] via-white to-[#fff3f6] p-5 shadow-[0_22px_60px_rgba(99,32,67,0.10)]">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
