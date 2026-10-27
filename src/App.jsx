@@ -213,6 +213,9 @@ export default function App() {
   const [clientSearch, setClientSearch] = useState("");
   const [clientService, setClientService] = useState("Todos");
   const [clientSort, setClientSort] = useState("az");
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("Todas");
+  const [serviceSort, setServiceSort] = useState("az");
   const [selectedDate, setSelectedDate] = useState(getTodayLocalISO());
   const [selectedMonth, setSelectedMonth] = useState(getTodayLocalISO().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -707,6 +710,26 @@ export default function App() {
         };
       });
   }, [clients, records]);
+
+  // Serviços: busca, categoria e ordem
+  const serviceCategoryOptions = useMemo(
+    () => [...new Set(services.map((service) => String(service.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [services],
+  );
+
+  const filteredServices = useMemo(() => {
+    const strip = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const term = strip(serviceSearch.trim());
+    const list = services.filter((service) => {
+      if (serviceCategory !== "Todas" && String(service.category || "").trim() !== serviceCategory) return false;
+      if (!term) return true;
+      return strip([service.name, service.category, service.itemDescription, service.workDescription, service.photoSize].join(" ")).includes(term);
+    });
+    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" });
+    if (serviceSort === "preco-menor") return list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0) || byName(a, b));
+    if (serviceSort === "preco-maior") return list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0) || byName(a, b));
+    return list.sort(byName);
+  }, [services, serviceSearch, serviceCategory, serviceSort]);
 
   // Clientes: busca, filtro por serviço e ordem alfabética
   const clientJobs = useMemo(() => {
@@ -3221,7 +3244,53 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {services.map((service) => (
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                      <div className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-stone-200 bg-white px-4">
+                        <Search className="h-4 w-4 text-stone-400" />
+                        <Input
+                          value={serviceSearch}
+                          onChange={(event) => setServiceSearch(event.target.value)}
+                          placeholder="Buscar serviço pelo nome ou descrição"
+                          className="border-0 p-0 shadow-none focus-visible:ring-0"
+                        />
+                        {serviceSearch ? (
+                          <button type="button" aria-label="Limpar busca" className="rounded-full p-1 text-stone-400 hover:bg-stone-100" onClick={() => setServiceSearch("")}><X className="h-4 w-4" /></button>
+                        ) : null}
+                      </div>
+                      {serviceCategoryOptions.length ? (
+                        <Select value={serviceCategory} onValueChange={setServiceCategory}>
+                          <SelectTrigger className="h-11 w-full rounded-xl border-stone-200 bg-white md:w-[220px]">
+                            <SelectValue placeholder="Categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Todas">Todas as categorias</SelectItem>
+                            {serviceCategoryOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                      <Select value={serviceSort} onValueChange={setServiceSort}>
+                        <SelectTrigger className="h-11 w-full rounded-xl border-stone-200 bg-white md:w-[200px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="az">Nome de A a Z</SelectItem>
+                          <SelectItem value="preco-menor">Menor preço</SelectItem>
+                          <SelectItem value="preco-maior">Maior preço</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-sm text-stone-500">
+                      {filteredServices.length === services.length
+                        ? `${services.length} serviço${services.length === 1 ? "" : "s"}`
+                        : `${filteredServices.length} de ${services.length} serviços`}
+                    </p>
+                    {filteredServices.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
+                        Nenhum serviço encontrado.{" "}
+                        <button type="button" className="font-medium text-stone-800 underline" onClick={() => { setServiceSearch(""); setServiceCategory("Todas"); }}>Limpar filtros</button>
+                      </div>
+                    ) : null}
+                    {filteredServices.map((service) => (
                       <div key={service.id} className="rounded-2xl border border-slate-200 p-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0 flex-1">
