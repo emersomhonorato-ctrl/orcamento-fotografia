@@ -423,7 +423,7 @@ export default function PublicPhotoSelection({ slug }) {
               <div className="mt-3 rounded-2xl bg-[#f6f1ea] p-3 text-sm text-[#4a4036]">
                 <p className="font-semibold">🖨️ Revelação: {printUnits} foto{printUnits > 1 ? "s" : ""}</p>
                 <p className="mt-0.5">{printsBySize.map((row) => `${row.qty}× ${row.size}`).join(" • ")}</p>
-                <p className="mt-0.5">{printCost > 0 ? <>Valor: <strong>{brl(printCost)}</strong>{printsIncluded ? ` (já descontadas ${printsIncluded} inclusas)` : ""}</> : "Inclusas no pacote 💛"}</p>
+                <p className="mt-0.5">{printCost > 0 ? <>Valor: <strong>{brl(printCost)}</strong>{printsIncluded ? ` (já ${printsIncluded > 1 ? `descontadas ${printsIncluded} inclusas` : "descontada 1 inclusa"})` : ""}</> : "Inclusas no pacote 💛"}</p>
               </div>
             ) : null}
             {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — combino o pagamento com você depois.</p> : null}
