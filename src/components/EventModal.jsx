@@ -1,4 +1,4 @@
-import { PHOTOGRAPHER_OPTIONS } from "@/lib/team";
+import { PHOTOGRAPHER_OPTIONS, busyOnDate } from "@/lib/team";
 import { MONTHLY_THEME_IDEAS } from "@/lib/sessions";
 import { Save, X } from "lucide-react";
 import BudgetItemsEditor from "@/components/BudgetItemsEditor";
@@ -32,7 +32,17 @@ export default function EventModal({
   onDuplicateItem,
   onSave,
   onCancel,
+  allEvents = [],
 }) {
+  const busy = form.recordType === "orcamento" ? { emerson: [], isabel: [] } : busyOnDate(allEvents, form.eventDate, form.id);
+  const describe = (list) => list.map((event) => [event.startTime, event.clientName, event.eventType].filter(Boolean).join(" ")).join("; ");
+  const wantsEmerson = form.photographer === "emerson" || form.photographer === "ambos";
+  const wantsIsabel = form.photographer === "isabel" || form.photographer === "ambos";
+  const conflicts = [
+    wantsEmerson && busy.emerson.length ? `Emerson já tem trabalho nesse dia: ${describe(busy.emerson)}.` : "",
+    wantsIsabel && busy.isabel.length ? `Isabel já tem trabalho nesse dia: ${describe(busy.isabel)}.` : "",
+  ].filter(Boolean);
+  const dayFull = busy.emerson.length > 0 && busy.isabel.length > 0;
   const title = form.sessionKind
     ? form.id
       ? "Editar sessão"
@@ -258,7 +268,19 @@ export default function EventModal({
                     );
                   })}
                 </div>
+                {!form.photographer && (busy.emerson.length || busy.isabel.length) ? (
+                  <p className="text-xs text-stone-500">
+                    {dayFull ? "Os dois já têm trabalho nesse dia." : busy.emerson.length ? "Emerson já tem trabalho nesse dia — Isabel está livre." : "Isabel já tem trabalho nesse dia — Emerson está livre."}
+                  </p>
+                ) : null}
               </div>
+              {conflicts.length || (dayFull && !form.photographer) ? (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2">
+                  <p className="font-semibold">⚠️ Atenção: conflito na agenda</p>
+                  {conflicts.map((line) => <p key={line} className="mt-0.5">{line}</p>)}
+                  {dayFull ? <p className="mt-0.5">Com Emerson e Isabel ocupados, esse dia fica bloqueado nas agendas públicas (ensaios temáticos).</p> : null}
+                </div>
+              ) : null}
               <div className="space-y-2 md:col-span-2">
                 <Label>Local</Label>
                 <Input

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Share2 } from "lucide-react";
 import { buildMonthCalendarPdf, eventsOfMonth, monthTitle } from "@/utils/monthCalendarPdf";
-import { matchesPhotographer, photographerLabel } from "@/lib/team";
+import { fullDays, matchesPhotographer, photographerLabel } from "@/lib/team";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const CHIP = [
@@ -30,6 +30,7 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
   const [who, setWho] = useState("todos");
   const { year, month } = cursor;
 
+  const blocked = useMemo(() => fullDays(events), [events]);
   const shownEvents = useMemo(() => events.filter((event) => matchesPhotographer(event.photographer, who)), [events, who]);
   const list = useMemo(() => eventsOfMonth(shownEvents, year, month), [shownEvents, year, month]);
   const byDay = useMemo(() => {
@@ -130,10 +131,13 @@ export default function MonthAgendaCalendar({ events = [], settings = {}, onOpen
             const iso = inMonth ? `${year}-${pad(month + 1)}-${pad(day)}` : "";
             const items = inMonth ? byDay.get(iso) || [] : [];
             return (
-              <div key={cell} className={`min-h-[112px] border-b border-r border-stone-100 p-1.5 ${inMonth ? "bg-white" : "bg-stone-50/70"} [&:nth-child(7n)]:border-r-0`}>
+              <div key={cell} className={`min-h-[112px] border-b border-r border-stone-100 p-1.5 ${inMonth ? (blocked.has(iso) ? "bg-stone-100" : "bg-white") : "bg-stone-50/70"} [&:nth-child(7n)]:border-r-0`}>
                 {inMonth ? (
                   <>
-                    <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs tabular-nums ${iso === todayIso ? "studio-primary font-semibold text-white" : "text-stone-700"}`}>{day}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs tabular-nums ${iso === todayIso ? "studio-primary font-semibold text-white" : "text-stone-700"}`}>{day}</span>
+                      {blocked.has(iso) ? <span className="rounded bg-stone-800 px-1.5 py-0.5 text-[10px] font-medium text-white" title="Emerson e Isabel já têm trabalho: dia bloqueado nas agendas públicas">Agenda cheia</span> : null}
+                    </div>
                     <div className="mt-1 space-y-1">
                       {items.slice(0, 4).map((event) => (
                         <button

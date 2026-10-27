@@ -52,6 +52,21 @@ export default function PublicChristmasBooking() {
   const [result, setResult] = useState(null);
   const [pixCopied, setPixCopied] = useState(false);
   const [cardEnabled, setCardEnabled] = useState(false);
+  const [blockedDays, setBlockedDays] = useState(() => new Set());
+
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      supabase.rpc("studio_blocked_dates", { p_from: new Date().toISOString().slice(0, 10) }).then(({ data, error }) => {
+        if (active && !error && Array.isArray(data)) setBlockedDays(new Set(data.map((row) => String(row.day || row).slice(0, 10))));
+      });
+    load();
+    const timer = setInterval(load, 120000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
   const [cardBusy, setCardBusy] = useState(false);
   const [cardError, setCardError] = useState("");
 
@@ -138,12 +153,16 @@ export default function PublicChristmasBooking() {
   const selectedPackage = packages.find((item) => item.name === packageName) || null;
   const days = useMemo(() => {
     const grouped = groupSlotsByDay(slots);
-    return Array.from(grouped.entries()).map(([key, daySlots]) => ({
-      key,
-      slots: daySlots,
-      free: daySlots.filter((slot) => slot.status === "livre").length,
-    }));
-  }, [slots]);
+    return Array.from(grouped.entries()).map(([key, daySlots]) => {
+      const isBlocked = blockedDays.has(key);
+      return {
+        key,
+        blocked: isBlocked,
+        slots: isBlocked ? daySlots.map((slot) => ({ ...slot, status: "bloqueado" })) : daySlots,
+        free: isBlocked ? 0 : daySlots.filter((slot) => slot.status === "livre").length,
+      };
+    });
+  }, [slots, blockedDays]);
   const selectedDay = days.find((day) => day.key === dayKey) || null;
   const selectedSlot = slots.find((slot) => slot.id === slotId) || null;
   const slotMinutes = Number(campaign?.slot_minutes || 30);
@@ -405,7 +424,7 @@ export default function PublicChristmasBooking() {
                       >
                         <span className="block text-[11px] uppercase tracking-wide opacity-80">{weekdayLabel(day.key, "short").replace(".", "")}</span>
                         <span className="block text-base font-semibold">{dayMonthLabel(day.key)}</span>
-                        <span className="block text-[10px] opacity-70">{day.free ? `${day.free} livre${day.free > 1 ? "s" : ""}` : "lotado"}</span>
+                        <span className="block text-[10px] opacity-70">{day.blocked ? "indisponível" : day.free ? `${day.free} livre${day.free > 1 ? "s" : ""}` : "lotado"}</span>
                       </button>
                     ))}
                   </div>
