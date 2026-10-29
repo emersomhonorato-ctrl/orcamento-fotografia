@@ -36,7 +36,12 @@ export function financeSituation(record, today = todayKey()) {
   const total = Number(record.computedAmount ?? record.amount ?? 0);
   const paid = Number(record.amountPaid || 0);
   const balance = Math.max(total - paid, 0);
-  if (total <= 0) return { key: "semvalor", label: "Sem valor", total, paid, balance };
+  if (total <= 0) {
+    // Trabalho sem custo (ex.: pré-wedding já pago no casamento) marcado como pago
+    const included = record.noCharge === true || (record.noCharge !== false && Boolean(record.sessionKind));
+    if (included) return { key: "incluso", label: record.sessionKind ? "Incluso no contrato" : "Pago · sem cobrança", total, paid, balance: 0 };
+    return { key: "semvalor", label: "Sem valor", total, paid, balance };
+  }
   if (balance <= 0.009) return { key: "pago", label: "Recebido", total, paid, balance: 0 };
   const past = record.eventDate && String(record.eventDate).slice(0, 10) < today;
   if (past || record.paymentStatus === "Atrasado") return { key: "atrasado", label: paid > 0 ? "Saldo em atraso" : "Em atraso", total, paid, balance };
@@ -49,6 +54,7 @@ const BADGE = {
   parcial: "bg-sky-50 text-sky-800 border-sky-200",
   pendente: "bg-amber-50 text-amber-800 border-amber-200",
   atrasado: "bg-rose-50 text-rose-800 border-rose-200",
+  incluso: "bg-emerald-50 text-emerald-800 border-emerald-200",
   semvalor: "bg-stone-100 text-stone-600 border-stone-200",
 };
 
@@ -111,7 +117,7 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
     const filtered = inPeriod.filter((record) => {
       if (view === "abertos" && !(record.fin.balance > 0 || record.fin.key === "semvalor")) return false;
       if (view === "atrasados" && record.fin.key !== "atrasado") return false;
-      if (view === "pagos" && record.fin.key !== "pago") return false;
+      if (view === "pagos" && record.fin.key !== "pago" && record.fin.key !== "incluso") return false;
       if (!text) return true;
       return [record.clientName, record.eventType, record.location, record.notes].some((value) => String(value || "").toLowerCase().includes(text));
     });
@@ -161,6 +167,17 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
     const history = historyOf(record);
     const payments = [...history, { id: crypto.randomUUID(), date: today, amount: record.fin.balance, method: record.receiptMethod || "Não informado", note: "Baixa total" }];
     applyPayments(record, payments);
+  }
+
+  function markNoCharge(record) {
+    const where = window.prompt(`Marcar ${record.clientName || "este trabalho"} como pago sem cobrança?\nSe quiser, escreva onde foi cobrado (ex.: "incluso no casamento"):`, record.noChargeNote || "Incluso no pacote");
+    if (where === null) return;
+    onUpdate(record.id, { noCharge: true, noChargeNote: where.trim(), paymentStatus: "Pago", receiptDate: record.receiptDate || today });
+  }
+
+  function undoNoCharge(record) {
+    if (!window.confirm("Voltar este trabalho para \"sem valor\" (a receber)?")) return;
+    onUpdate(record.id, { noCharge: false, paymentStatus: "Pendente" });
   }
 
   function removePayment(record, paymentId) {
@@ -286,6 +303,9 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
                   <p className="mt-0.5 text-sm text-stone-500">
                     {[record.eventDate ? dateBR(record.eventDate) : "Sem data", record.eventType, photographerLabel(record.photographer)].filter(Boolean).join(" · ")}
                   </p>
+                  {record.fin.key === "incluso" && record.noChargeNote ? (
+                    <p className="mt-0.5 text-xs text-emerald-700">{record.noChargeNote}</p>
+                  ) : null}
                   {record.fin.paid > 0 && record.receiptDate ? (
                     <p className="mt-0.5 text-xs text-stone-400">Último recebimento em {dateBR(record.receiptDate)}{record.receiptMethod ? ` · ${record.receiptMethod}` : ""}</p>
                   ) : null}
@@ -305,6 +325,14 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
                         <CheckCircle2 className="mr-1.5 h-4 w-4" />Já recebido
                       </Button>
                     </>
+                  ) : record.fin.key === "semvalor" ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => markNoCharge(record)} className="rounded-lg border-emerald-200 text-emerald-800 hover:bg-emerald-50">
+                      <CheckCircle2 className="mr-1.5 h-4 w-4" />Marcar como pago
+                    </Button>
+                  ) : record.fin.key === "incluso" ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => undoNoCharge(record)} className="rounded-lg border-stone-200">
+                      <Undo2 className="mr-1.5 h-4 w-4" />Desfazer
+                    </Button>
                   ) : (
                     <Button type="button" size="sm" variant="outline" onClick={() => openReceive(record)} className="rounded-lg border-stone-200">
                       Recebimentos
