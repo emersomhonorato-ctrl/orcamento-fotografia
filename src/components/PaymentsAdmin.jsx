@@ -301,7 +301,7 @@ export default function PaymentsAdmin({ records = [] }) {
         <Card className="rounded-[28px] border-slate-200 shadow-sm">
           <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
             <div className="space-y-1 sm:col-span-2">
-              <Label>Puxar dados da agenda/orçamento (opcional)</Label>
+              <Label>Trabalho da agenda (recomendado: quando o cliente pagar, a baixa entra sozinha no Financeiro)</Label>
               <select className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm" value={form.event_id} onChange={(e) => fillFromEvent(e.target.value)}>
                 <option value="">— Digitar manualmente —</option>
                 {agendaOptions.map((item) => (

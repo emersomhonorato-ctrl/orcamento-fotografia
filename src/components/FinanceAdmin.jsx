@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { photographerLabel } from "@/lib/team";
+import { historyOf, paymentFields } from "@/lib/finance";
 
 const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const METHODS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Transferência", "Boleto", "Mercado Pago", "Outro"];
@@ -57,16 +58,6 @@ const BADGE = {
   incluso: "bg-emerald-50 text-emerald-800 border-emerald-200",
   semvalor: "bg-stone-100 text-stone-600 border-stone-200",
 };
-
-// Histórico de recebimentos; se o valor pago foi mudado pela edição, ajusta para bater
-function historyOf(record) {
-  const paid = Math.round(Number(record.amountPaid || 0) * 100) / 100;
-  const list = Array.isArray(record.payments) ? record.payments.filter((item) => Number(item?.amount) > 0) : [];
-  const sum = Math.round(list.reduce((total, item) => total + Number(item.amount || 0), 0) * 100) / 100;
-  if (list.length && Math.abs(sum - paid) < 0.01) return list;
-  if (list.length && paid > sum) return [...list, { id: "ajuste", date: record.receiptDate || "", amount: Math.round((paid - sum) * 100) / 100, method: record.receiptMethod || "", note: "Ajuste feito na edição" }];
-  return paid > 0 ? [{ id: "anterior", date: record.receiptDate || "", amount: paid, method: record.receiptMethod || "", note: "Valor já lançado antes" }] : [];
-}
 
 function csvCell(value) {
   const text = String(value ?? "");
@@ -150,16 +141,7 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
   }
 
   function applyPayments(record, payments) {
-    const total = Number(record.fin.total || 0);
-    const paid = Math.round(payments.reduce((sum, item) => sum + Number(item.amount || 0), 0) * 100) / 100;
-    const last = payments[payments.length - 1];
-    onUpdate(record.id, {
-      payments,
-      amountPaid: total > 0 ? Math.min(paid, total) : paid,
-      paymentStatus: paid <= 0 ? "Pendente" : total > 0 && paid >= total - 0.009 ? "Pago" : "Entrada paga",
-      receiptDate: last?.date || "",
-      receiptMethod: last?.method || record.receiptMethod || "",
-    });
+    onUpdate(record.id, paymentFields(record, payments, Number(record.fin.total || 0)));
   }
 
   function receiveAll(record) {
@@ -183,7 +165,8 @@ export default function FinanceAdmin({ records = [], onUpdate, onEdit }) {
   function removePayment(record, paymentId) {
     if (!window.confirm("Remover este recebimento?")) return;
     const payments = historyOf(record).filter((item) => item.id !== paymentId);
-    applyPayments(record, payments);
+    const ignored = String(paymentId).startsWith("mp-") ? { ignoredCardPayments: [...(record.ignoredCardPayments || []), paymentId] } : {};
+    onUpdate(record.id, { ...paymentFields(record, payments, Number(record.fin.total || 0)), ...ignored });
   }
 
   function exportCsv() {
