@@ -51,6 +51,7 @@ import SafeSection from "@/components/SafeSection";
 import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
+import FinanceAdmin from "@/components/FinanceAdmin";
 import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
@@ -246,7 +247,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const tab = new URLSearchParams(window.location.search).get("aba");
-      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "cobrancas", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
+      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "cobrancas", "financeiro", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
     } catch {
       return "dashboard";
     }
@@ -2633,6 +2634,7 @@ export default function App() {
             <TabsTrigger value="natal" className="studio-nav-tab">Ensaios</TabsTrigger>
             <TabsTrigger value="selecao" className="studio-nav-tab">Seleção</TabsTrigger>
             <TabsTrigger value="entregas" className="studio-nav-tab">Entregas</TabsTrigger>
+            <TabsTrigger value="financeiro" className="studio-nav-tab">Financeiro</TabsTrigger>
             <TabsTrigger value="cobrancas" className="studio-nav-tab">Cobranças</TabsTrigger>
             <TabsTrigger value="realizados" className="studio-nav-tab">Realizados</TabsTrigger>
             <TabsTrigger value="orcamentos" className="studio-nav-tab">Orçamentos</TabsTrigger>
@@ -3019,6 +3021,12 @@ export default function App() {
           <TabsContent value="entregas" className="mt-6">
             <SafeSection name="Entregas">
               <PhotoDeliveryAdmin records={records} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="financeiro" className="mt-6">
+            <SafeSection name="Financeiro">
+              <FinanceAdmin records={enrichedRecords} onUpdate={updateRecordFields} onEdit={editEvent} />
             </SafeSection>
           </TabsContent>
 
