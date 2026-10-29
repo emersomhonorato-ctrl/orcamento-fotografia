@@ -100,6 +100,15 @@ import {
 const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
 const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "emersomhonorato@gmail.com").trim().toLowerCase();
+// Equipe que pode entrar (a mesma lista fica no banco em private.studio_team)
+const TEAM_MEMBERS = {
+  "emersomhonorato@gmail.com": "Emerson",
+  "isahonoratoneuropsicopedagoga@gmail.com": "Isabel",
+};
+const TEAM_EMAILS = new Set([ADMIN_EMAIL, ...Object.keys(TEAM_MEMBERS)].filter(Boolean));
+const isTeamEmail = (email) => TEAM_EMAILS.has(String(email || "").trim().toLowerCase());
+// Link de convite ou de "esqueci a senha": o Supabase devolve type=invite/recovery no endereço
+const INITIAL_AUTH_LINK = typeof window !== "undefined" ? (window.location.hash.match(/type=(invite|recovery|signup|magiclink)/) || [])[1] || "" : "";
 
 function StatusBadge({ value }) {
   const map = {
@@ -258,7 +267,12 @@ export default function App() {
 
   const { events, clients, services, settings } = appState;
   const userEmail = session?.user?.email?.toLowerCase() || "";
-  const isAuthorized = !AUTH_ENABLED || (Boolean(session?.user) && (!ADMIN_EMAIL || userEmail === ADMIN_EMAIL));
+  const isAuthorized = !AUTH_ENABLED || (Boolean(session?.user) && isTeamEmail(userEmail));
+  const userFirstName = TEAM_MEMBERS[userEmail] || "";
+  const [needsPassword, setNeedsPassword] = useState(INITIAL_AUTH_LINK === "invite" || INITIAL_AUTH_LINK === "recovery");
+  const [passwordForm, setPasswordForm] = useState({ password: "", confirm: "" });
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [resetMessage, setResetMessage] = useState("");
 
   useEffect(() => {
     if (!AUTH_ENABLED) return undefined;
@@ -289,7 +303,8 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") setNeedsPassword(true);
       setSession(nextSession);
       setAuthLoading(false);
     });
@@ -2113,20 +2128,58 @@ export default function App() {
     });
 
     if (error) {
-      setAuthError(error.message || "Não foi possível entrar.");
+      setAuthError(/invalid login credentials/i.test(error.message || "") ? "E-mail ou senha incorretos." : /email not confirmed/i.test(error.message || "") ? "Confirme seu e-mail pelo link que chegou na sua caixa de entrada." : error.message || "Não foi possível entrar.");
       setIsSubmittingLogin(false);
       return;
     }
 
     const nextEmail = data.user?.email?.toLowerCase() || "";
-    if (ADMIN_EMAIL && nextEmail !== ADMIN_EMAIL) {
+    if (!isTeamEmail(nextEmail)) {
       await supabase.auth.signOut();
-      setAuthError(`Este sistema aceita apenas o admin ${ADMIN_EMAIL}.`);
+      setAuthError("Este e-mail não faz parte da equipe do estúdio.");
       setIsSubmittingLogin(false);
       return;
     }
 
     setIsSubmittingLogin(false);
+  }
+
+  async function handleForgotPassword() {
+    const email = loginForm.email.trim().toLowerCase();
+    setAuthError("");
+    setResetMessage("");
+    if (!email) {
+      setAuthError("Digite seu e-mail acima e clique de novo em “Esqueci minha senha”.");
+      return;
+    }
+    if (!isTeamEmail(email)) {
+      setAuthError("Este e-mail não faz parte da equipe do estúdio.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if (error) {
+      setAuthError(error.message || "Não consegui enviar o e-mail agora. Tente de novo em instantes.");
+      return;
+    }
+    setResetMessage("Enviei um link para o seu e-mail. Abra o e-mail e clique no link para criar uma senha nova.");
+  }
+
+  async function handleSetPassword(event) {
+    event.preventDefault();
+    setPasswordMessage("");
+    if (passwordForm.password.length < 8) return setPasswordMessage("A senha precisa ter pelo menos 8 caracteres.");
+    if (passwordForm.password !== passwordForm.confirm) return setPasswordMessage("As duas senhas não são iguais.");
+    setIsSubmittingLogin(true);
+    const { error } = await supabase.auth.updateUser({ password: passwordForm.password });
+    setIsSubmittingLogin(false);
+    if (error) return setPasswordMessage(error.message || "Não consegui salvar a senha. Tente de novo.");
+    setPasswordForm({ password: "", confirm: "" });
+    setNeedsPassword(false);
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } catch {
+      /* ignora */
+    }
   }
 
   async function handleLogout() {
@@ -2468,6 +2521,43 @@ export default function App() {
               <button type="submit" className="studio-primary h-11 w-full rounded-xl text-sm font-medium text-white disabled:opacity-60" disabled={isSubmittingLogin}>
                 {isSubmittingLogin ? "Entrando…" : "Entrar"}
               </button>
+              {resetMessage ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{resetMessage}</p> : null}
+              <button type="button" onClick={handleForgotPassword} className="block w-full text-center text-sm text-stone-500 hover:text-stone-800 hover:underline">
+                Esqueci minha senha
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (AUTH_ENABLED && session?.user && needsPassword) {
+    return (
+      <div className="studio-shell min-h-screen text-stone-900" data-theme-color={settings.themeColor || "classico"}>
+        <div className="flex min-h-screen items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm">
+            <div className="mb-8 text-center">
+              <img src="/icons/icon-192.png" alt="" className="mx-auto h-14 w-14 rounded-2xl" />
+              <h1 className="mt-4 text-[1.7rem] font-semibold leading-tight" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                {userFirstName ? `Olá, ${userFirstName}!` : "Crie sua senha"}
+              </h1>
+              <p className="mt-1 text-sm text-stone-500">Escolha a senha que você vai usar para entrar no app do estúdio.</p>
+            </div>
+            <form className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6" onSubmit={handleSetPassword}>
+              <p className="text-sm text-stone-600">E-mail: <strong>{session.user.email}</strong></p>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-password">Nova senha</Label>
+                <Input id="new-password" type="password" autoComplete="new-password" className="h-11 rounded-xl" value={passwordForm.password} onChange={(event) => setPasswordForm((current) => ({ ...current, password: event.target.value }))} placeholder="Pelo menos 8 caracteres" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password">Repita a senha</Label>
+                <Input id="confirm-password" type="password" autoComplete="new-password" className="h-11 rounded-xl" value={passwordForm.confirm} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm: event.target.value }))} />
+              </div>
+              {passwordMessage ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{passwordMessage}</div> : null}
+              <button type="submit" className="studio-primary h-11 w-full rounded-xl text-sm font-medium text-white disabled:opacity-60" disabled={isSubmittingLogin}>
+                {isSubmittingLogin ? "Salvando…" : "Salvar senha e entrar"}
+              </button>
             </form>
           </div>
         </div>
@@ -2483,7 +2573,7 @@ export default function App() {
             <CardContent className="space-y-4 p-8">
               <h1 className="text-3xl font-bold text-slate-900">Acesso negado</h1>
               <p className="text-slate-600">
-                Este sistema está configurado para aceitar apenas o admin {ADMIN_EMAIL}.
+                Este e-mail ({userEmail}) não faz parte da equipe do estúdio. Entre com o e-mail do Emerson ou da Isabel.
               </p>
               <Button onClick={handleLogout} className="rounded-2xl">Sair</Button>
             </CardContent>
@@ -2531,6 +2621,7 @@ export default function App() {
           onSync={handleManualSync}
           onImport={importBackup}
           onLogout={AUTH_ENABLED ? handleLogout : null}
+          userName={userFirstName}
         />
 
 
