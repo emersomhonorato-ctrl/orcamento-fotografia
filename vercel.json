@@ -63,6 +63,14 @@
     {
       "source": "/pagar/:codigo/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/contrato/:codigo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/contrato/:codigo/",
+      "destination": "/index.html"
     }
   ],
   "headers": [

@@ -6,6 +6,7 @@ import PublicBudgetRequestForm from "./components/PublicBudgetRequestForm.jsx";
 import PublicChristmasBooking from "./components/PublicChristmasBooking.jsx";
 import PublicPhotoDelivery from "./components/PublicPhotoDelivery.jsx";
 import PublicBudgetApproval from "./components/PublicBudgetApproval.jsx";
+import PublicContractSign from "./components/PublicContractSign.jsx";
 import PublicPhotoSelection from "./components/PublicPhotoSelection.jsx";
 import PublicPayment from "./components/PublicPayment.jsx";
 
@@ -16,6 +17,8 @@ const isPublicChristmasBooking = /^\/(natal|ensaio|ensaios)\/?$/i.test(window.lo
 // Entrega de fotos: https://orcamento.emersonhonoratoretratos.com.br/entrega/<codigo>
 const deliveryMatch = window.location.pathname.match(/^\/entrega\/([a-z0-9-]{4,80})\/?$/i);
 // Aprovação de orçamento: https://orcamento.emersonhonoratoretratos.com.br/orcamento/<codigo>
+// Contrato para assinar: https://orcamento.emersonhonoratoretratos.com.br/contrato/<codigo>
+const contractMatch = window.location.pathname.match(/^\/contrato\/([a-z0-9-]{4,80})\/?$/i);
 const budgetMatch = window.location.pathname.match(/^\/orcamento\/([a-z0-9-]{4,80})\/?$/i);
 // Escolha de fotos: https://orcamento.emersonhonoratoretratos.com.br/selecao/<codigo>
 const selectionMatch = window.location.pathname.match(/^\/selecao\/([a-z0-9-]{4,80})\/?$/i);
@@ -59,7 +62,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
     </PreviewErrorBoundary>
   </StrictMode>,
 );

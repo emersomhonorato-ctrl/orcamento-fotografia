@@ -54,6 +54,7 @@ import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
 import RevenueChart from "@/components/RevenueChart";
+import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments } from "@/lib/finance";
 import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
@@ -227,6 +228,7 @@ const MAIN_TABS = [
 ];
 const MORE_TABS = [
   ["cobrancas", "Cobranças"],
+  ["contratos", "Contratos"],
   ["whatsapp", "WhatsApp"],
   ["realizados", "Realizados"],
   ["servicos", "Serviços"],
@@ -3716,6 +3718,12 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {selectedContract ? (
+                <SafeSection name="Assinatura online">
+                  <ContractSignPanel record={selectedContract} settings={settings} contractText={contractPreview} onSigned={updateRecordFields} />
+                </SafeSection>
+              ) : null}
 
               <div className="grid gap-6 xl:grid-cols-[400px,1fr]">
                 <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
