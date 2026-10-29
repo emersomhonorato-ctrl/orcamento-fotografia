@@ -32,7 +32,7 @@ function syncLabel(status = "") {
 }
 
 // Barra do topo: nome do estúdio, estado da nuvem, ações principais e menu "Mais"
-export default function StudioHeader({ syncStatus, syncMessage, onNewEvent, onNewBudget, onBackup, onSync, onImport, onLogout }) {
+export default function StudioHeader({ syncStatus, syncMessage, onNewEvent, onNewBudget, onBackup, onSync, onImport, onLogout, userName }) {
   useSerifFont();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
@@ -64,6 +64,7 @@ export default function StudioHeader({ syncStatus, syncMessage, onNewEvent, onNe
           <p className="mt-1 flex items-center gap-1.5 text-xs text-stone-500" title={syncMessage || syncStatus}>
             <span className={`h-1.5 w-1.5 rounded-full ${syncTone(syncStatus)}`} />
             {syncLabel(syncStatus)}
+            {userName ? <span className="text-stone-400">· {userName}</span> : null}
           </p>
         </div>
       </div>
