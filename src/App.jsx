@@ -52,6 +52,7 @@ import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
+import { applyCardPayments } from "@/lib/finance";
 import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
@@ -1064,6 +1065,31 @@ export default function App() {
   }, []);
 
   // Reservas da agenda de Natal -> viram agendamento na Agenda + cliente cadastrado (uma vez só)
+  // Pagamentos com cartão (Mercado Pago) ligados a um trabalho viram baixa automática no Financeiro
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    let stopped = false;
+    async function syncCardPayments() {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("id, event_id, status, amount, paid_amount, paid_at, installments, description")
+        .eq("status", "pago")
+        .not("event_id", "is", null)
+        .limit(1000);
+      if (stopped || error || !data?.length) return;
+      setAppState((current) => {
+        const events = applyCardPayments(current.events || [], data);
+        return events ? normalizeAppState({ ...current, events }) : current;
+      });
+    }
+    syncCardPayments();
+    const timer = setInterval(syncCardPayments, 120000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [hasHydratedRemote, isAuthorized]);
+
   const importBookingsAsEvents = useCallback((bookingList = [], campaign = null) => {
     setAppState((current) => {
       const imported = new Set(current.settings?.importedBookingIds || []);
