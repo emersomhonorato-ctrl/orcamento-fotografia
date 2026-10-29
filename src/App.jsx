@@ -6,6 +6,7 @@ import {
   Briefcase,
   CalendarDays,
   Camera,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -52,6 +53,7 @@ import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
+import RevenueChart from "@/components/RevenueChart";
 import { applyCardPayments } from "@/lib/finance";
 import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
@@ -213,6 +215,25 @@ function getMonthKeyFromDate(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const MAIN_TABS = [
+  ["dashboard", "Dashboard"],
+  ["agenda", "Agenda"],
+  ["financeiro", "Financeiro"],
+  ["orcamentos", "Orçamentos"],
+  ["clientes", "Clientes"],
+  ["natal", "Ensaios"],
+  ["selecao", "Seleção"],
+  ["entregas", "Entregas"],
+];
+const MORE_TABS = [
+  ["cobrancas", "Cobranças"],
+  ["whatsapp", "WhatsApp"],
+  ["realizados", "Realizados"],
+  ["servicos", "Serviços"],
+  ["configuracoes", "Configurações"],
+  ["cancelados", "Cancelados"],
+];
+
 export default function App() {
   const [appState, setAppState] = useState(readLocalAppState);
   const [session, setSession] = useState(null);
@@ -253,6 +274,16 @@ export default function App() {
       return "dashboard";
     }
   });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const close = (event) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) setMoreOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [moreOpen]);
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -2653,22 +2684,41 @@ export default function App() {
 
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="studio-nav flex h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-stone-200 bg-transparent p-0 [scrollbar-width:none] [&>button]:shrink-0">
-            <TabsTrigger value="dashboard" className="studio-nav-tab">Dashboard</TabsTrigger>
-            <TabsTrigger value="agenda" className="studio-nav-tab">Agenda</TabsTrigger>
-            <TabsTrigger value="whatsapp" className="studio-nav-tab">WhatsApp</TabsTrigger>
-            <TabsTrigger value="natal" className="studio-nav-tab">Ensaios</TabsTrigger>
-            <TabsTrigger value="selecao" className="studio-nav-tab">Seleção</TabsTrigger>
-            <TabsTrigger value="entregas" className="studio-nav-tab">Entregas</TabsTrigger>
-            <TabsTrigger value="financeiro" className="studio-nav-tab">Financeiro</TabsTrigger>
-            <TabsTrigger value="cobrancas" className="studio-nav-tab">Cobranças</TabsTrigger>
-            <TabsTrigger value="realizados" className="studio-nav-tab">Realizados</TabsTrigger>
-            <TabsTrigger value="orcamentos" className="studio-nav-tab">Orçamentos</TabsTrigger>
-            <TabsTrigger value="clientes" className="studio-nav-tab">Clientes</TabsTrigger>
-            <TabsTrigger value="servicos" className="studio-nav-tab">Serviços</TabsTrigger>
-            <TabsTrigger value="configuracoes" className="studio-nav-tab">Configurações</TabsTrigger>
-            <TabsTrigger value="cancelados" className="studio-nav-tab">Cancelados</TabsTrigger>
+          <div className="relative flex items-end border-b border-stone-200">
+          <TabsList className="studio-nav flex h-auto min-w-0 flex-1 justify-start gap-0 overflow-x-auto rounded-none border-0 bg-transparent p-0 [scrollbar-width:none] [&>button]:shrink-0">
+            {MAIN_TABS.map(([value, label]) => (
+              <TabsTrigger key={value} value={value} className="studio-nav-tab">{label}</TabsTrigger>
+            ))}
           </TabsList>
+          <div className="relative shrink-0" ref={moreMenuRef}>
+            <button
+              type="button"
+              onClick={() => setMoreOpen((current) => !current)}
+              data-active={MORE_TABS.some(([value]) => value === activeTab) ? "" : undefined}
+              className="studio-nav-tab inline-flex items-center gap-1"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+            >
+              {MORE_TABS.find(([value]) => value === activeTab)?.[1] || "Mais"}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {moreOpen ? (
+              <div role="menu" className="absolute right-0 top-full z-40 mt-1 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                {MORE_TABS.map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setActiveTab(value); setMoreOpen(false); }}
+                    className={`block w-full px-4 py-2 text-left text-sm hover:bg-stone-50 ${activeTab === value ? "font-semibold text-stone-900" : "text-stone-600"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          </div>
 
           {SEARCH_TABS.includes(activeTab) ? (
           <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -2765,6 +2815,9 @@ export default function App() {
               <MetricCard title="Serviços" value={metrics.totalServices} subtitle="na tabela" icon={Briefcase} />
             </div>
           </section>
+          <SafeSection name="Faturamento">
+            <RevenueChart records={enrichedRecords} />
+          </SafeSection>
               <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
                 <div className="overflow-hidden rounded-[34px] border border-rose-200/70 bg-gradient-to-br from-[#fff8fa] via-white to-[#fff4f7] p-6 shadow-[0_28px_70px_rgba(99,32,67,0.14)]">
 

@@ -144,34 +144,6 @@ export default function SalesReport({ events = [], budgets = [] }) {
         ))}
       </div>
 
-      <div className="rounded-[30px] border border-white/70 bg-white/90 p-6 shadow-[0_18px_50px_rgba(40,52,84,0.08)]">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Faturamento por mês</h3>
-            <p className="text-sm text-slate-500">Últimos 12 meses pela data do trabalho • total {formatCurrency(report.last12)}</p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[#7f274f]/25" />Previsto</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[#7f274f]" />Recebido</span>
-          </div>
-        </div>
-        <div className="mt-6 flex h-48 items-end gap-2">
-          {report.months.map((m) => {
-            const h = report.maxMonth ? Math.round((m.total / report.maxMonth) * 100) : 0;
-            const p = m.total ? Math.round((Math.min(m.paid, m.total) / m.total) * h) : 0;
-            return (
-              <div key={m.key} className="group flex h-full flex-1 flex-col items-center justify-end gap-1" title={`${m.label}: ${formatCurrency(m.total)} (${m.count} trabalhos) • recebido ${formatCurrency(m.paid)}`}>
-                <span className="text-[10px] font-medium text-slate-500 opacity-0 transition group-hover:opacity-100">{m.total ? formatCurrency(m.total).replace(",00", "") : ""}</span>
-                <div className="relative w-full max-w-[40px] overflow-hidden rounded-t-lg bg-[#7f274f]/20" style={{ height: `${Math.max(h, m.total ? 3 : 0)}%` }}>
-                  <div className="absolute bottom-0 left-0 right-0 bg-[#7f274f]" style={{ height: h ? `${(p / h) * 100}%` : 0 }} />
-                </div>
-                <span className="text-[10px] text-slate-500">{m.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="rounded-[30px] border border-white/70 bg-white/90 p-6 shadow-[0_18px_50px_rgba(40,52,84,0.08)]">
           <h3 className="text-lg font-semibold text-slate-900">O que mais vende</h3>
