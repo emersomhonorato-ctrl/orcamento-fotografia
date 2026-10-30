@@ -47,7 +47,7 @@ export const defaultServices = [
   },
   {
     id: crypto.randomUUID(),
-    name: "Gestante",
+    name: "Ensaio Gestante",
     category: "Ensaio",
     price: 650,
     itemDescription: "Ensaio gestante com direção delicada, valorização da fase da maternidade, trocas de figurino e construção de imagens afetivas e elegantes.",
@@ -161,7 +161,7 @@ export const defaultServices = [
   },
   {
     id: crypto.randomUUID(),
-    name: "Formatura",
+    name: "Cobertura de Formatura",
     category: "Evento",
     price: 1800,
     itemDescription: "Cobertura de formatura com registros da solenidade, homenagens, convidados, retratos individuais e momentos marcantes da celebração.",
@@ -453,6 +453,7 @@ export const mergeServicesByName = (services = []) => {
 export function createDefaultAppState() {
   return {
     events: [],
+    expenses: [],
     clients: [],
     services: mergeServicesByName([]),
     settings: defaultSettings,
@@ -620,6 +621,7 @@ export function normalizeAppState(raw) {
 
   return {
     events: Array.isArray(payload.events) ? payload.events.map(normalizeRecord) : base.events,
+    expenses: Array.isArray(payload.expenses) ? payload.expenses.filter((item) => item && item.id) : [],
     clients: Array.isArray(payload.clients) ? payload.clients.map(normalizeClient) : base.clients,
     services: Array.isArray(payload.services) && payload.services.length > 0
       ? mergeServicesByName(payload.services.map(normalizeService))

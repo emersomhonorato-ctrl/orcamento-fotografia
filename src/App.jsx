@@ -53,6 +53,7 @@ import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
+import ExpensesAdmin from "@/components/ExpensesAdmin";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments } from "@/lib/finance";
@@ -220,6 +221,7 @@ const MAIN_TABS = [
   ["dashboard", "Dashboard"],
   ["agenda", "Agenda"],
   ["financeiro", "Financeiro"],
+  ["contas", "Contas a pagar"],
   ["orcamentos", "Orçamentos"],
   ["clientes", "Clientes"],
   ["natal", "Ensaios"],
@@ -271,7 +273,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const tab = new URLSearchParams(window.location.search).get("aba");
-      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "cobrancas", "financeiro", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
+      return ["dashboard", "agenda", "orcamentos", "entregas", "selecao", "cobrancas", "financeiro", "contas", "natal", "clientes", "whatsapp"].includes(tab) ? tab : "dashboard";
     } catch {
       return "dashboard";
     }
@@ -3102,6 +3104,12 @@ export default function App() {
           <TabsContent value="entregas" className="mt-6">
             <SafeSection name="Entregas">
               <PhotoDeliveryAdmin records={records} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="contas" className="mt-6">
+            <SafeSection name="Contas a pagar">
+              <ExpensesAdmin expenses={appState.expenses || []} records={enrichedRecords} onChange={(expenses) => updateAppState({ expenses })} />
             </SafeSection>
           </TabsContent>
 
