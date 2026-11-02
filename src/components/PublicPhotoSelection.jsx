@@ -20,6 +20,9 @@ function useSerifFont() {
 const thumbUrl = (id, size = 500) => `https://drive.google.com/thumbnail?id=${id}&sz=w${size}`;
 const altThumbUrl = (id, size = 500) => `https://lh3.googleusercontent.com/d/${id}=w${size}`;
 const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Galerias grandes travam o celular (iPhone fecha a página) se todas as fotos ficarem na tela de uma vez.
+// Mostramos em páginas e com miniaturas leves.
+const PAGE_SIZE = 48;
 const shortName = (name = "") => String(name).replace(/\.[A-Za-z0-9]{2,5}$/, "");
 
 function Photo({ photo, size, className, alt }) {
@@ -54,6 +57,8 @@ export default function PublicPhotoSelection({ slug }) {
   const [pinValue, setPinValue] = useState("");
   const [selected, setSelected] = useState([]);
   const [filter, setFilter] = useState("todas");
+  const [page, setPage] = useState(0);
+  const gridTop = useRef(null);
   const [viewer, setViewer] = useState(-1);
   const [saveState, setSaveState] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -123,6 +128,29 @@ export default function PublicPhotoSelection({ slug }) {
   const printsBySize = printSizes
     .map((z) => ({ size: z.size, qty: prints.filter((item) => item.size === z.size).reduce((sum, item) => sum + (Number(item.qty) || 0), 0) }))
     .filter((row) => row.qty > 0);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  function closeViewer() {
+    setViewer((current) => {
+      if (current >= 0) setPage(Math.floor(current / PAGE_SIZE));
+      return -1;
+    });
+  }
+  const safePage = Math.min(page, pageCount - 1);
+  const goPage = (next) => {
+    setPage(Math.max(0, Math.min(pageCount - 1, next)));
+    requestAnimationFrame(() => gridTop.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const pager = (
+    <div className="flex items-center justify-center gap-2 py-2 text-sm text-white/80">
+      <button type="button" disabled={safePage === 0} onClick={() => goPage(safePage - 1)} className="whitespace-nowrap rounded-full bg-white/10 px-3 py-2 font-medium disabled:opacity-30">‹ Voltar</button>
+      <select value={safePage} onChange={(e) => goPage(Number(e.target.value))} className="rounded-full bg-white/10 px-3 py-2 text-white" aria-label="Página">
+        {Array.from({ length: pageCount }, (_, i) => (
+          <option key={i} value={i} className="text-black">Fotos {i * PAGE_SIZE + 1}–{Math.min(visible.length, (i + 1) * PAGE_SIZE)}</option>
+        ))}
+      </select>
+      <button type="button" disabled={safePage >= pageCount - 1} onClick={() => goPage(safePage + 1)} className="whitespace-nowrap rounded-full bg-white/10 px-3 py-2 font-medium disabled:opacity-30">Próximas ›</button>
+    </div>
+  );
   const extrasCost = extras * extraPrice;
   const totalToPay = extrasCost + printCost;
 
@@ -171,7 +199,7 @@ export default function PublicPhotoSelection({ slug }) {
   useEffect(() => {
     if (viewer < 0) return undefined;
     const onKey = (event) => {
-      if (event.key === "Escape") setViewer(-1);
+      if (event.key === "Escape") closeViewer();
       if (event.key === "ArrowRight") setViewer((i) => Math.min(visible.length - 1, i + 1));
       if (event.key === "ArrowLeft") setViewer((i) => Math.max(0, i - 1));
       if (event.key === " " || event.key.toLowerCase() === "f") {
@@ -289,23 +317,25 @@ export default function PublicPhotoSelection({ slug }) {
       <div className="sticky top-0 z-20 border-y border-white/10 bg-[#0f0d0b]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2.5 text-sm">
           {[["todas", `Todas (${photos.length})`], ["escolhidas", `Escolhidas (${selected.length})`], ...(printsEnabled ? [["revelacao", `Revelação (${printUnits})`]] : [])].map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setFilter(key)} className={`rounded-full px-4 py-1.5 font-medium transition ${filter === key ? "bg-white text-[#1b1610]" : "text-white/70 hover:bg-white/10"}`}>{label}</button>
+            <button key={key} type="button" onClick={() => { setFilter(key); setPage(0); }} className={`rounded-full px-4 py-1.5 font-medium transition ${filter === key ? "bg-white text-[#1b1610]" : "text-white/70 hover:bg-white/10"}`}>{label}</button>
           ))}
           <span className="ml-auto text-xs text-white/50">{saveState === "salvando" ? "Salvando…" : saveState === "salvo" ? "Salvo ✓" : saveState === "erro" ? "Não salvou — verifique a internet" : ""}</span>
         </div>
       </div>
 
-      <main className="mx-auto max-w-6xl px-2 pt-3 sm:px-4">
+      <main ref={gridTop} className="mx-auto max-w-6xl scroll-mt-14 px-2 pt-3 sm:px-4">
+        {pageCount > 1 ? pager : null}
         {visible.length === 0 ? (
           <p className="py-16 text-center text-white/60">{filter === "escolhidas" ? "Você ainda não escolheu nenhuma foto." : filter === "revelacao" ? "Nenhuma foto para revelar ainda. Abra uma foto e escolha o tamanho." : "Nenhuma foto nesta galeria."}</p>
         ) : (
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-4">
-            {visible.map((photo, index) => {
+            {visible.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE).map((photo, pageIndex) => {
+              const index = safePage * PAGE_SIZE + pageIndex;
               const isSel = selectedSet.has(photo.name);
               return (
                 <div key={photo.id} className={`group relative overflow-hidden rounded-lg bg-white/5 ${isSel ? "ring-2 ring-rose-400" : ""}`}>
                   <button type="button" onClick={() => setViewer(index)} className="block aspect-[4/5] w-full">
-                    <Photo photo={photo} size={500} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+                    <Photo photo={photo} size={360} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
                   </button>
                   <button
                     type="button"
@@ -327,6 +357,7 @@ export default function PublicPhotoSelection({ slug }) {
             })}
           </div>
         )}
+        {pageCount > 1 ? <div className="mt-3">{pager}</div> : null}
       </main>
 
       {/* barra de resumo */}
@@ -362,10 +393,10 @@ export default function PublicPhotoSelection({ slug }) {
         <div className="fixed inset-0 z-40 flex flex-col bg-black/95">
           <div className="flex items-center justify-between px-4 py-3 text-sm text-white/80">
             <span>{shortName(current.name)} • {viewer + 1} de {visible.length}</span>
-            <button type="button" onClick={() => setViewer(-1)} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
+            <button type="button" onClick={() => closeViewer()} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
           </div>
           <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-            <Photo key={current.id} photo={current} size={1600} className="max-h-full max-w-full object-contain" />
+            <Photo key={current.id} photo={current} size={1200} className="max-h-full max-w-full object-contain" />
             {viewer > 0 ? <button type="button" onClick={() => setViewer(viewer - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Anterior">‹</button> : null}
             {viewer < visible.length - 1 ? <button type="button" onClick={() => setViewer(viewer + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Próxima">›</button> : null}
           </div>
