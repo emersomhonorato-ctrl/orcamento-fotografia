@@ -392,7 +392,8 @@ export default function PublicChristmasBooking() {
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4">
                     <div>
                       <p className="font-medium text-slate-900">Pessoas extras</p>
-                      <p className="text-xs text-slate-500">{formatBRL(extraPersonPrice)} por pessoa a mais (até {maxExtraPeople})</p>
+                      <p className="text-xs text-slate-500">O ensaio já inclui a família: pai, mãe e filhos.</p>
+                      <p className="text-xs text-slate-500">Vai trazer avós, tios, padrinhos ou outra pessoa? {formatBRL(extraPersonPrice)} por pessoa a mais (até {maxExtraPeople}). Ex.: avô e avó = 2 pessoas extras.</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <button type="button" aria-label="Menos uma pessoa" disabled={extraPeople <= 0} onClick={() => setExtraPeople((n) => Math.max(0, n - 1))} className="h-10 w-10 rounded-full border-2 border-slate-200 text-xl font-semibold text-[#7a1712] disabled:opacity-40">−</button>
