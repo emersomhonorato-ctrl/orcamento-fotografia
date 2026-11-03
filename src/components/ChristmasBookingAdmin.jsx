@@ -22,6 +22,7 @@ import {
 } from "@/lib/bookings";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
+import { openExternal } from "@/lib/openExternal";
 
 export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/ensaio";
 const PDF_BUCKET = "ensaios";
@@ -355,7 +356,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       Number(campaign?.extra_photo_price) ? `• Foto extra: ${formatBRL(campaign.extra_photo_price)}` : "",
       Number(campaign?.extra_person_price) ? `• Pessoa extra: ${formatBRL(campaign.extra_person_price)}` : "",
     ].filter((line) => line !== null).join("\n");
-    window.open(buildWhatsAppShareLink(text), "_blank", "noopener");
+    openExternal(buildWhatsAppShareLink(text));
   }
 
   function confirmOnWhatsApp(booking) {
@@ -384,7 +385,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
     else lines.push("", "Qualquer dúvida, é só responder esta mensagem.");
     const text = lines.join("\n");
-    window.open(buildWhatsAppLink(booking.whatsapp, text), "_blank", "noopener");
+    openExternal(buildWhatsAppLink(booking.whatsapp, text));
   }
 
   const toggleWeekday = (value) =>
@@ -429,7 +430,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           <div className="flex flex-wrap gap-2">
             <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={shareLink}><Send className="mr-2 h-4 w-4" />Divulgar no WhatsApp</Button>
             <Button variant="outline" className="rounded-2xl" onClick={copyLink}><Copy className="mr-2 h-4 w-4" />{copied ? "Copiado!" : "Copiar link"}</Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/ensaio`, "_blank", "noopener")}><ExternalLink className="mr-2 h-4 w-4" />Ver página</Button>
+            <Button variant="outline" className="rounded-2xl" onClick={() => openExternal(`${window.location.origin}/ensaio`)}><ExternalLink className="mr-2 h-4 w-4" />Ver página</Button>
             <Button variant="outline" className="rounded-2xl" disabled={busy} onClick={toggleCampaign}>{campaign?.active ? "Fechar reservas" : "Abrir reservas"}</Button>
           </div>
         </div>
@@ -523,7 +524,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
             </div>
             {campaign?.instructions_pdf_url ? (
               <>
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => window.open(campaign.instructions_pdf_url, "_blank", "noopener")}><ExternalLink className="mr-2 h-4 w-4" />Ver</Button>
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openExternal(campaign.instructions_pdf_url)}><ExternalLink className="mr-2 h-4 w-4" />Ver</Button>
                 <Button variant="ghost" size="sm" className="rounded-xl text-red-600" disabled={uploading} onClick={removePdf}><Trash2 className="h-4 w-4" /></Button>
               </>
             ) : null}

@@ -11,6 +11,7 @@ import { formatDateBR, makeDeliverySlug, slugify } from "@/lib/delivery";
 import { listDriveImages } from "@/lib/driveList";
 import { baseFileName, buildLightroomCollection, downloadTextFile } from "@/lib/lightroom";
 import { PAY_PUBLIC_BASE } from "@/lib/payments";
+import { openExternal } from "@/lib/openExternal";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -254,7 +255,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
         item.pin ? `🔑 Senha: ${item.pin}` : "",
       ].filter(Boolean).join("\n\n");
       const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-      window.open(url, "_blank", "noopener");
+      openExternal(url);
     }
   }
 
@@ -294,7 +295,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       "Emerson Honorato Retratos",
     ].filter((line) => line !== "").join("\n").replace(/\n{3,}/g, "\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
   }
 
   async function chargeExtras(item, extras) {
@@ -335,7 +336,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       payLink ? `Você pode pagar no cartão ou Pix por aqui:\n${payLink}` : "Posso te mandar o Pix?",
     ].join("\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
   }
 
   async function downloadPrints(item) {
@@ -588,7 +589,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   {count > 0 ? (
                     <Button size="sm" variant="outline" className="rounded-xl" title="Copia os nomes separados por vírgula (para colar na busca do Lightroom ou do computador)" onClick={() => copy((item.selected || []).map(baseFileName).join(", "), `n-${item.id}`)}>{copied === `n-${item.id}` ? "Copiado!" : "Nomes"}</Button>
                   ) : null}
-                  <Button size="sm" variant="ghost" className="rounded-xl" title="Ver como o cliente vê" onClick={() => window.open(`${window.location.origin}/selecao/${item.slug}`, "_blank", "noopener")}><Eye className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" variant="ghost" className="rounded-xl" title="Ver como o cliente vê" onClick={() => openExternal(`${window.location.origin}/selecao/${item.slug}`)}><Eye className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl" title="Atualizar fotos do Drive" disabled={busy} onClick={() => refreshPhotos(item)}><RefreshCw className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl" onClick={() => startEdit(item)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="rounded-xl text-red-600" onClick={() => remove(item)}><Trash2 className="h-3.5 w-3.5" /></Button>

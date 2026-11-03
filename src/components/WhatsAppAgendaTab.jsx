@@ -15,6 +15,7 @@ import {
   getTimeRange,
   getWeekdayDate,
 } from "@/utils/whatsappMessages";
+import { openExternal } from "@/lib/openExternal";
 
 const PERIODS = [
   { id: "hoje", label: "Hoje", days: 0 },
@@ -59,7 +60,7 @@ export default function WhatsAppAgendaTab({ events = [], settings = {}, onUpdate
   function openWhatsApp(phone, text) {
     const link = buildWhatsAppLink(phone, text);
     if (!link) return false;
-    window.open(link, "_blank", "noopener");
+    openExternal(link);
     return true;
   }
 

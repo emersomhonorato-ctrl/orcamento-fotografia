@@ -15,6 +15,7 @@ import {
   formatDateBR,
   isDriveFolder,
   makeDeliverySlug, DEFAULT_COVER_FOCUS, coverFocusStyle, focusFromClick } from "@/lib/delivery";
+import { openExternal } from "@/lib/openExternal";
 
 function addDays(days) {
   const date = new Date();
@@ -124,7 +125,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       "Emerson Honorato Retratos",
     ].join("\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
     await supabase.from("photo_deliveries").update({ review_requested_at: new Date().toISOString() }).eq("id", item.id);
     load();
   }
@@ -280,7 +281,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       "Emerson Honorato Retratos",
     ].filter((line) => line !== "").join("\n").replace(/\n{3,}/g, "\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -333,7 +334,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
           ) : (
             <>
               <span className="min-w-0 flex-1 truncate text-xs text-white/60">{reviewUrl || "Nenhum link cadastrado — o pedido de avaliação não aparece."}</span>
-              {reviewUrl ? <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => window.open(reviewUrl, "_blank", "noopener")}>Testar</Button> : null}
+              {reviewUrl ? <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => openExternal(reviewUrl)}>Testar</Button> : null}
               <Button size="sm" variant="ghost" className="rounded-xl text-white hover:bg-white/10" onClick={() => setReviewDraft(reviewUrl)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Editar</Button>
             </>
           )}
@@ -529,7 +530,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => sendWhatsApp(item)}><Send className="mr-1.5 h-3.5 w-3.5" />Enviar</Button>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => copyLink(item)}><Copy className="mr-1.5 h-3.5 w-3.5" />{copiedId === item.id ? "Copiado!" : "Link"}</Button>
-                  <Button size="sm" variant="outline" className="rounded-xl" onClick={() => window.open(linkFor(item).replace(DELIVERY_PUBLIC_BASE, `${window.location.origin}/entrega/`), "_blank", "noopener")}><Eye className="mr-1.5 h-3.5 w-3.5" />Ver</Button>
+                  <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openExternal(linkFor(item).replace(DELIVERY_PUBLIC_BASE, `${window.location.origin}/entrega/`))}><Eye className="mr-1.5 h-3.5 w-3.5" />Ver</Button>
                   {!item.review_clicked_at ? (
                     <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800 hover:bg-amber-50" title="Pedir avaliação no Google pelo WhatsApp" onClick={() => askReview(item)}><Star className="mr-1.5 h-3.5 w-3.5" />Avaliação</Button>
                   ) : null}
