@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
 import { supabase } from "@/supabase";
 import { buildPixPayload, formatPixKey } from "@/lib/pix";
+import { formatCpfInput, isValidBirthDate, isValidCpf } from "@/lib/cpf";
 import {
   BOOKING_CAMPAIGN_ID,
   addMinutesToTime,
@@ -54,7 +55,7 @@ export default function PublicChristmasBooking() {
       return "";
     }
   });
-  const [form, setForm] = useState(() => ({ name: "", whatsapp: "", email: "", notes: "", website: "", referral: referralFromLink }));
+  const [form, setForm] = useState(() => ({ name: "", whatsapp: "", email: "", cpf: "", birth_date: "", notes: "", website: "", referral: referralFromLink }));
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
@@ -181,7 +182,7 @@ export default function PublicChristmasBooking() {
   const previewDeposit = Math.round(previewTotal * Number(campaign?.deposit_percent || 50)) / 100;
 
   const update = (field) => (event) => {
-    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : event.target.value;
+    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : field === "cpf" ? formatCpfInput(event.target.value) : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -197,6 +198,8 @@ export default function PublicChristmasBooking() {
     if (form.name.trim().split(/\s+/).filter((part) => part.length >= 2).length < 2) return setErrorMessage("Informe nome e sobrenome.");
     if (form.whatsapp.replace(/\D/g, "").length < 10) return setErrorMessage("Informe um WhatsApp com DDD.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return setErrorMessage("Informe um e-mail válido.");
+    if (!isValidCpf(form.cpf)) return setErrorMessage("Informe um CPF válido (é usado no contrato).");
+    if (!isValidBirthDate(form.birth_date)) return setErrorMessage("Informe sua data de nascimento.");
 
     setStatus("sending");
     const { data, error } = await supabase.rpc("book_slot", {
@@ -208,6 +211,8 @@ export default function PublicChristmasBooking() {
       p_notes: [form.referral.trim() ? `🎁 Indicação: ${form.referral.trim().slice(0, 80)}` : "", form.notes.trim()].filter(Boolean).join("\n") || null,
       p_extra_people: extraPersonPrice > 0 ? extraPeople : 0,
       p_payment: allowFullPayment ? paymentChoice : "sinal",
+      p_cpf: form.cpf.replace(/\D/g, ""),
+      p_birth_date: form.birth_date,
     });
     if (error) {
       setStatus("idle");
@@ -476,6 +481,15 @@ export default function PublicChristmasBooking() {
                   <label className="block">
                     <span className="text-sm font-medium">E-mail <span className="text-[#b3261e]">*</span></span>
                     <input className={`${inputClass} mt-1.5`} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="seuemail@exemplo.com" />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">CPF <span className="text-[#b3261e]">*</span></span>
+                    <input className={`${inputClass} mt-1.5`} value={form.cpf} onChange={update("cpf")} inputMode="numeric" placeholder="000.000.000-00" />
+                    <span className="mt-1 block text-xs text-slate-500">Usado só no contrato do ensaio.</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">Data de nascimento <span className="text-[#b3261e]">*</span></span>
+                    <input className={`${inputClass} mt-1.5`} type="date" max={new Date().toISOString().slice(0, 10)} value={form.birth_date} onChange={update("birth_date")} autoComplete="bday" />
                   </label>
                 </div>
                 <label className="block">

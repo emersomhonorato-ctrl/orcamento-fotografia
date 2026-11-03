@@ -1072,15 +1072,24 @@ export default function App() {
         imported.add(request.id);
         const email = String(request.email || "").trim().toLowerCase();
         const phone = normalizePhoneDigits(request.whatsapp);
-        const exists = clientsList.some((client) => {
+        const existingIndex = clientsList.findIndex((client) => {
           const clientEmail = String(client.email || "").trim().toLowerCase();
           const clientPhones = [normalizePhoneDigits(client.phone), normalizePhoneDigits(client.whatsapp)].filter(Boolean);
           return (email && clientEmail === email) || (phone && clientPhones.includes(phone));
         });
-        if (exists) return;
+        if (existingIndex >= 0) {
+          const requestCpf = String(request.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+          const found = clientsList[existingIndex];
+          if ((request.birth_date && !found.birthDate) || (requestCpf && !found.cpf)) {
+            clientsList[existingIndex] = { ...found, birthDate: found.birthDate || request.birth_date || "", cpf: found.cpf || requestCpf };
+          }
+          return;
+        }
 
         clientsList.push(normalizeClient({
           name: String(request.name).trim(),
+          birthDate: request.birth_date || "",
+          cpf: String(request.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4"),
           email,
           phone: request.whatsapp || "",
           whatsapp: request.whatsapp || "",
@@ -1168,14 +1177,23 @@ export default function App() {
         imported.add(booking.id);
         const email = String(booking.email || "").trim().toLowerCase();
         const phone = normalizePhoneDigits(booking.whatsapp);
-        let client = clientsList.find((item) => {
+        const bookingCpf = String(booking.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+        const bookingBirth = String(booking.birth_date || "").slice(0, 10);
+        const clientIndex = clientsList.findIndex((item) => {
           const itemEmail = String(item.email || "").trim().toLowerCase();
           const phones = [normalizePhoneDigits(item.phone), normalizePhoneDigits(item.whatsapp)].filter(Boolean);
           return (email && itemEmail === email) || (phone && phones.includes(phone));
         });
+        let client = clientIndex >= 0 ? clientsList[clientIndex] : null;
+        if (client && ((bookingCpf && !client.cpf) || (bookingBirth && !client.birthDate))) {
+          client = { ...client, cpf: client.cpf || bookingCpf, birthDate: client.birthDate || bookingBirth };
+          clientsList[clientIndex] = client;
+        }
         if (!client) {
           client = normalizeClient({
             name: String(booking.name || "").trim(),
+            cpf: bookingCpf,
+            birthDate: bookingBirth,
             email,
             phone: booking.whatsapp || "",
             whatsapp: booking.whatsapp || "",
@@ -1195,6 +1213,7 @@ export default function App() {
           bookingId: booking.id,
           clientId: client.id,
           clientName: client.name || booking.name,
+          clientCpf: client.cpf || bookingCpf,
           whatsapp: booking.whatsapp || "",
           phone: booking.whatsapp || "",
           email,
@@ -1326,7 +1345,7 @@ export default function App() {
     let active = true;
     supabase
       .from("budget_requests")
-      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found")
+      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found, cpf, birth_date")
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data, error }) => {
@@ -1525,6 +1544,7 @@ export default function App() {
     openNewBudgetModal({
       clientId: linkedClient?.id || "",
       clientName: linkedClient?.name || request.name || "",
+      clientCpf: linkedClient?.cpf || String(request.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4"),
       whatsapp: request.whatsapp || "",
       phone: request.whatsapp || "",
       email: request.email || "",
