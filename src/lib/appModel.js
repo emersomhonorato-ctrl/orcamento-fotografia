@@ -624,7 +624,7 @@ export function normalizeAppState(raw) {
     expenses: Array.isArray(payload.expenses) ? payload.expenses.filter((item) => item && item.id) : [],
     clients: Array.isArray(payload.clients) ? payload.clients.map(normalizeClient) : base.clients,
     services: Array.isArray(payload.services) && payload.services.length > 0
-      ? mergeServicesByName(payload.services.map(normalizeService))
+      ? payload.services.map(normalizeService) // os serviços padrão só entram num app novo, sem serviços; não voltam depois de renomeados ou excluídos
       : base.services,
     settings: {
       ...base.settings,
