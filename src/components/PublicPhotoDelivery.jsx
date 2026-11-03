@@ -325,7 +325,7 @@ export default function PublicPhotoDelivery({ slug }) {
                 <p className="text-xs uppercase tracking-[0.2em] text-[#7a6650]">Seu código</p>
                 <p className="mt-1 text-3xl font-bold tracking-[0.18em] text-[#1b1610]">{data.referral_code}</p>
                 <a
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Fiz meu ensaio com o Emerson Honorato Retratos e amei as fotos! 📸💛\nPede seu orçamento por aqui (já vai com o meu código ${data.referral_code}):\nhttps://orcamento.emersonhonoratoretratos.com.br/pedido?indicacao=${data.referral_code}`)}`}
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Fiz meu ensaio com o Emerson Honorato Retratos e amei as fotos! 📸💛\nAgende o seu Ensaio de Natal por aqui (já vai com o meu código ${data.referral_code}):\nhttps://orcamento.emersonhonoratoretratos.com.br/natal?indicacao=${data.referral_code}\n\nOu peça um orçamento para outro ensaio:\nhttps://orcamento.emersonhonoratoretratos.com.br/pedido?indicacao=${data.referral_code}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-4 inline-flex w-full justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"

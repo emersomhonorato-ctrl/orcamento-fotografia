@@ -46,6 +46,7 @@ import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
 import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
 import NewActivityAlert from "@/components/NewActivityAlert";
 import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
+import ReferralsPanel from "@/components/ReferralsPanel";
 import SalesReport from "@/components/SalesReport";
 import FollowUpPanel from "@/components/FollowUpPanel";
 import SafeSection from "@/components/SafeSection";
@@ -3104,6 +3105,9 @@ export default function App() {
           <TabsContent value="entregas" className="mt-6">
             <SafeSection name="Entregas">
               <PhotoDeliveryAdmin records={records} />
+              <div className="mt-6">
+                <ReferralsPanel settings={settings} onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))} />
+              </div>
             </SafeSection>
           </TabsContent>
 

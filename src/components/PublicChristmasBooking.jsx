@@ -46,7 +46,15 @@ export default function PublicChristmasBooking() {
   const [bookedAt, setBookedAt] = useState(0);
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
-  const [form, setForm] = useState({ name: "", whatsapp: "", email: "", notes: "", website: "" });
+  // Indicação: o link do cliente chega como ?indicacao=CODIGO
+  const [referralFromLink] = useState(() => {
+    try {
+      return String(new URLSearchParams(window.location.search).get("indicacao") || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 20);
+    } catch {
+      return "";
+    }
+  });
+  const [form, setForm] = useState(() => ({ name: "", whatsapp: "", email: "", notes: "", website: "", referral: referralFromLink }));
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
@@ -197,7 +205,7 @@ export default function PublicChristmasBooking() {
       p_name: form.name.trim(),
       p_whatsapp: form.whatsapp.trim(),
       p_email: form.email.trim(),
-      p_notes: form.notes.trim() || null,
+      p_notes: [form.referral.trim() ? `🎁 Indicação: ${form.referral.trim().slice(0, 80)}` : "", form.notes.trim()].filter(Boolean).join("\n") || null,
       p_extra_people: extraPersonPrice > 0 ? extraPeople : 0,
       p_payment: allowFullPayment ? paymentChoice : "sinal",
     });
@@ -470,6 +478,12 @@ export default function PublicChristmasBooking() {
                     <input className={`${inputClass} mt-1.5`} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="seuemail@exemplo.com" />
                   </label>
                 </div>
+                <label className="block">
+                  <span className="text-sm font-medium">Alguém te indicou?</span>
+                  <span className="block text-xs text-slate-500">Escreva o código de indicação ou o nome de quem indicou. Quem indica ganha um presente do estúdio. 🎁</span>
+                  <input className={`${inputClass} mt-1.5`} value={form.referral} onChange={update("referral")} maxLength={80} placeholder="Ex.: MARIA7K2 ou Maria Silva" />
+                  {referralFromLink ? <span className="mt-1 block text-xs text-emerald-700">Você chegou pelo link de indicação. Obrigado!</span> : null}
+                </label>
                 <label className="block">
                   <span className="text-sm font-medium">Observações</span>
                   <span className="block text-xs text-slate-500">Quantas pessoas, crianças, pets, alguma ideia especial…</span>
