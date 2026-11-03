@@ -47,6 +47,7 @@ export default function PublicChristmasBooking() {
   const [bookedAt, setBookedAt] = useState(0);
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
+  const [doubleSession, setDoubleSession] = useState(false);
   // Indicação: o link do cliente chega como ?indicacao=CODIGO
   const [referralFromLink] = useState(() => {
     try {
@@ -178,7 +179,15 @@ export default function PublicChristmasBooking() {
   const extraPersonPrice = Number(campaign?.extra_person_price || 0);
   const maxExtraPeople = Math.max(0, Number(campaign?.max_extra_people ?? 5));
   const allowFullPayment = campaign?.allow_full_payment !== false;
-  const previewTotal = selectedPackage ? Number(selectedPackage.price || 0) + extraPeople * extraPersonPrice : 0;
+  // Ensaio de 1 hora: o horário seguinte (mesmo dia) precisa estar livre
+  const nextSlot = selectedSlot && selectedDay
+    ? selectedDay.slots.find((slot) => slot.status === "livre" && new Date(slot.starts_at).getTime() === new Date(selectedSlot.starts_at).getTime() + slotMinutes * 60000) || null
+    : null;
+  const isDouble = doubleSession && Boolean(nextSlot);
+  const sessionMinutes = slotMinutes * (isDouble ? 2 : 1);
+  const packagePrice = selectedPackage ? Number(selectedPackage.price || 0) * (isDouble ? 2 : 1) : 0;
+  const packagePhotos = selectedPackage ? Number(selectedPackage.photos || 0) * (isDouble ? 2 : 1) : 0;
+  const previewTotal = selectedPackage ? packagePrice + extraPeople * extraPersonPrice : 0;
   const previewDeposit = Math.round(previewTotal * Number(campaign?.deposit_percent || 50)) / 100;
 
   const update = (field) => (event) => {
@@ -213,12 +222,14 @@ export default function PublicChristmasBooking() {
       p_payment: allowFullPayment ? paymentChoice : "sinal",
       p_cpf: form.cpf.replace(/\D/g, ""),
       p_birth_date: form.birth_date,
+      ...(isDouble ? { p_double: true } : {}),
     });
     if (error) {
       setStatus("idle");
       setErrorMessage(error.message || "Não foi possível reservar agora. Tente novamente.");
       if (/reservado|passou/i.test(error.message || "")) {
         setSlotId("");
+        setDoubleSession(false);
         loadData();
       }
       return;
@@ -311,7 +322,7 @@ export default function PublicChristmasBooking() {
               {result ? (
                 <div className="mx-auto mt-5 max-w-sm rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left text-sm leading-7 text-slate-700">
                   <p><strong>Data:</strong> {selectedDay ? fullDateLabel(selectedDay.key) : ""}</p>
-                  <p><strong>Horário:</strong> {selectedSlot ? `${localTime(selectedSlot.starts_at)} às ${addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes)}` : ""}</p>
+                  <p><strong>Horário:</strong> {selectedSlot ? `${localTime(selectedSlot.starts_at)} às ${addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes * (result.double ? 2 : 1))}` : ""}{result.double ? " (ensaio de 1 hora)" : ""}</p>
                   <p><strong>Pacote:</strong> {result.photos} fotos — {formatBRL(result.package_price ?? result.price)}</p>
                   {Number(result.extra_people) ? <p><strong>Pessoas extras:</strong> {result.extra_people} — {formatBRL(result.extra_amount)}</p> : null}
                   <p><strong>Total:</strong> {formatBRL(result.price)}</p>
@@ -464,6 +475,26 @@ export default function PublicChristmasBooking() {
                       </button>
                     ))}
                   </div>
+                  {selectedSlot && selectedPackage ? (
+                    <button
+                      type="button"
+                      disabled={!nextSlot}
+                      onClick={() => setDoubleSession((value) => !value)}
+                      className={`flex w-full items-start gap-3 rounded-2xl border-2 p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${isDouble ? "border-[#7a1712] bg-[#fff5f3]" : "border-slate-200 hover:border-[#c2483d]"}`}
+                    >
+                      <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs font-bold ${isDouble ? "border-[#7a1712] bg-[#7a1712] text-white" : "border-slate-300"}`}>{isDouble ? "✓" : ""}</span>
+                      <span className="text-sm leading-6">
+                        <span className="block font-semibold text-slate-900">⏱️ Quero o ensaio especial de 1 hora</span>
+                        {nextSlot ? (
+                          <span className="block text-slate-600">
+                            Reserva 2 horários seguidos ({localTime(selectedSlot.starts_at)} às {addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes * 2)}) e você recebe o dobro de fotos: <strong>{Number(selectedPackage.photos || 0) * 2} fotos tratadas</strong> por {formatBRL(Number(selectedPackage.price || 0) * 2)}.
+                          </span>
+                        ) : (
+                          <span className="block text-slate-500">Indisponível neste horário: o horário seguinte já está ocupado. Escolha outro horário para o ensaio de 1 hora.</span>
+                        )}
+                      </span>
+                    </button>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -509,8 +540,8 @@ export default function PublicChristmasBooking() {
               {selectedPackage && selectedSlot ? (
                 <div className="rounded-2xl border border-[#f1d3cf] bg-[#fff8f6] p-4 text-sm leading-6 text-slate-700">
                   <p className="font-semibold text-[#7a1712]">Resumo</p>
-                  <p>{fullDateLabel(selectedDay.key)} • {localTime(selectedSlot.starts_at)} às {addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes)}</p>
-                  <p>{selectedPackage.photos} fotos tratadas • {formatBRL(selectedPackage.price)}</p>
+                  <p>{fullDateLabel(selectedDay.key)} • {localTime(selectedSlot.starts_at)} às {addMinutesToTime(localTime(selectedSlot.starts_at), sessionMinutes)}{isDouble ? " (ensaio de 1 hora)" : ""}</p>
+                  <p>{packagePhotos} fotos tratadas • {formatBRL(packagePrice)}</p>
                   {extraPeople > 0 ? <p>{extraPeople} pessoa{extraPeople > 1 ? "s" : ""} extra{extraPeople > 1 ? "s" : ""} • {formatBRL(extraPeople * extraPersonPrice)}</p> : null}
                   <p className="mt-1 font-semibold text-slate-900">Total: {formatBRL(previewTotal)}</p>
                 </div>

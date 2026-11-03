@@ -1204,6 +1204,7 @@ export default function App() {
         }
 
         const startTime = localTime(booking.starts_at);
+        const sessionMinutes = slotMinutes * (booking.is_double ? 2 : 1);
         const depositPaid = booking.status === "confirmado" ? Number(booking.deposit_amount || 0) : 0;
         eventsList.push(normalizeRecord({
           recordType: "evento",
@@ -1222,12 +1223,12 @@ export default function App() {
           packageName: `${campaign?.title || "Ensaio"} — ${booking.package_photos || ""} fotos`,
           eventDate: localDateKey(booking.starts_at),
           startTime,
-          endTime: addMinutesToTime(startTime, slotMinutes),
+          endTime: addMinutesToTime(startTime, sessionMinutes),
           location: campaign?.location || "",
           amount: bookingTotal(booking),
           amountPaid: depositPaid,
           editedPhotosCount: Number(booking.package_photos || 0),
-          budgetDescription: `${campaign?.title || "Ensaio"} (${slotMinutes} min) com ${booking.package_photos} fotos tratadas${Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa(s) extra(s) (R$ ${Number(booking.extra_people_amount || 0).toFixed(2).replace(".", ",")})` : ""}.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
+          budgetDescription: `${campaign?.title || "Ensaio"} (${sessionMinutes} min${booking.is_double ? ", ensaio especial de 1 hora" : ""}) com ${booking.package_photos} fotos tratadas${Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa(s) extra(s) (R$ ${Number(booking.extra_people_amount || 0).toFixed(2).replace(".", ",")})` : ""}.${extraPrice ? ` Fotos extras: R$ ${extraPrice.toFixed(2).replace(".", ",")} cada.` : ""}`,
           notes: [
             booking.notes ? `Observação do cliente: ${booking.notes}` : "",
             booking.status === "aguardando_sinal" ? `Aguardando sinal de R$ ${Number(booking.deposit_amount || 0).toFixed(2).replace(".", ",")} via Pix.` : "",
