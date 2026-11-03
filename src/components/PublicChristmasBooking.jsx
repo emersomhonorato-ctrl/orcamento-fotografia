@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
 import { supabase } from "@/supabase";
 import { buildPixPayload, formatPixKey } from "@/lib/pix";
+import { formatCpfInput, isValidBirthDate, isValidCpf } from "@/lib/cpf";
 import {
   BOOKING_CAMPAIGN_ID,
   addMinutesToTime,
@@ -46,7 +47,15 @@ export default function PublicChristmasBooking() {
   const [bookedAt, setBookedAt] = useState(0);
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
-  const [form, setForm] = useState({ name: "", whatsapp: "", email: "", notes: "", website: "" });
+  // Indicação: o link do cliente chega como ?indicacao=CODIGO
+  const [referralFromLink] = useState(() => {
+    try {
+      return String(new URLSearchParams(window.location.search).get("indicacao") || "").toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 20);
+    } catch {
+      return "";
+    }
+  });
+  const [form, setForm] = useState(() => ({ name: "", whatsapp: "", email: "", cpf: "", birth_date: "", notes: "", website: "", referral: referralFromLink }));
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
@@ -173,7 +182,7 @@ export default function PublicChristmasBooking() {
   const previewDeposit = Math.round(previewTotal * Number(campaign?.deposit_percent || 50)) / 100;
 
   const update = (field) => (event) => {
-    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : event.target.value;
+    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : field === "cpf" ? formatCpfInput(event.target.value) : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -189,6 +198,8 @@ export default function PublicChristmasBooking() {
     if (form.name.trim().split(/\s+/).filter((part) => part.length >= 2).length < 2) return setErrorMessage("Informe nome e sobrenome.");
     if (form.whatsapp.replace(/\D/g, "").length < 10) return setErrorMessage("Informe um WhatsApp com DDD.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return setErrorMessage("Informe um e-mail válido.");
+    if (!isValidCpf(form.cpf)) return setErrorMessage("Informe um CPF válido (é usado no contrato).");
+    if (!isValidBirthDate(form.birth_date)) return setErrorMessage("Informe sua data de nascimento.");
 
     setStatus("sending");
     const { data, error } = await supabase.rpc("book_slot", {
@@ -197,9 +208,11 @@ export default function PublicChristmasBooking() {
       p_name: form.name.trim(),
       p_whatsapp: form.whatsapp.trim(),
       p_email: form.email.trim(),
-      p_notes: form.notes.trim() || null,
+      p_notes: [form.referral.trim() ? `🎁 Indicação: ${form.referral.trim().slice(0, 80)}` : "", form.notes.trim()].filter(Boolean).join("\n") || null,
       p_extra_people: extraPersonPrice > 0 ? extraPeople : 0,
       p_payment: allowFullPayment ? paymentChoice : "sinal",
+      p_cpf: form.cpf.replace(/\D/g, ""),
+      p_birth_date: form.birth_date,
     });
     if (error) {
       setStatus("idle");
@@ -392,7 +405,8 @@ export default function PublicChristmasBooking() {
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4">
                     <div>
                       <p className="font-medium text-slate-900">Pessoas extras</p>
-                      <p className="text-xs text-slate-500">{formatBRL(extraPersonPrice)} por pessoa a mais (até {maxExtraPeople})</p>
+                      <p className="text-xs text-slate-500">O ensaio já inclui a família: pai, mãe e filhos.</p>
+                      <p className="text-xs text-slate-500">Vai trazer avós, tios, padrinhos ou outra pessoa? {formatBRL(extraPersonPrice)} por pessoa a mais (até {maxExtraPeople}). Ex.: avô e avó = 2 pessoas extras.</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <button type="button" aria-label="Menos uma pessoa" disabled={extraPeople <= 0} onClick={() => setExtraPeople((n) => Math.max(0, n - 1))} className="h-10 w-10 rounded-full border-2 border-slate-200 text-xl font-semibold text-[#7a1712] disabled:opacity-40">−</button>
@@ -468,7 +482,22 @@ export default function PublicChristmasBooking() {
                     <span className="text-sm font-medium">E-mail <span className="text-[#b3261e]">*</span></span>
                     <input className={`${inputClass} mt-1.5`} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="seuemail@exemplo.com" />
                   </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">CPF <span className="text-[#b3261e]">*</span></span>
+                    <input className={`${inputClass} mt-1.5`} value={form.cpf} onChange={update("cpf")} inputMode="numeric" placeholder="000.000.000-00" />
+                    <span className="mt-1 block text-xs text-slate-500">Usado só no contrato do ensaio.</span>
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-medium">Data de nascimento <span className="text-[#b3261e]">*</span></span>
+                    <input className={`${inputClass} mt-1.5`} type="date" max={new Date().toISOString().slice(0, 10)} value={form.birth_date} onChange={update("birth_date")} autoComplete="bday" />
+                  </label>
                 </div>
+                <label className="block">
+                  <span className="text-sm font-medium">Alguém te indicou?</span>
+                  <span className="block text-xs text-slate-500">Escreva o código de indicação ou o nome de quem indicou. Quem indica ganha um presente do estúdio. 🎁</span>
+                  <input className={`${inputClass} mt-1.5`} value={form.referral} onChange={update("referral")} maxLength={80} placeholder="Ex.: MARIA7K2 ou Maria Silva" />
+                  {referralFromLink ? <span className="mt-1 block text-xs text-emerald-700">Você chegou pelo link de indicação. Obrigado!</span> : null}
+                </label>
                 <label className="block">
                   <span className="text-sm font-medium">Observações</span>
                   <span className="block text-xs text-slate-500">Quantas pessoas, crianças, pets, alguma ideia especial…</span>

@@ -30,6 +30,15 @@ export default function ClientModal({ open, onOpenChange, clientForm, setClientF
             />
           </div>
           <div className="space-y-2">
+            <Label>Data de nascimento</Label>
+            <Input
+              type="date"
+              value={clientForm.birthDate || ""}
+              onChange={(event) => setClientForm((current) => ({ ...current, birthDate: event.target.value }))}
+              className="rounded-2xl"
+            />
+          </div>
+          <div className="space-y-2">
             <Label>E-mail</Label>
             <Input
               value={clientForm.email}

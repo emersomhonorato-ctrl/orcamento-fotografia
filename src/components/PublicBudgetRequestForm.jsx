@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatCpfInput, isValidBirthDate, isValidCpf } from "@/lib/cpf";
 import { supabase } from "@/supabase";
 
 // Página pública: o cliente abre pelo link enviado no WhatsApp e pede um orçamento.
@@ -25,6 +26,8 @@ const emptyForm = {
   name: "",
   whatsapp: "",
   email: "",
+  cpf: "",
+  birth_date: "",
   service: "",
   event_date: "",
   event_time: "",
@@ -85,7 +88,7 @@ export default function PublicBudgetRequestForm() {
   }, [form.event_date]);
 
   const update = (field) => (event) => {
-    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : event.target.value;
+    const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : field === "cpf" ? formatCpfInput(event.target.value) : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -110,6 +113,14 @@ export default function PublicBudgetRequestForm() {
       setErrorMessage("Informe um e-mail válido.");
       return;
     }
+    if (!isValidCpf(form.cpf)) {
+      setErrorMessage("Informe um CPF válido (é usado no contrato).");
+      return;
+    }
+    if (!isValidBirthDate(form.birth_date)) {
+      setErrorMessage("Informe sua data de nascimento.");
+      return;
+    }
     if (!form.service) {
       setErrorMessage("Escolha o tipo de evento.");
       return;
@@ -124,6 +135,8 @@ export default function PublicBudgetRequestForm() {
       name: form.name.trim().slice(0, 120),
       whatsapp: form.whatsapp.trim(),
       email: form.email.trim().toLowerCase().slice(0, 160),
+      cpf: form.cpf.replace(/\D/g, ""),
+      birth_date: form.birth_date,
       service: form.service,
       event_date: form.event_date,
       event_time: form.event_time.trim().slice(0, 30) || null,
@@ -177,6 +190,15 @@ export default function PublicBudgetRequestForm() {
                 </Field>
                 <Field label="E-mail" required>
                   <input className={inputClass} value={form.email} onChange={update("email")} type="email" autoComplete="email" placeholder="seuemail@exemplo.com" />
+                </Field>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="CPF" required hint="Usado só no contrato">
+                  <input className={inputClass} value={form.cpf} onChange={update("cpf")} inputMode="numeric" placeholder="000.000.000-00" />
+                </Field>
+                <Field label="Data de nascimento" required>
+                  <input className={inputClass} type="date" max={today} value={form.birth_date} onChange={update("birth_date")} autoComplete="bday" />
                 </Field>
               </div>
 

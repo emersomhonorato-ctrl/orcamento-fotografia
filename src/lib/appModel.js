@@ -359,6 +359,7 @@ export const emptyClient = {
   id: null,
   name: "",
   cpf: "",
+  birthDate: "",
   email: "",
   phone: "",
   whatsapp: "",
@@ -512,6 +513,7 @@ export function normalizeClient(client) {
     id: source.id || crypto.randomUUID(),
     name: source.name || source.clientName || "",
     cpf: source.cpf || source.clientCpf || "",
+    birthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(source.birthDate || "")) ? source.birthDate : "",
     email: source.email || "",
     phone: source.phone || "",
     whatsapp: source.whatsapp || source.phone || "",
@@ -624,7 +626,7 @@ export function normalizeAppState(raw) {
     expenses: Array.isArray(payload.expenses) ? payload.expenses.filter((item) => item && item.id) : [],
     clients: Array.isArray(payload.clients) ? payload.clients.map(normalizeClient) : base.clients,
     services: Array.isArray(payload.services) && payload.services.length > 0
-      ? mergeServicesByName(payload.services.map(normalizeService))
+      ? payload.services.map(normalizeService) // os serviços padrão só entram num app novo, sem serviços; não voltam depois de renomeados ou excluídos
       : base.services,
     settings: {
       ...base.settings,
