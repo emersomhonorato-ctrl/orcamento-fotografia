@@ -47,6 +47,7 @@ import ChristmasBookingAdmin from "@/components/ChristmasBookingAdmin";
 import NewActivityAlert from "@/components/NewActivityAlert";
 import PhotoDeliveryAdmin from "@/components/PhotoDeliveryAdmin";
 import ReferralsPanel from "@/components/ReferralsPanel";
+import CampaignQueue from "@/components/CampaignQueue";
 import SalesReport from "@/components/SalesReport";
 import FollowUpPanel from "@/components/FollowUpPanel";
 import SafeSection from "@/components/SafeSection";
@@ -3356,7 +3357,10 @@ export default function App() {
             <Card className="studio-panel rounded-3xl border-0 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-lg">Clientes</CardTitle>
-                <Button onClick={openNewClientModal} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo cliente</Button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <CampaignQueue clients={clients} events={events} settings={settings} onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))} />
+                  <Button onClick={openNewClientModal} className="rounded-2xl"><Plus className="mr-2 h-4 w-4" />Novo cliente</Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {duplicateGroups.length ? (
