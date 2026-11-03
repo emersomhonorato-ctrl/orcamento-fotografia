@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/supabase";
 import {
   BOOKING_CAMPAIGN_ID,
+  addMinutesToTime,
   buildSlotTimes,
   capitalize,
   dayMonthLabel,
@@ -89,7 +90,10 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
 
   const bookingBySlot = useMemo(() => {
     const map = new Map();
-    bookings.filter((booking) => booking.status !== "cancelado").forEach((booking) => map.set(booking.slot_id, booking));
+    bookings.filter((booking) => booking.status !== "cancelado").forEach((booking) => {
+      map.set(booking.slot_id, booking);
+      if (booking.is_double && booking.second_slot_id) map.set(booking.second_slot_id, { ...booking, isContinuation: true });
+    });
     return map;
   }, [bookings]);
 
@@ -160,7 +164,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     if (!window.confirm(`Cancelar a reserva de ${booking.name}? O horário volta a ficar livre.`)) return;
     setBusy(true);
     await supabase.from("bookings").update({ status: "cancelado" }).eq("id", booking.id);
-    await supabase.from("booking_slots").update({ status: "livre" }).eq("id", booking.slot_id);
+    await supabase.from("booking_slots").update({ status: "livre" }).in("id", [booking.slot_id, booking.is_double ? booking.second_slot_id : null].filter(Boolean));
     setBusy(false);
     onBookingCanceled?.(booking);
     load();
@@ -371,7 +375,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         : `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio (${campaign?.title || "ensaio"}) está confirmado ${themeEmoji(campaign?.title)}`,
       "",
       `📅 *Data:* ${date}`,
-      `⏰ *Horário:* ${localTime(booking.starts_at)}`,
+      `⏰ *Horário:* ${localTime(booking.starts_at)}${booking.is_double ? ` às ${addMinutesToTime(localTime(booking.starts_at), Number(campaign?.slot_minutes || 30) * 2)} (ensaio de 1 hora)` : ""}`,
       `📸 *Pacote:* ${booking.package_photos} fotos — ${formatBRL(booking.package_price)}`,
       Number(booking.extra_people) ? `👥 *Pessoas extras:* ${booking.extra_people} — ${formatBRL(booking.extra_people_amount)}` : "",
       `💵 *Total:* ${formatBRL(bookingTotal(booking))}`,
@@ -646,9 +650,11 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                         <span className="font-semibold">{localTime(slot.starts_at)}</span>
                         <span className="text-[11px] uppercase tracking-wide">{booking ? (booking.status === "aguardando_sinal" ? "aguardando" : "confirmado") : slot.status}</span>
                       </div>
-                      {booking ? (
+                      {booking?.isContinuation ? (
+                        <p className="mt-1 text-xs text-slate-600">Continuação do ensaio de 1 hora de <strong>{booking.name}</strong></p>
+                      ) : booking ? (
                         <div className="mt-1 space-y-1">
-                          <p className="font-medium text-slate-900">{booking.name}</p>
+                          <p className="font-medium text-slate-900">{booking.name}{booking.is_double ? <span className="ml-1.5 rounded-full bg-[#7a1712] px-2 py-0.5 text-[10px] font-semibold text-white">1 hora</span> : null}</p>
                           <p className="text-xs text-slate-600">{booking.package_photos} fotos{Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa${booking.extra_people > 1 ? "s" : ""}` : ""} • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</p>
                           {booking.status === "aguardando_sinal" ? (
                             <>

@@ -12,6 +12,7 @@ import { listDriveImages } from "@/lib/driveList";
 import { baseFileName, buildLightroomCollection, downloadTextFile } from "@/lib/lightroom";
 import { PAY_PUBLIC_BASE } from "@/lib/payments";
 import { openExternal } from "@/lib/openExternal";
+import DriveImportButton from "@/components/DriveImportButton";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -451,6 +452,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
             <div className="space-y-1">
               <Label>Link da pasta do Drive com as fotos em baixa *</Label>
               <div className="flex items-center gap-2"><Link2 className="h-4 w-4 shrink-0 text-slate-400" /><Input className="rounded-2xl" placeholder="https://drive.google.com/drive/folders/..." value={form.drive_url} onChange={(e) => setForm({ ...form, drive_url: e.target.value })} /></div>
+              <DriveImportButton kind="selecao" clientName={form.client_name} eventDate={form.event_date} currentUrl={form.drive_url} onFolderReady={(url) => setForm((current) => ({ ...current, drive_url: url }))} />
               <p className="text-xs text-slate-500">Use os mesmos nomes de arquivo do Lightroom (ex.: EME_1158.jpg). Fotos em baixa (lado maior ~1600 px) carregam rápido no celular.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-4">
@@ -489,6 +491,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
             <div className="space-y-1">
               <Label>Pasta das fotos tratadas para a entrega (opcional — dá para colocar depois)</Label>
               <div className="flex items-center gap-2"><Link2 className="h-4 w-4 shrink-0 text-slate-400" /><Input className="rounded-2xl" placeholder="https://drive.google.com/drive/folders/..." value={form.final_drive_url} onChange={(e) => setForm({ ...form, final_drive_url: e.target.value })} /></div>
+              <DriveImportButton kind="entrega" clientName={form.client_name} eventDate={form.event_date} currentUrl={form.final_drive_url} onFolderReady={(url) => setForm((current) => ({ ...current, final_drive_url: url }))} />
               <p className="text-xs text-slate-500">Quando o cliente enviar a escolha, a galeria de entrega é criada sozinha (como rascunho) na aba Entregas, com os dados do cliente e a mesma senha.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-[1fr_220px]">

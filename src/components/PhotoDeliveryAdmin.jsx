@@ -16,6 +16,7 @@ import {
   isDriveFolder,
   makeDeliverySlug, DEFAULT_COVER_FOCUS, coverFocusStyle, focusFromClick } from "@/lib/delivery";
 import { openExternal } from "@/lib/openExternal";
+import DriveImportButton from "@/components/DriveImportButton";
 
 function addDays(days) {
   const date = new Date();
@@ -422,6 +423,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 <Link2 className="h-4 w-4 shrink-0 text-slate-400" />
                 <Input className="rounded-2xl" placeholder="https://drive.google.com/drive/folders/..." value={form.drive_url} onChange={(e) => setForm({ ...form, drive_url: e.target.value })} />
               </div>
+              <DriveImportButton kind="entrega" clientName={form.client_name} eventDate={form.event_date} currentUrl={form.drive_url} onFolderReady={(url) => setForm((current) => ({ ...current, drive_url: url }))} />
               <p className={`text-xs ${form.drive_url && !isDriveFolder(form.drive_url) ? "text-amber-700" : "text-slate-500"}`}>
                 {form.drive_url && !isDriveFolder(form.drive_url)
                   ? "Esse link não parece ser de uma pasta. Funciona, mas a galeria embutida só aparece com link de pasta."
