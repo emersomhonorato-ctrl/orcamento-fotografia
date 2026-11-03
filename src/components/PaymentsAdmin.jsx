@@ -8,6 +8,7 @@ import { supabase } from "@/supabase";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR } from "@/lib/delivery";
 import { PAY_PUBLIC_BASE, PAYMENT_STATUS, brl, installmentLabel, methodLabel } from "@/lib/payments";
+import { openExternal } from "@/lib/openExternal";
 
 function addDays(days) {
   const date = new Date();
@@ -175,7 +176,7 @@ export default function PaymentsAdmin({ records = [] }) {
       "Assim que pagar, eu já recebo a confirmação automaticamente. Obrigado! 📸",
     ].join("\n\n");
     const url = item.client_whatsapp ? buildWhatsAppLink(item.client_whatsapp, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
   }
 
   async function refresh(item) {
@@ -376,7 +377,7 @@ export default function PaymentsAdmin({ records = [] }) {
                         <Button size="sm" variant="ghost" className="rounded-xl" title="Cancelar cobrança" onClick={() => cancel(item)}><XCircle className="h-3.5 w-3.5" /></Button>
                       </>
                     ) : null}
-                    <Button size="sm" variant="ghost" className="rounded-xl" title="Ver como o cliente vê" onClick={() => window.open(`${window.location.origin}/pagar/${item.slug}`, "_blank", "noopener")}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="rounded-xl" title="Ver como o cliente vê" onClick={() => openExternal(`${window.location.origin}/pagar/${item.slug}`)}><Eye className="h-3.5 w-3.5" /></Button>
                     {item.status !== "pago" ? <Button size="sm" variant="ghost" className="rounded-xl text-red-600" title="Excluir" onClick={() => remove(item)}><Trash2 className="h-3.5 w-3.5" /></Button> : null}
                   </div>
                 </CardContent>

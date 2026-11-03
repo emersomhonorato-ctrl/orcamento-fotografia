@@ -3,6 +3,7 @@ import { HeartHandshake, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR, getTodayLocalISO } from "@/utils/formatters";
+import { openExternal } from "@/lib/openExternal";
 
 // Regras de "próximo ensaio": a partir do tipo do trabalho, sugere o próximo contato
 const RULES = [
@@ -58,7 +59,7 @@ export default function FollowUpPanel({ events = [], settings = {}, onUpdateSett
     const phone = item.record.whatsapp || item.record.phone;
     const text = `${item.rule.text(first)}\n\n${settings.studioName || "Emerson Honorato Retratos"}`;
     const url = phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank", "noopener");
+    openExternal(url);
     mark("followupContacted", item.key);
   }
 

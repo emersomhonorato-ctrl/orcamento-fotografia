@@ -104,6 +104,7 @@ import {
   isConflict,
   normalizeItems,
 } from "@/utils/formatters";
+import { openExternal } from "@/lib/openExternal";
 
 const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
@@ -2056,7 +2057,7 @@ export default function App() {
       return;
     }
 
-    window.open(buildWhatsAppLink(phone, buildCommunicationMessage(record, settings, kind)), "_blank");
+    openExternal(buildWhatsAppLink(phone, buildCommunicationMessage(record, settings, kind)));
     markCommunicationSent(record, kind);
   }
 
@@ -2094,7 +2095,7 @@ export default function App() {
       `A proposta vale até ${formatDateBR(expiresISO)}. Qualquer dúvida, é só me chamar! 💛`,
       settings.studioName || "Emerson Honorato Retratos",
     ].join("\n");
-    window.open(phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    openExternal(phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
     if (!record.budgetSentAt) updateRecordFields(record.id, { budgetSentAt: new Date().toISOString() });
     loadBudgetShares();
   }
@@ -2107,7 +2108,7 @@ export default function App() {
 
     const subject = encodeURIComponent(buildCommunicationSubject(record, settings, kind));
     const body = encodeURIComponent(buildCommunicationMessage(record, settings, kind));
-    window.open(`mailto:${record.email}?subject=${subject}&body=${body}`, "_blank");
+    openExternal(`mailto:${record.email}?subject=${subject}&body=${body}`);
     markCommunicationSent(record, kind);
   }
 

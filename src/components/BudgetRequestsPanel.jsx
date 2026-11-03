@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/utils/formatters";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
+import { openExternal } from "@/lib/openExternal";
 
 export const PUBLIC_REQUEST_URL = "https://orcamento.emersonhonoratoretratos.com.br/pedido";
 
@@ -81,7 +82,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
   function sendInvite() {
     const text = buildRequestInviteMessage(settings);
     const link = clientPhone.replace(/\D/g, "") ? buildWhatsAppLink(clientPhone, text) : buildWhatsAppShareLink(text);
-    window.open(link, "_blank", "noopener");
+    openExternal(link);
   }
 
   async function copyLink() {
@@ -99,7 +100,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
     const text = `Olá, ${firstName}! Recebi seu pedido de orçamento para ${String(request.service || "o seu evento").toLowerCase()}${
       request.event_date ? ` no dia ${formatDateBR(request.event_date)}` : ""
     }. Já estou preparando a proposta e te envio por aqui. 😊`;
-    window.open(buildWhatsAppLink(request.whatsapp, text), "_blank", "noopener");
+    openExternal(buildWhatsAppLink(request.whatsapp, text));
     if (request.status === "novo") setStatus(request, "respondido");
   }
 
@@ -140,7 +141,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
               <Copy className="mr-2 h-4 w-4" />
               {copied ? "Copiado!" : "Copiar link"}
             </Button>
-            <Button variant="outline" className="rounded-2xl" onClick={() => window.open(`${window.location.origin}/pedido`, "_blank", "noopener")}>
+            <Button variant="outline" className="rounded-2xl" onClick={() => openExternal(`${window.location.origin}/pedido`)}>
               <ExternalLink className="mr-2 h-4 w-4" />
               Ver formulário
             </Button>

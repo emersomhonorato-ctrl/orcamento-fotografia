@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronRight, Megaphone, Send, SkipForward, X } from "luc
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { openExternal } from "@/lib/openExternal";
 
 const CAMPAIGN_ID = "natal-2026";
 const TEAM_EMAILS = ["emersomhonorato@gmail.com", "isahonoratoneuropsicopedagoga@gmail.com"];
@@ -16,7 +17,7 @@ function phoneDigits(client) {
 }
 
 function firstName(name = "") {
-  const first = String(name).trim().split(/[\s_\-]+/)[0] || "";
+  const first = String(name).trim().split(/[\s_-]+/)[0] || "";
   return first ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase() : "";
 }
 
@@ -56,7 +57,7 @@ export default function CampaignQueue({ clients = [], events = [], settings = {}
 
   function sendCurrent() {
     if (!current) return;
-    window.open(link, "_blank", "noopener,noreferrer");
+    openExternal(link);
     markSent(current);
   }
 

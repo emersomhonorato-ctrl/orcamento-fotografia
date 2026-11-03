@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/supabase";
 import { STUDIO_WHATSAPP, driveEmbedUrl, formatDateBR, coverFocusStyle } from "@/lib/delivery";
+import { openExternal } from "@/lib/openExternal";
 
 const LOGO = "/Emerson%20Honorato%20Retratos%20Logo.png";
 const SERIF = { fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif" };
@@ -82,7 +83,7 @@ export default function PublicPhotoDelivery({ slug }) {
 
   function openReview() {
     supabase.rpc("mark_review_click", { p_slug: slug }).then(() => {});
-    window.open(data.review_url, "_blank", "noopener");
+    openExternal(data.review_url);
   }
 
   const whatsappLink = (text) => `https://api.whatsapp.com/send?phone=${STUDIO_WHATSAPP}&text=${encodeURIComponent(text)}`;
