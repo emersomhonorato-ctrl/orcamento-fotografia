@@ -24,6 +24,7 @@ import {
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
 import { openExternal } from "@/lib/openExternal";
+import BookingLeadsPanel from "@/components/BookingLeadsPanel";
 
 export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/ensaio";
 const PDF_BUCKET = "ensaios";
@@ -611,6 +612,8 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           {message ? <p className="rounded-2xl bg-slate-50 px-4 py-2 text-sm text-slate-700">{message}</p> : null}
         </CardContent>
       </Card>
+
+      <BookingLeadsPanel campaignId={BOOKING_CAMPAIGN_ID} campaignTitle={campaign?.title} bookings={bookings} publicUrl={CHRISTMAS_PUBLIC_URL} />
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900">Dias e horários</h3>

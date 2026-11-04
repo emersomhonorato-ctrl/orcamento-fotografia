@@ -28,6 +28,16 @@ function formatPhoneInput(value) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+const LEAD_KEY = "eh-natal-lead";
+
+// Celular ou fixo do Brasil: DDD válido + 8 dígitos (fixo) ou 9 começando com 9 (celular)
+function isValidBrazilPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  if (!/^[1-9][1-9]\d{8,9}$/.test(digits)) return false;
+  if (/^(\d)\1+$/.test(digits.slice(2))) return false;
+  return digits.length === 10 ? /^[2-5]/.test(digits.slice(2)) : digits[2] === "9";
+}
+
 function StepTitle({ number, children }) {
   return (
     <h2 className="flex items-center gap-3 text-lg font-semibold text-slate-900">
@@ -56,7 +66,19 @@ export default function PublicChristmasBooking() {
       return "";
     }
   });
-  const [form, setForm] = useState(() => ({ name: "", whatsapp: "", email: "", cpf: "", birth_date: "", notes: "", website: "", referral: referralFromLink }));
+  // Antes de ver os valores: nome completo e WhatsApp (fica salvo neste aparelho)
+  const [lead, setLead] = useState(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(LEAD_KEY) || "null");
+      return saved && saved.name && saved.whatsapp ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const [leadForm, setLeadForm] = useState({ name: "", whatsapp: "", website: "" });
+  const [leadError, setLeadError] = useState("");
+  const [leadBusy, setLeadBusy] = useState(false);
+  const [form, setForm] = useState(() => ({ name: lead?.name || "", whatsapp: lead?.whatsapp || "", email: "", cpf: "", birth_date: "", notes: "", website: "", referral: referralFromLink }));
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState(null);
@@ -194,6 +216,27 @@ export default function PublicChristmasBooking() {
     const value = field === "whatsapp" ? formatPhoneInput(event.target.value) : field === "cpf" ? formatCpfInput(event.target.value) : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  async function handleLeadSubmit(event) {
+    event.preventDefault();
+    setLeadError("");
+    const name = leadForm.name.trim().replace(/\s+/g, " ");
+    if (name.split(" ").filter((part) => part.length >= 2).length < 2) return setLeadError("Informe seu nome completo (nome e sobrenome).");
+    if (!isValidBrazilPhone(leadForm.whatsapp)) return setLeadError("Informe um WhatsApp válido com DDD, por exemplo (48) 99999-9999.");
+    const saved = { name, whatsapp: leadForm.whatsapp.trim() };
+    if (!leadForm.website) {
+      setLeadBusy(true);
+      await supabase.from("booking_leads").insert({ campaign_id: BOOKING_CAMPAIGN_ID, name: name.slice(0, 120), whatsapp: saved.whatsapp.slice(0, 30) }).then(() => null, () => null);
+      setLeadBusy(false);
+    }
+    try {
+      window.localStorage.setItem(LEAD_KEY, JSON.stringify(saved));
+    } catch {
+      // sem armazenamento: só pede de novo na próxima visita
+    }
+    setForm((current) => ({ ...current, name: current.name || saved.name, whatsapp: current.whatsapp || saved.whatsapp }));
+    setLead(saved);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -383,7 +426,29 @@ export default function PublicChristmasBooking() {
             </div>
           ) : null}
 
-          {loadState === "ready" && status !== "done" ? (
+          {loadState === "ready" && status !== "done" && !lead ? (
+            <form onSubmit={handleLeadSubmit} className="mx-auto max-w-md space-y-5 py-2" noValidate>
+              <div className="text-center">
+                <p className="text-3xl">{themeEmoji(campaign?.title)}</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">Veja os pacotes e os horários livres</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Antes, me conte quem é você. Leva 10 segundos.</p>
+              </div>
+              <label className="block">
+                <span className="text-sm font-medium">Nome completo <span className="text-[#b3261e]">*</span></span>
+                <input className={`${inputClass} mt-1.5`} value={leadForm.name} onChange={(event) => setLeadForm((current) => ({ ...current, name: event.target.value }))} autoComplete="name" placeholder="Nome e sobrenome" />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium">WhatsApp <span className="text-[#b3261e]">*</span></span>
+                <input className={`${inputClass} mt-1.5`} value={leadForm.whatsapp} onChange={(event) => setLeadForm((current) => ({ ...current, whatsapp: formatPhoneInput(event.target.value) }))} inputMode="tel" autoComplete="tel" placeholder="(48) 99999-9999" />
+              </label>
+              <input tabIndex={-1} autoComplete="off" value={leadForm.website} onChange={(event) => setLeadForm((current) => ({ ...current, website: event.target.value }))} className="absolute left-[-9999px] h-0 w-0 opacity-0" aria-hidden="true" />
+              {leadError ? <p className="rounded-2xl bg-red-50 px-4 py-2 text-sm text-red-700">{leadError}</p> : null}
+              <button type="submit" disabled={leadBusy} className="w-full rounded-2xl bg-[#7a1712] px-5 py-3.5 font-semibold text-white shadow hover:bg-[#5c0f0b] disabled:opacity-60">{leadBusy ? "Abrindo…" : "Ver pacotes e horários"}</button>
+              <p className="text-center text-xs text-slate-500">Seus dados ficam só com o estúdio, para falar sobre o seu ensaio.</p>
+            </form>
+          ) : null}
+
+          {loadState === "ready" && status !== "done" && lead ? (
             <form onSubmit={handleSubmit} className="space-y-8" noValidate>
               {campaign?.instructions_pdf_url ? (
                 <a href={campaign.instructions_pdf_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-[#7a1712]/20 bg-[#fff5f3] px-4 py-3 text-sm font-semibold text-[#7a1712] hover:bg-[#ffece8]">
