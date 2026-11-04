@@ -25,6 +25,7 @@ import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessa
 import { buildPixPayload } from "@/lib/pix";
 import { openExternal } from "@/lib/openExternal";
 import BookingLeadsPanel from "@/components/BookingLeadsPanel";
+import { paymentDeadline } from "@/components/OverdueBookingsAlert";
 
 export const CHRISTMAS_PUBLIC_URL = "https://orcamento.emersonhonoratoretratos.com.br/ensaio";
 const PDF_BUCKET = "ensaios";
@@ -664,7 +665,11 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                             <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{booking.payment_choice === "total" ? "Aguardando pagamento total" : "Aguardando sinal"} {formatBRL(booking.deposit_amount)}</p>
                             {Number(campaign?.payment_hold_hours ?? 24) > 0 ? (
                               <p className="text-[11px] text-amber-700">
-                                Libera sozinho em {new Date(new Date(booking.created_at).getTime() + Number(campaign?.payment_hold_hours ?? 24) * 3600000).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                {(() => {
+                                  const deadline = paymentDeadline(booking, campaign);
+                                  const label = deadline ? deadline.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+                                  return deadline && deadline.getTime() <= Date.now() ? `Prazo do sinal venceu em ${label} — decida no aviso do topo` : `Prazo do sinal: até ${label}`;
+                                })()}
                               </p>
                             ) : null}
                             </>

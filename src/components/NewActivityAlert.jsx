@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, CalendarCheck, FileText, X } from "lucide-react";
 import { supabase } from "@/supabase";
 import { BOOKING_CAMPAIGN_ID, localDateKey, localTime, dayMonthLabel } from "@/lib/bookings";
+import OverdueBookingsAlert from "@/components/OverdueBookingsAlert";
 
 const SEEN_KEY = "eh-avisos-visto-ate";
 const POLL_MS = 60 * 1000;
@@ -41,6 +42,7 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   const [requests, setRequests] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [campaignTitle, setCampaignTitle] = useState("");
+  const [campaign, setCampaign] = useState(null);
   const [shares, setShares] = useState([]);
   const [selections, setSelections] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -76,7 +78,10 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
       setBookings(bookingRes.data);
       onBookingsData?.(bookingRes.data, campaignRes.data || null);
     }
-    if (!campaignRes.error && campaignRes.data) setCampaignTitle(campaignRes.data.title || "");
+    if (!campaignRes.error && campaignRes.data) {
+      setCampaignTitle(campaignRes.data.title || "");
+      setCampaign(campaignRes.data);
+    }
   }, [onRequestsData, onBookingsData, onSharesData]);
 
   useEffect(() => {
@@ -104,7 +109,9 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
     document.title = total ? `(${total}) Novidades — ${base}` : base;
   }, [total]);
 
-  if (!enabled || !total) return null;
+  if (!enabled) return null;
+  const overdueAlert = <OverdueBookingsAlert bookings={bookings} campaign={campaign} onChanged={poll} onOpenBookings={onOpenBookings} />;
+  if (!total) return overdueAlert;
 
   const markSeen = () => {
     const now = new Date().toISOString();
@@ -151,6 +158,8 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
   ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
+    <>
+    {overdueAlert}
     <div className="mb-6 overflow-hidden rounded-[28px] border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 shadow-[0_18px_50px_rgba(180,120,20,0.12)]">
       <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 px-5 py-3">
         <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-amber-500 text-white">
@@ -194,5 +203,6 @@ export default function NewActivityAlert({ enabled, onOpenRequests, onOpenBookin
         {items.length > 5 ? <li className="px-5 py-2 text-xs text-slate-500">e mais {items.length - 5}…</li> : null}
       </ul>
     </div>
+    </>
   );
 }
