@@ -420,7 +420,7 @@ export default function PublicChristmasBooking() {
               <p className="mx-auto mt-5 max-w-sm text-xs leading-5 text-slate-500">
                 Obrigado, {form.name.trim().split(" ")[0]}! Assim que eu conferir o pagamento, sua reserva fica confirmada.
                 {payUntil
-                  ? ` Pague até ${payUntil.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — depois disso o horário é liberado automaticamente para outra pessoa.`
+                  ? ` Pague até ${payUntil.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} para garantir o seu horário. Sem o pagamento, o horário pode ser liberado para outra pessoa.`
                   : " Sem o pagamento, o horário pode ser liberado para outra pessoa."}
               </p>
             </div>
