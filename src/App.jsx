@@ -1,32 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Ban,
-  Bell,
-  Briefcase,
-  CalendarDays,
-  Camera,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Clock3,
-  FileText,
-  Image as ImageIcon,
-  Mail,
-  MapPin,
-  Pencil,
-  Phone,
-  Plus,
-  RotateCcw,
-  Save,
-  Search,
-  Send,
-  Trash2,
-  User,
-  Wallet,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Ban, Bell, Briefcase, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,10 +28,11 @@ import StudioHeader from "@/components/StudioHeader";
 import PhotoSelectionAdmin from "@/components/PhotoSelectionAdmin";
 import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
-import ExpensesAdmin from "@/components/ExpensesAdmin";
+import ExpensesAdmin, { expensesForMonth } from "@/components/ExpensesAdmin";
+import MonthGoalBar from "@/components/MonthGoalBar";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
-import { applyCardPayments } from "@/lib/finance";
+import { applyCardPayments, historyOf } from "@/lib/finance";
 import MonthAgendaCalendar from "@/components/MonthAgendaCalendar";
 import { BOOKING_CAMPAIGN_ID, addMinutesToTime, bookingTotal, fetchAllRows, localDateKey, localTime } from "@/lib/bookings";
 import {
@@ -1020,9 +994,24 @@ export default function App() {
       return date.getMonth() === selectedMonthNumber - 1 && date.getFullYear() === selectedYear;
     });
 
-    const totalRevenue = onlyEvents.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
-    const received = onlyEvents.reduce((sum, record) => sum + Number(record.amountPaid || 0), 0);
-    const pending = Math.max(totalRevenue - received, 0);
+    // Valores do mês escolhido
+    const activeMonthEvents = monthEvents.filter((record) => record.status !== "Cancelado");
+    const totalRevenue = activeMonthEvents.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
+    // Dinheiro que entrou no mês (pela data de cada pagamento; sem data, conta no mês do trabalho)
+    const received = onlyEvents.reduce((sum, record) => sum + historyOf(record)
+      .filter((payment) => String(payment.date || record.eventDate || "").slice(0, 7) === selectedMonth)
+      .reduce((acc, payment) => acc + Number(payment.amount || 0), 0), 0);
+    // Saldo em aberto de todos os trabalhos não cancelados
+    const pending = onlyEvents
+      .filter((record) => record.status !== "Cancelado")
+      .reduce((sum, record) => sum + Math.max(Number(record.computedAmount || record.amount || 0) - Number(record.amountPaid || 0), 0), 0);
+    const monthExpenses = expensesForMonth(appState.expenses || [], selectedMonth);
+    const expensesTotal = monthExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const expensesPaid = monthExpenses
+      .filter((item) => item.status === "pago")
+      .reduce((sum, item) => sum + Number(item.paidAmount ?? item.amount ?? 0), 0);
+    const profit = received - expensesPaid;
+    const expectedProfit = totalRevenue - expensesTotal;
     const potentialRevenue = activeBudgets.reduce((sum, record) => sum + Number(record.computedAmount || record.amount || 0), 0);
 
     // Conversão = trabalhos fechados ÷ (fechados + cancelados + orçamentos em aberto)
@@ -1038,13 +1027,17 @@ export default function App() {
       totalRevenue,
       received,
       pending,
+      expensesTotal,
+      expensesPaid,
+      profit,
+      expectedProfit,
       openBudgets: activeBudgets.filter((record) => ["Pendente", "Em negociação"].includes(record.status)).length,
       potentialRevenue,
       conversionRate,
       totalClients: uniqueClientsFromEvents.length,
       totalServices: services.length,
     };
-  }, [activeBudgets, canceledBudgets.length, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
+  }, [activeBudgets, appState.expenses, canceledBudgets.length, onlyEvents, selectedMonth, services.length, uniqueClientsFromEvents.length]);
 
   function changeSelectedMonth(direction) {
     const baseDate = new Date(`${selectedMonth}-01T12:00:00`);
@@ -2854,15 +2847,21 @@ export default function App() {
               />
             </div>
             <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-stone-200 bg-white md:grid-cols-4 [&>*]:border-stone-100">
-              <MetricCard title="Receita prevista" value={formatCurrency(metrics.totalRevenue)} subtitle="agenda confirmada" icon={Wallet} />
-              <MetricCard title="Recebido" value={formatCurrency(metrics.received)} subtitle="pagamentos lançados" icon={CheckCircle2} />
-              <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="saldo pendente" icon={AlertTriangle} />
+              <MetricCard title="Faturamento do mês" value={formatCurrency(metrics.totalRevenue)} subtitle={`trabalhos de ${monthLabel}`} icon={Wallet} />
+              <MetricCard title="Entrou no mês" value={formatCurrency(metrics.received)} subtitle="pagamentos recebidos" icon={CheckCircle2} />
+              <MetricCard title="Contas do mês" value={formatCurrency(metrics.expensesTotal)} subtitle={`${formatCurrency(metrics.expensesPaid)} já pagas`} icon={Receipt} tone="expense" />
+              <MetricCard title="Lucro do mês" value={formatCurrency(metrics.profit)} subtitle={`entrou − contas pagas • previsto ${formatCurrency(metrics.expectedProfit)}`} icon={TrendingUp} tone={metrics.profit < 0 ? "negative" : "positive"} />
+              <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="saldo em aberto (todos os meses)" icon={AlertTriangle} tone="pending" />
               <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
               <MetricCard title="Eventos ativos" value={metrics.totalEvents} subtitle="na agenda" icon={CalendarDays} />
               <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="em andamento" icon={FileText} />
-              <MetricCard title="Clientes" value={metrics.totalClients} subtitle="cadastrados" icon={User} />
-              <MetricCard title="Serviços" value={metrics.totalServices} subtitle="na tabela" icon={Briefcase} />
             </div>
+            <MonthGoalBar
+              monthLabel={monthLabel}
+              goal={Number(settings.monthlyGoal || 0)}
+              value={metrics.totalRevenue}
+              onSave={(monthlyGoal) => updateAppState({ settings: { ...settings, monthlyGoal } })}
+            />
           </section>
           <SafeSection name="Faturamento">
             <RevenueChart records={enrichedRecords} />
