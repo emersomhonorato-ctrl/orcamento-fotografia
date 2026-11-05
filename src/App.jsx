@@ -30,6 +30,7 @@ import PaymentsAdmin from "@/components/PaymentsAdmin";
 import FinanceAdmin from "@/components/FinanceAdmin";
 import ExpensesAdmin, { expensesForMonth } from "@/components/ExpensesAdmin";
 import MonthGoalBar from "@/components/MonthGoalBar";
+import WeekAgenda from "@/components/WeekAgenda";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments, historyOf } from "@/lib/finance";
@@ -2826,6 +2827,9 @@ export default function App() {
 
           <TabsContent value="dashboard" className="mt-6">
             <div className="space-y-6">
+          <SafeSection name="Próximos 7 dias">
+            <WeekAgenda events={onlyEvents} onOpen={editEvent} onWhatsApp={(record, dayIndex) => sendWhatsApp(record, dayIndex === 0 ? "lembrete_hoje" : "lembrete")} />
+          </SafeSection>
           <section>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <button type="button" aria-label="Mês anterior" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50" onClick={() => changeSelectedMonth(-1)}>
