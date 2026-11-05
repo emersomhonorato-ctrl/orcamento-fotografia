@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, BadgeCheck, CalendarPlus, Copy, ExternalLink, FileText, FileUp, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, BadgeCheck, CalendarPlus, Clock3, Copy, ExternalLink, FileText, FileUp, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, Undo2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ const WEEKDAYS = [
   { value: 0, label: "Dom" },
 ];
 
-export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCanceled }) {
+export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCanceled, onBookingUpdated }) {
   const [campaign, setCampaign] = useState(null);
   const [slots, setSlots] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -169,6 +169,69 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     await supabase.from("booking_slots").update({ status: "livre" }).in("id", [booking.slot_id, booking.is_double ? booking.second_slot_id : null].filter(Boolean));
     setBusy(false);
     onBookingCanceled?.(booking);
+    load();
+  }
+
+  // Ensaio de 30 min -> 1 hora: reserva o horário seguinte, dobra fotos e pacote e prepara a cobrança da diferença
+  const [upgradeNotice, setUpgradeNotice] = useState(null);
+
+  function nextSlotOf(booking) {
+    const minutes = Number(campaign?.slot_minutes || 30);
+    const target = new Date(booking.starts_at).getTime() + minutes * 60000;
+    return slots.find((slot) => new Date(slot.starts_at).getTime() === target) || null;
+  }
+
+  function upgradeMessage(booking, extra) {
+    const first = String(booking.name || "").trim().split(" ")[0];
+    const minutes = Number(campaign?.slot_minutes || 30);
+    const start = localTime(booking.starts_at);
+    const lines = [
+      `Olá, ${first}! Seu ensaio (${campaign?.title || "ensaio"}) passou para o *ensaio especial de 1 hora* ${themeEmoji(campaign?.title)}`,
+      "",
+      `📅 *Data:* ${fullDateLabel(localDateKey(booking.starts_at))}`,
+      `⏰ *Horário:* ${start} às ${addMinutesToTime(start, minutes * 2)}`,
+      `📸 *Fotos tratadas:* ${booking.package_photos}`,
+      `💵 *Novo total:* ${formatBRL(bookingTotal(booking))}`,
+    ];
+    if (booking.status === "aguardando_sinal") {
+      lines.push(`💰 *${booking.payment_choice === "total" ? "Valor para confirmar" : "Sinal para confirmar"}:* ${formatBRL(booking.deposit_amount)}`);
+      const pix = pixFor(booking);
+      if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
+    } else if (extra > 0) {
+      lines.push(`➕ *Valor adicional:* ${formatBRL(extra)}`);
+      const pix = campaign?.pix_key
+        ? buildPixPayload({ key: campaign.pix_key, name: campaign.pix_name || "Emerson Honorato Retratos", city: campaign.pix_city || "Sideropolis", amount: extra, txid: `NATAL1H${String(booking.id).replace(/-/g, "").slice(0, 10)}` })
+        : "";
+      if (pix) lines.push("", "Se preferir já acertar, Pix copia e cola do valor adicional:", pix, "", "Ou, se preferir, pode pagar no dia do ensaio. 🙏");
+      else lines.push("", "O valor adicional pode ser pago no dia do ensaio. 🙏");
+    }
+    return lines.join("\n");
+  }
+
+  async function upgradeToDouble(booking) {
+    const next = nextSlotOf(booking);
+    if (!next) return setMessage("Não existe horário criado logo depois deste para formar 1 hora.");
+    if (next.status === "reservado") return setMessage(`O horário das ${localTime(next.starts_at)} já está reservado por outra pessoa.`);
+    const minutes = Number(campaign?.slot_minutes || 30);
+    const pkg = (Array.isArray(campaign?.packages) ? campaign.packages : []).find((item) => item.name === booking.package_name);
+    const basePrice = Number(pkg?.price ?? booking.package_price ?? 0);
+    const basePhotos = Number(pkg?.photos ?? booking.package_photos ?? 0);
+    const newTotal = basePrice * 2 + Number(booking.extra_people_amount || 0);
+    const extra = Math.round((newTotal - bookingTotal(booking)) * 100) / 100;
+    const start = localTime(booking.starts_at);
+    if (!window.confirm(
+      `Transformar o ensaio de ${booking.name} em 1 hora?\n\n` +
+      `Horário: ${start} às ${addMinutesToTime(start, minutes * 2)}${next.status === "bloqueado" ? " (o horário das " + localTime(next.starts_at) + " estava bloqueado e será usado)" : ""}\n` +
+      `Fotos tratadas: ${basePhotos * 2}\nNovo total: ${formatBRL(newTotal)}\nDiferença a cobrar: ${formatBRL(extra)}`,
+    )) return;
+    setBusy(true);
+    setMessage("");
+    const { data, error } = await supabase.rpc("admin_make_double", { p_booking_id: booking.id });
+    setBusy(false);
+    if (error) return setMessage(`Não foi possível transformar em 1 hora: ${error.message}`);
+    const updated = { ...booking, ...(data?.booking || {}) };
+    setUpgradeNotice({ booking: updated, extra: Number(data?.extra ?? extra) });
+    onBookingUpdated?.(updated, campaign);
     load();
   }
 
@@ -614,6 +677,23 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         </CardContent>
       </Card>
 
+      {upgradeNotice ? (
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+          <p className="font-semibold text-emerald-900">✅ {upgradeNotice.booking.name} agora tem o ensaio de 1 hora ({upgradeNotice.booking.package_photos} fotos, total {formatBRL(bookingTotal(upgradeNotice.booking))}).</p>
+          <p className="mt-1 text-emerald-800">
+            {upgradeNotice.booking.status === "aguardando_sinal"
+              ? `O sinal foi recalculado para ${formatBRL(upgradeNotice.booking.deposit_amount)}.`
+              : upgradeNotice.extra > 0 ? `Diferença a cobrar: ${formatBRL(upgradeNotice.extra)}.` : "Sem diferença a cobrar."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => openExternal(buildWhatsAppLink(upgradeNotice.booking.whatsapp, upgradeMessage(upgradeNotice.booking, upgradeNotice.extra)))}>
+              <Send className="mr-2 h-4 w-4" />Enviar cobrança pelo WhatsApp
+            </Button>
+            <Button variant="ghost" className="rounded-2xl" onClick={() => setUpgradeNotice(null)}>Fechar</Button>
+          </div>
+        </div>
+      ) : null}
+
       <BookingLeadsPanel campaignId={BOOKING_CAMPAIGN_ID} campaignTitle={campaign?.title} bookings={bookings} publicUrl={CHRISTMAS_PUBLIC_URL} />
 
       <div className="flex items-center justify-between">
@@ -682,6 +762,9 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                               <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" disabled={busy} onClick={() => markDepositReceived(booking)}><BadgeCheck className="h-3.5 w-3.5" />{booking.payment_choice === "total" ? "Pagamento recebido" : "Sinal recebido"}</button>
                             ) : null}
                             <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700" onClick={() => confirmOnWhatsApp(booking)}><Send className="h-3.5 w-3.5" />{booking.status === "aguardando_sinal" ? "Cobrar sinal" : "Confirmar"}</button>
+                            {!booking.is_double ? (
+                              <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-[#7a1712]" disabled={busy} onClick={() => upgradeToDouble(booking)}><Clock3 className="h-3.5 w-3.5" />Transformar em 1 hora</button>
+                            ) : null}
                             <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-red-700" onClick={() => cancelBooking(booking)}><Undo2 className="h-3.5 w-3.5" />Cancelar</button>
                           </div>
                         </div>

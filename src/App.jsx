@@ -1248,6 +1248,27 @@ export default function App() {
   }, []);
 
   // Reserva cancelada na aba Natal -> agendamento correspondente fica "Cancelado"
+  // Reserva virou ensaio de 1 hora (aba Ensaios) -> atualiza o agendamento correspondente
+  const updateBookingEvent = useCallback((booking, campaign) => {
+    const slotMinutes = Number(campaign?.slot_minutes || 30) * (booking.is_double ? 2 : 1);
+    setAppState((current) => normalizeAppState({
+      ...current,
+      events: (current.events || []).map((item) => {
+        if (item.bookingId !== booking.id) return item;
+        const startTime = item.startTime || localTime(booking.starts_at);
+        return {
+          ...item,
+          endTime: addMinutesToTime(startTime, slotMinutes),
+          amount: bookingTotal(booking),
+          editedPhotosCount: Number(booking.package_photos || item.editedPhotosCount || 0),
+          packageName: `${campaign?.title || "Ensaio"} — ${booking.package_photos || ""} fotos${booking.is_double ? " (1 hora)" : ""}`,
+          notes: [item.notes, booking.is_double ? "Transformado em ensaio especial de 1 hora pelo estúdio." : ""].filter(Boolean).join("\n"),
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    }));
+  }, []);
+
   const markBookingEventCanceled = useCallback((booking) => {
     setAppState((current) => normalizeAppState({
       ...current,
@@ -3116,6 +3137,7 @@ export default function App() {
             <ChristmasBookingAdmin
               onBookingsLoaded={hasHydratedRemote ? importBookingsAsEvents : undefined}
               onBookingCanceled={markBookingEventCanceled}
+              onBookingUpdated={updateBookingEvent}
             />
           </TabsContent>
 
