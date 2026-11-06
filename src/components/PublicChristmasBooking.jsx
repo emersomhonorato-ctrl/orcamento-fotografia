@@ -15,6 +15,7 @@ import {
   fetchAllRows,
   themeEmoji,
 } from "@/lib/bookings";
+import LegalConsent from "@/components/LegalConsent";
 
 // Página pública: o cliente escolhe pacote, dia e horário do ensaio temático (Natal, Dia das Mães...) e reserva.
 
@@ -78,6 +79,7 @@ export default function PublicChristmasBooking() {
   const [leadForm, setLeadForm] = useState({ name: "", whatsapp: "", website: "" });
   const [leadError, setLeadError] = useState("");
   const [leadBusy, setLeadBusy] = useState(false);
+  const [consent, setConsent] = useState({ privacy: false, marketing: false });
   const [form, setForm] = useState(() => ({ name: lead?.name || "", whatsapp: lead?.whatsapp || "", email: "", cpf: "", birth_date: "", notes: "", website: "", referral: referralFromLink }));
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -252,6 +254,7 @@ export default function PublicChristmasBooking() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return setErrorMessage("Informe um e-mail válido.");
     if (!isValidCpf(form.cpf)) return setErrorMessage("Informe um CPF válido (é usado no contrato).");
     if (!isValidBirthDate(form.birth_date)) return setErrorMessage("Informe sua data de nascimento.");
+    if (!consent.privacy) return setErrorMessage("Para reservar, marque que leu e aceita a Política de Privacidade e os Termos de uso.");
 
     setStatus("sending");
     const { data, error } = await supabase.rpc("book_slot", {
@@ -266,6 +269,8 @@ export default function PublicChristmasBooking() {
       p_cpf: form.cpf.replace(/\D/g, ""),
       p_birth_date: form.birth_date,
       ...(isDouble ? { p_double: true } : {}),
+      p_privacy: true,
+      p_marketing: consent.marketing,
     });
     if (error) {
       setStatus("idle");
@@ -444,7 +449,10 @@ export default function PublicChristmasBooking() {
               <input tabIndex={-1} autoComplete="off" value={leadForm.website} onChange={(event) => setLeadForm((current) => ({ ...current, website: event.target.value }))} className="absolute left-[-9999px] h-0 w-0 opacity-0" aria-hidden="true" />
               {leadError ? <p className="rounded-2xl bg-red-50 px-4 py-2 text-sm text-red-700">{leadError}</p> : null}
               <button type="submit" disabled={leadBusy} className="w-full rounded-2xl bg-[#7a1712] px-5 py-3.5 font-semibold text-white shadow hover:bg-[#5c0f0b] disabled:opacity-60">{leadBusy ? "Abrindo…" : "Ver pacotes e horários"}</button>
-              <p className="text-center text-xs text-slate-500">Seus dados ficam só com o estúdio, para falar sobre o seu ensaio.</p>
+              <p className="text-center text-xs leading-5 text-slate-500">
+                Seus dados ficam só com o estúdio, para falar sobre o seu ensaio. Ao continuar, você concorda com a{" "}
+                <a href="/privacidade" target="_blank" rel="noreferrer" className="underline">Política de Privacidade</a>.
+              </p>
             </form>
           ) : null}
 
@@ -634,6 +642,8 @@ export default function PublicChristmasBooking() {
                   </div>
                 </section>
               ) : null}
+
+              <LegalConsent privacy={consent.privacy} marketing={consent.marketing} onChange={(change) => setConsent((current) => ({ ...current, ...change }))} />
 
               {errorMessage ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
 

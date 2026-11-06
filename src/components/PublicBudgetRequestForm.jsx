@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatCpfInput, isValidBirthDate, isValidCpf } from "@/lib/cpf";
 import { supabase } from "@/supabase";
+import LegalConsent from "@/components/LegalConsent";
 
 // Página pública: o cliente abre pelo link enviado no WhatsApp e pede um orçamento.
 // Só faz INSERT na tabela budget_requests (o banco não permite ler pedidos sem login).
@@ -71,6 +72,7 @@ export default function PublicBudgetRequestForm() {
     }
   });
   const [form, setForm] = useState(() => ({ ...emptyForm, how_found: referralCode ? "Indicação" : "" }));
+  const [consent, setConsent] = useState({ privacy: false, marketing: false });
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMessage, setErrorMessage] = useState("");
   const today = new Date().toISOString().slice(0, 10);
@@ -121,6 +123,10 @@ export default function PublicBudgetRequestForm() {
       setErrorMessage("Informe sua data de nascimento.");
       return;
     }
+    if (!consent.privacy) {
+      setErrorMessage("Para enviar, marque que leu e aceita a Política de Privacidade e os Termos de uso.");
+      return;
+    }
     if (!form.service) {
       setErrorMessage("Escolha o tipo de evento.");
       return;
@@ -137,6 +143,8 @@ export default function PublicBudgetRequestForm() {
       email: form.email.trim().toLowerCase().slice(0, 160),
       cpf: form.cpf.replace(/\D/g, ""),
       birth_date: form.birth_date,
+      privacy_accepted_at: new Date().toISOString(),
+      marketing_opt_in: consent.marketing,
       service: form.service,
       event_date: form.event_date,
       event_time: form.event_time.trim().slice(0, 30) || null,
@@ -269,6 +277,8 @@ export default function PublicBudgetRequestForm() {
                 className="absolute left-[-9999px] h-0 w-0 opacity-0"
                 aria-hidden="true"
               />
+
+              <LegalConsent privacy={consent.privacy} marketing={consent.marketing} onChange={(change) => setConsent((current) => ({ ...current, ...change }))} />
 
               {errorMessage ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</p> : null}
 
