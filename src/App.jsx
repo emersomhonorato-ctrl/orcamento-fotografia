@@ -32,6 +32,7 @@ import ExpensesAdmin, { expensesForMonth } from "@/components/ExpensesAdmin";
 import MonthGoalBar from "@/components/MonthGoalBar";
 import WeekAgenda from "@/components/WeekAgenda";
 import HelpGuide from "@/components/HelpGuide";
+import ChristmasDashboard from "@/components/ChristmasDashboard";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments, historyOf } from "@/lib/finance";
@@ -2873,6 +2874,9 @@ export default function App() {
               onSave={(monthlyGoal) => updateAppState({ settings: { ...settings, monthlyGoal } })}
             />
           </section>
+          <SafeSection name="Painel do Natal">
+            <ChristmasDashboard onOpenBookings={() => setActiveTab("natal")} />
+          </SafeSection>
           <SafeSection name="Faturamento">
             <RevenueChart records={enrichedRecords} />
           </SafeSection>
