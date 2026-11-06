@@ -1075,8 +1075,9 @@ export default function App() {
         if (existingIndex >= 0) {
           const requestCpf = String(request.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
           const found = clientsList[existingIndex];
-          if ((request.birth_date && !found.birthDate) || (requestCpf && !found.cpf)) {
-            clientsList[existingIndex] = { ...found, birthDate: found.birthDate || request.birth_date || "", cpf: found.cpf || requestCpf };
+          const optIn = typeof request.marketing_opt_in === "boolean" ? request.marketing_opt_in : null;
+          if ((request.birth_date && !found.birthDate) || (requestCpf && !found.cpf) || (optIn !== null && found.marketingOptIn !== optIn)) {
+            clientsList[existingIndex] = { ...found, birthDate: found.birthDate || request.birth_date || "", cpf: found.cpf || requestCpf, marketingOptIn: optIn ?? found.marketingOptIn ?? null };
           }
           return;
         }
@@ -1084,6 +1085,7 @@ export default function App() {
         clientsList.push(normalizeClient({
           name: String(request.name).trim(),
           birthDate: request.birth_date || "",
+          marketingOptIn: typeof request.marketing_opt_in === "boolean" ? request.marketing_opt_in : null,
           cpf: String(request.cpf || "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4"),
           email,
           phone: request.whatsapp || "",
@@ -1180,8 +1182,9 @@ export default function App() {
           return (email && itemEmail === email) || (phone && phones.includes(phone));
         });
         let client = clientIndex >= 0 ? clientsList[clientIndex] : null;
-        if (client && ((bookingCpf && !client.cpf) || (bookingBirth && !client.birthDate))) {
-          client = { ...client, cpf: client.cpf || bookingCpf, birthDate: client.birthDate || bookingBirth };
+        const bookingOptIn = typeof booking.marketing_opt_in === "boolean" ? booking.marketing_opt_in : null;
+        if (client && ((bookingCpf && !client.cpf) || (bookingBirth && !client.birthDate) || (bookingOptIn !== null && client.marketingOptIn !== bookingOptIn))) {
+          client = { ...client, cpf: client.cpf || bookingCpf, birthDate: client.birthDate || bookingBirth, marketingOptIn: bookingOptIn ?? client.marketingOptIn ?? null };
           clientsList[clientIndex] = client;
         }
         if (!client) {
@@ -1189,6 +1192,7 @@ export default function App() {
             name: String(booking.name || "").trim(),
             cpf: bookingCpf,
             birthDate: bookingBirth,
+            marketingOptIn: typeof booking.marketing_opt_in === "boolean" ? booking.marketing_opt_in : null,
             email,
             phone: booking.whatsapp || "",
             whatsapp: booking.whatsapp || "",
@@ -1362,7 +1366,7 @@ export default function App() {
     let active = true;
     supabase
       .from("budget_requests")
-      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found, cpf, birth_date")
+      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found, cpf, birth_date, marketing_opt_in")
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data, error }) => {

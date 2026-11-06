@@ -29,6 +29,16 @@ export default function ClientModal({ open, onOpenChange, clientForm, setClientF
               className="rounded-2xl"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={clientForm.marketingOptIn === true}
+              onChange={(event) => setClientForm((current) => ({ ...current, marketingOptIn: event.target.checked }))}
+            />
+            Aceita receber novidades e promoções (LGPD)
+            {clientForm.marketingOptIn === null || clientForm.marketingOptIn === undefined ? <span className="text-xs text-slate-400">— ainda não perguntado</span> : null}
+          </label>
           <div className="space-y-2">
             <Label>Data de nascimento</Label>
             <Input
