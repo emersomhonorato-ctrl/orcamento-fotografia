@@ -31,6 +31,7 @@ import FinanceAdmin from "@/components/FinanceAdmin";
 import ExpensesAdmin, { expensesForMonth } from "@/components/ExpensesAdmin";
 import MonthGoalBar from "@/components/MonthGoalBar";
 import WeekAgenda from "@/components/WeekAgenda";
+import HelpGuide from "@/components/HelpGuide";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments, historyOf } from "@/lib/finance";
@@ -214,6 +215,7 @@ const MORE_TABS = [
   ["servicos", "Serviços"],
   ["configuracoes", "Configurações"],
   ["cancelados", "Cancelados"],
+  ["ajuda", "Ajuda"],
 ];
 
 export default function App() {
@@ -4272,6 +4274,10 @@ export default function App() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="ajuda" className="mt-6">
+            <HelpGuide />
           </TabsContent>
 
           <TabsContent value="configuracoes" className="mt-6">

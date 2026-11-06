@@ -87,6 +87,14 @@
     {
       "source": "/termos/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/ajuda",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ajuda/",
+      "destination": "/index.html"
     }
   ],
   "headers": [

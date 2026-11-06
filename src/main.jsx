@@ -10,6 +10,8 @@ import PublicContractSign from "./components/PublicContractSign.jsx";
 import PublicPhotoSelection from "./components/PublicPhotoSelection.jsx";
 import PublicPayment from "./components/PublicPayment.jsx";
 import PublicLegalPage from "./components/PublicLegalPage.jsx";
+import PublicHelpPage from "./components/PublicHelpPage.jsx";
+import PublicHelpFooter from "./components/PublicHelpFooter.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
@@ -27,8 +29,12 @@ const selectionMatch = window.location.pathname.match(/^\/selecao\/([a-z0-9-]{4,
 const paymentMatch = window.location.pathname.match(/^\/pagar\/([a-z0-9-]{4,80})\/?$/i);
 // Privacidade e termos (LGPD): /privacidade e /termos
 const legalMatch = window.location.pathname.match(/^\/(privacidade|termos)\/?$/i);
+const isHelpPage = /^\/ajuda\/?$/i.test(window.location.pathname);
 const isPublicRequestForm =
   /^\/pedido\/?$/i.test(window.location.pathname) || new URLSearchParams(window.location.search).has("pedido");
+
+// Rodapé de ajuda nas páginas dos clientes (o painel do estúdio não mostra)
+const helpContext = isHelpPage ? "ajuda" : paymentMatch ? "pagar" : selectionMatch ? "selecao" : deliveryMatch ? "entrega" : contractMatch ? "contrato" : budgetMatch ? "orcamento" : isPublicChristmasBooking ? "natal" : isPublicRequestForm ? "pedido" : "";
 
 class PreviewErrorBoundary extends Component {
   constructor(props) {
@@ -65,7 +71,8 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {legalMatch ? <PublicLegalPage page={legalMatch[1].toLowerCase()} /> : paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {isHelpPage ? <PublicHelpPage /> : legalMatch ? <PublicLegalPage page={legalMatch[1].toLowerCase()} /> : paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {helpContext ? <PublicHelpFooter context={helpContext} dark={helpContext === "selecao"} /> : null}
     </PreviewErrorBoundary>
   </StrictMode>,
 );
