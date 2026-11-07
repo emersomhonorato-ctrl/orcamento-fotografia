@@ -34,6 +34,7 @@ import WeekAgenda from "@/components/WeekAgenda";
 import HelpGuide from "@/components/HelpGuide";
 import ChristmasDashboard from "@/components/ChristmasDashboard";
 import DuesAndBirthdays from "@/components/DuesAndBirthdays";
+import RecontactPanel from "@/components/RecontactPanel";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments, historyOf } from "@/lib/finance";
@@ -2877,6 +2878,14 @@ export default function App() {
           </section>
           <SafeSection name="Cobranças e aniversários">
             <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} />
+          </SafeSection>
+          <SafeSection name="Clientes para chamar de novo">
+            <RecontactPanel
+              clients={uniqueClientsFromEvents}
+              events={onlyEvents}
+              contactLog={settings.recontactLog || {}}
+              onContacted={(client) => updateAppState({ settings: { ...settings, recontactLog: { ...(settings.recontactLog || {}), [client.id]: new Date().toISOString().slice(0, 10) } } })}
+            />
           </SafeSection>
           <SafeSection name="Painel do Natal">
             <ChristmasDashboard onOpenBookings={() => setActiveTab("natal")} />
