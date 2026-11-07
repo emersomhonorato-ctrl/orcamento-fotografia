@@ -102,6 +102,10 @@ export default function PublicPhotoSelection({ slug }) {
   const saveTimer = useRef(null);
   const [prints, setPrints] = useState([]);
   const latest = useRef({ selected: [], note: "", prints: [] });
+  // arrastar com o dedo no visualizador
+  const swipe = useRef(null);
+  const [payment, setPayment] = useState(null);
+  const [dragX, setDragX] = useState(0);
 
   const load = useCallback(async (pinTry) => {
     const { data: result, error: rpcError } = await supabase.rpc("get_selection", { p_slug: slug, p_pin: pinTry || null });
@@ -121,6 +125,18 @@ export default function PublicPhotoSelection({ slug }) {
     const timer = setTimeout(() => load(null), 0);
     return () => clearTimeout(timer);
   }, [load]);
+
+  // escolha enviada: busca (ou cria) o link de pagamento dos extras/revelações
+  const loadPayment = useCallback(async (pinTry) => {
+    const { data: result, error: rpcError } = await supabase.rpc("selection_payment", { p_slug: slug, p_pin: pinTry || null });
+    if (!rpcError && result) setPayment(result);
+  }, [slug]);
+
+  useEffect(() => {
+    if (state !== "enviada") return undefined;
+    const timer = setTimeout(() => loadPayment(pinValue), 0);
+    return () => clearTimeout(timer);
+  }, [state, pinValue, loadPayment]);
 
   useEffect(() => {
     if (data?.client_name) document.title = `Escolha das fotos — ${data.client_name}`;
@@ -324,6 +340,18 @@ export default function PublicPhotoSelection({ slug }) {
           <div className="mx-auto mt-6 max-w-lg rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-5">
             <p className="text-lg font-semibold">Recebi sua escolha, {first}! 💛</p>
             <p className="mt-1 text-sm text-white/75">{selected.length} fotos escolhidas{printUnits ? ` e ${printUnits} revelaç${printUnits > 1 ? "ões" : "ão"}` : ""}{data.submitted_at ? ` em ${new Date(data.submitted_at).toLocaleString("pt-BR")}` : ""}. Agora é comigo: vou tratar cada uma com carinho.</p>
+            {payment?.status === "pendente" ? (
+              <div className="mt-4 rounded-2xl bg-black/25 p-4 text-left">
+                <p className="text-sm text-white/80">Fotos extras e revelações{Number(payment.paid) > 0 ? ` (já recebi ${brl(payment.paid)}, falta a diferença)` : ""}:</p>
+                <p className="mt-1 text-2xl font-semibold text-[#e9c77b]">{brl(payment.amount)}</p>
+                <a href={`/pagar/${payment.slug}`} className="mt-3 flex w-full items-center justify-center rounded-2xl bg-[#e9c77b] px-5 py-3 text-sm font-bold text-[#1b1610] hover:bg-[#f3d692]">Pagar agora — Pix ou cartão</a>
+                <p className="mt-2 text-[11px] text-white/50">Pagamento seguro pelo Mercado Pago. Se preferir, pode pagar depois por este mesmo link.</p>
+              </div>
+            ) : payment?.status === "manual" ? (
+              <p className="mt-3 text-sm text-[#e9c77b]">Total das fotos extras e revelações: <strong>{brl(payment.amount)}</strong>. Vou te mandar como pagar pelo WhatsApp.</p>
+            ) : payment?.status === "pago" ? (
+              <p className="mt-3 text-sm font-semibold text-emerald-300">Pagamento recebido ✓ Obrigado!</p>
+            ) : null}
             <a href={wa(`Olá, Emerson! Enviei minha escolha de fotos (${data.title}).`)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold">Falar no WhatsApp</a>
           </div>
         ) : state === "expired" ? (
@@ -405,10 +433,19 @@ export default function PublicPhotoSelection({ slug }) {
                 {selected.length} escolhida{selected.length === 1 ? "" : "s"}
                 {included > 0 ? <span className="font-normal text-white/60"> de {included} inclusas</span> : null}
               </p>
-              {extras > 0 ? (
-                <p className="text-xs text-amber-300">{extras} extra{extras > 1 ? "s" : ""}{extraPrice > 0 ? ` × ${brl(extraPrice)} = ${brl(extras * extraPrice)}` : ""}</p>
-              ) : included > 0 ? (
-                <div className="mt-1 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.min(100, (selected.length / included) * 100)}%` }} /></div>
+              {included > 0 ? (
+                <>
+                  <div className="mt-1.5 h-2 w-full max-w-sm overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full transition-all duration-300 ${extras > 0 ? "bg-amber-400" : selected.length >= included ? "bg-emerald-400" : "bg-rose-400"}`} style={{ width: `${Math.min(100, (selected.length / included) * 100)}%` }} />
+                  </div>
+                  <p className={`mt-1 text-xs ${extras > 0 ? "text-amber-300" : selected.length >= included ? "text-emerald-300" : "text-white/60"}`}>
+                    {extras > 0
+                      ? `Passou ${extras} do pacote${extraPrice > 0 ? ` • ${extras} × ${brl(extraPrice)} = ${brl(extras * extraPrice)}` : ""}`
+                      : selected.length >= included
+                        ? "Pacote completo ✓ Pode enviar ou escolher extras."
+                        : `Faltam ${included - selected.length} para completar o pacote`}
+                  </p>
+                </>
               ) : null}
               {printUnits > 0 ? (
                 <p className="text-xs text-[#e9c77b]">
@@ -426,13 +463,46 @@ export default function PublicPhotoSelection({ slug }) {
 
       {/* visualizador */}
       {current ? (
-        <div className="fixed inset-0 z-40 flex flex-col bg-black/95">
+        <div className="fixed inset-0 z-40 flex flex-col bg-black">
           <div className="flex items-center justify-between px-4 py-3 text-sm text-white/80">
             <span>{shortName(current.name)} • {viewer + 1} de {visible.length}</span>
+            <span className={`ml-auto mr-2 rounded-full px-3 py-1 text-xs font-semibold ${included > 0 && extras > 0 ? "bg-amber-400/20 text-amber-200" : included > 0 && selected.length >= included ? "bg-emerald-400/20 text-emerald-200" : "bg-white/10 text-white/80"}`}>
+              ♥ {selected.length}{included > 0 ? ` de ${included}` : ""}
+            </span>
             <button type="button" onClick={() => closeViewer()} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
           </div>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-            <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
+          <div
+            className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2"
+            style={{ touchAction: "pan-y pinch-zoom" }}
+            onTouchStart={(event) => {
+              if (event.touches.length !== 1) { swipe.current = null; return; }
+              swipe.current = { x: event.touches[0].clientX, y: event.touches[0].clientY, horizontal: null };
+            }}
+            onTouchMove={(event) => {
+              const start = swipe.current;
+              if (!start || event.touches.length !== 1) return;
+              const dx = event.touches[0].clientX - start.x;
+              const dy = event.touches[0].clientY - start.y;
+              if (start.horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) start.horizontal = Math.abs(dx) > Math.abs(dy);
+              if (!start.horizontal) return;
+              const atEdge = (dx > 0 && viewer === 0) || (dx < 0 && viewer === visible.length - 1);
+              setDragX(atEdge ? dx / 4 : dx);
+            }}
+            onTouchEnd={(event) => {
+              const start = swipe.current;
+              swipe.current = null;
+              if (!start?.horizontal) { setDragX(0); return; }
+              const dx = (event.changedTouches[0]?.clientX ?? start.x) - start.x;
+              const limit = Math.min(80, window.innerWidth * 0.18);
+              if (dx < -limit && viewer < visible.length - 1) setViewer(viewer + 1);
+              else if (dx > limit && viewer > 0) setViewer(viewer - 1);
+              setDragX(0);
+            }}
+            onTouchCancel={() => { swipe.current = null; setDragX(0); }}
+          >
+            <div className="flex max-h-full max-w-full items-center justify-center" style={{ transform: `translateX(${dragX}px)`, transition: dragX ? "none" : "transform 200ms ease-out" }}>
+              <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
+            </div>
             {viewer > 0 ? <button type="button" onClick={() => setViewer(viewer - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Anterior">‹</button> : null}
             {viewer < visible.length - 1 ? <button type="button" onClick={() => setViewer(viewer + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Próxima">›</button> : null}
           </div>
@@ -444,6 +514,7 @@ export default function PublicPhotoSelection({ slug }) {
               </button>
             ) : null}
             <span className="hidden text-xs text-white/40 sm:inline">← → para navegar • espaço para escolher</span>
+            {visible.length > 1 ? <span className="text-xs text-white/40 sm:hidden">Arraste para o lado ↔</span> : null}
           </div>
           {printsEnabled && (!locked || printMap.has(current.name)) ? (
             <div className="mx-auto mb-4 w-full max-w-xl px-4">
@@ -493,7 +564,7 @@ export default function PublicPhotoSelection({ slug }) {
                 <p className="mt-0.5">{printCost > 0 ? <>Valor: <strong>{brl(printCost)}</strong>{printsIncluded ? ` (já ${printsIncluded > 1 ? `descontadas ${printsIncluded} inclusas` : "descontada 1 inclusa"})` : ""}</> : "Inclusas no pacote 💛"}</p>
               </div>
             ) : null}
-            {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — combino o pagamento com você depois.</p> : null}
+            {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — depois de enviar, já aparece o botão para pagar (Pix ou cartão).</p> : null}
             <label className="mt-4 block text-sm font-medium">
               Algum pedido especial? (opcional)
               <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} placeholder="Ex.: a foto EME_1230 em preto e branco…" className="mt-1 min-h-[90px] w-full rounded-2xl border border-[#e4dbd0] px-4 py-3 text-sm focus:border-[#a8875a] focus:outline-none" />

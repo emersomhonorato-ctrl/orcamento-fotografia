@@ -10,7 +10,7 @@ import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR, makeDeliverySlug, slugify } from "@/lib/delivery";
 import { listDriveImages } from "@/lib/driveList";
 import { baseFileName, buildLightroomCollection, downloadTextFile } from "@/lib/lightroom";
-import { PAY_PUBLIC_BASE } from "@/lib/payments";
+import { PAY_PUBLIC_BASE, methodLabel } from "@/lib/payments";
 import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
 
@@ -19,6 +19,24 @@ const DEFAULT_PRINT_SIZES = [
   { size: "15x21", price: 15 },
   { size: "20x30", price: 35 },
 ];
+
+// "há 5 min", "ontem às 20:14", "12/11 às 09:30"
+export function timeAgo(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const diff = Date.now() - date.getTime();
+  if (Number.isNaN(diff)) return "";
+  const minutes = Math.round(diff / 60000);
+  if (minutes < 1) return "agora há pouco";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  const hm = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const dayKey = (d) => d.toLocaleDateString("pt-BR");
+  const yesterday = new Date(Date.now() - 86400000);
+  if (dayKey(date) === dayKey(new Date())) return hours <= 1 ? "há 1 hora" : `hoje às ${hm}`;
+  if (dayKey(date) === dayKey(yesterday)) return `ontem às ${hm}`;
+  return `${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${hm}`;
+}
 
 // Valor das revelações: as N inclusas saem das mais baratas
 export function printTotals(item) {
@@ -80,6 +98,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState("");
   const [defaultSizes, setDefaultSizes] = useState(DEFAULT_PRINT_SIZES);
+  const [payments, setPayments] = useState({});
 
   const load = useCallback(async () => {
     const [{ data, error }, settingsRes] = await Promise.all([
@@ -91,6 +110,11 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       return;
     }
     setItems(data || []);
+    const payIds = (data || []).map((item) => item.payment_id).filter(Boolean);
+    if (payIds.length) {
+      const { data: pays } = await supabase.from("payments").select("id, slug, status, amount, payment_method").in("id", payIds);
+      setPayments(Object.fromEntries((pays || []).map((pay) => [pay.id, pay])));
+    } else setPayments({});
     if (!settingsRes.error) {
       setApiKey(settingsRes.data?.google_api_key || "");
       if (Array.isArray(settingsRes.data?.print_sizes) && settingsRes.data.print_sizes.length) setDefaultSizes(settingsRes.data.print_sizes);
@@ -309,27 +333,14 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       extrasCost > 0 ? `${extras} foto${extras > 1 ? "s" : ""} extra${extras > 1 ? "s" : ""} (${extras} × ${brl(item.extra_price)} = ${brl(extrasCost)})` : "",
       prints.cost > 0 ? `revelação: ${prints.bySize.map((row) => `${row.qty}× ${row.size}`).join(", ")} = ${brl(prints.cost)}` : "",
     ].filter(Boolean);
-    const { data: cardOn } = await supabase.rpc("card_payments_enabled");
     let payLink = "";
-    if (cardOn) {
-      const description = [extrasCost > 0 ? "Fotos extras" : "", prints.cost > 0 ? "Revelação" : ""].filter(Boolean).join(" e ") + ` — ${item.title}`;
-      const { data: payment, error } = await supabase
-        .from("payments")
-        .insert({
-          kind: "avulso",
-          event_id: item.event_id || null,
-          client_name: item.client_name,
-          client_whatsapp: item.client_whatsapp || null,
-          description: description.slice(0, 250),
-          amount: total,
-          max_installments: total >= 300 ? 6 : total >= 100 ? 3 : 1,
-          expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
-        })
-        .select("slug")
-        .single();
-      if (error) setMessage(`Não consegui criar o link de pagamento: ${error.message}`);
-      else payLink = `${PAY_PUBLIC_BASE}${payment.slug}`;
-    }
+    const { data: pay, error } = await supabase.rpc("selection_payment", { p_slug: item.slug, p_pin: item.pin || null });
+    if (error) setMessage(`Não consegui criar o link de pagamento: ${error.message}`);
+    else if (pay?.status === "pago") {
+      setMessage(`${item.client_name} já pagou ${brl(pay.paid)} ✓`);
+      return;
+    } else if (pay?.status === "pendente") payLink = `${PAY_PUBLIC_BASE}${pay.slug}`;
+    load();
     const text = [
       `Oi, ${first}! Recebi sua escolha 💛`,
       `Ficou assim: ${parts.join(" + ")}.`,
@@ -516,6 +527,30 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-10 text-center text-slate-500">Nenhuma seleção ainda. Clique em <strong>Nova seleção</strong>.</div>
       ) : null}
 
+      {items.length > 0 ? (() => {
+        const groups = { naoAbriu: 0, abriu: 0, escolhendo: 0, vencido: 0, enviada: 0 };
+        for (const item of items) {
+          const n = Array.isArray(item.selected) ? item.selected.length : 0;
+          if (item.status === "enviada") groups.enviada += 1;
+          else if (item.expires_at && item.expires_at < today) groups.vencido += 1;
+          else if (n > 0) groups.escolhendo += 1;
+          else if (item.views > 0) groups.abriu += 1;
+          else groups.naoAbriu += 1;
+        }
+        const chips = [
+          [groups.naoAbriu, "ainda não abriram", "bg-slate-100 text-slate-700"],
+          [groups.abriu, "abriram e não escolheram", "bg-slate-100 text-slate-700"],
+          [groups.escolhendo, "escolhendo", "bg-sky-100 text-sky-800"],
+          [groups.vencido, "com prazo vencido", "bg-amber-100 text-amber-800"],
+          [groups.enviada, "enviadas", "bg-emerald-100 text-emerald-800"],
+        ].filter(([n]) => n > 0);
+        return (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {chips.map(([n, text, tone]) => <span key={text} className={`rounded-full px-3 py-1 font-medium ${tone}`}><strong>{n}</strong> {text}</span>)}
+          </div>
+        );
+      })() : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
           const total = Array.isArray(item.photos) ? item.photos.length : 0;
@@ -554,6 +589,12 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   <span className="font-semibold">{count}</span>
                   <span className="text-slate-500">de {total} fotos{item.included_count ? ` • ${item.included_count} inclusas` : ""}</span>
                 </div>
+                <p className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-500">
+                  <Eye className="h-3.5 w-3.5" />
+                  {item.views > 0
+                    ? <>Abriu {item.views}x • último acesso {timeAgo(item.last_viewed_at)}{!sent && item.last_saved_at ? ` • última escolha ${timeAgo(item.last_saved_at)}` : ""}</>
+                    : "O cliente ainda não abriu o link"}
+                </p>
                 {extras > 0 ? <p className="text-xs font-medium text-amber-700">{extras} extra{extras > 1 ? "s" : ""}{Number(item.extra_price) ? ` = ${brl(extras * Number(item.extra_price))}` : ""}</p> : null}
                 {printInfo.units > 0 ? (
                   <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
@@ -562,6 +603,14 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                     {printInfo.cost > 0 ? <span className="text-amber-700"> = {brl(printInfo.cost)}</span> : <span className="text-emerald-700"> (inclusas)</span>}
                   </p>
                 ) : null}
+                {(() => {
+                  const pay = item.payment_id ? payments[item.payment_id] : null;
+                  if (pay?.status === "pago" || (!pay && Number(item.paid_total) > 0 && amountDue <= Number(item.paid_total)))
+                    return <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">💳 Pagamento recebido ✓{pay ? ` ${brl(pay.amount)}${pay.payment_method ? ` (${methodLabel(pay.payment_method)})` : ""}` : ` ${brl(item.paid_total)}`}</p>;
+                  if (pay?.status === "pendente")
+                    return <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">💳 Aguardando pagamento de {brl(pay.amount)} — o cliente já vê o botão de pagar.</p>;
+                  return null;
+                })()}
                 {item.delivery_id ? (
                   <button type="button" className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-left text-xs text-emerald-800 hover:bg-emerald-100" onClick={() => onOpenDeliveries?.()}>
                     <span>✅ Galeria de entrega criada (rascunho). Quando as fotos estiverem prontas, abra em <strong>Entregas</strong>, confira a pasta e ative.</span>
@@ -579,8 +628,8 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   {sent && printInfo.units > 0 ? (
                     <Button size="sm" variant="outline" className="rounded-xl" title="Lista para o laboratório + coleção do Lightroom por tamanho" onClick={() => downloadPrints(item)}><Printer className="mr-1.5 h-3.5 w-3.5" />Revelação</Button>
                   ) : null}
-                  {sent && amountDue > 0 ? (
-                    <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800" onClick={() => chargeExtras(item, extras)}><CreditCard className="mr-1.5 h-3.5 w-3.5" />Cobrar {brl(amountDue)}</Button>
+                  {sent && amountDue - Number(item.paid_total || 0) >= 1 && payments[item.payment_id]?.status !== "pago" ? (
+                    <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800" onClick={() => chargeExtras(item, extras)}><CreditCard className="mr-1.5 h-3.5 w-3.5" />Cobrar {brl(amountDue - Number(item.paid_total || 0))}</Button>
                   ) : null}
                   {sent ? (
                     <Button size="sm" variant="outline" className="rounded-xl border-sky-200 text-sky-800" title="O cliente pediu para mudar? Libera de novo." onClick={() => reopen(item)}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reabrir seleção</Button>
