@@ -20,6 +20,24 @@ const DEFAULT_PRINT_SIZES = [
   { size: "20x30", price: 35 },
 ];
 
+// "há 5 min", "ontem às 20:14", "12/11 às 09:30"
+export function timeAgo(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const diff = Date.now() - date.getTime();
+  if (Number.isNaN(diff)) return "";
+  const minutes = Math.round(diff / 60000);
+  if (minutes < 1) return "agora há pouco";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  const hm = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const dayKey = (d) => d.toLocaleDateString("pt-BR");
+  const yesterday = new Date(Date.now() - 86400000);
+  if (dayKey(date) === dayKey(new Date())) return hours <= 1 ? "há 1 hora" : `hoje às ${hm}`;
+  if (dayKey(date) === dayKey(yesterday)) return `ontem às ${hm}`;
+  return `${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${hm}`;
+}
+
 // Valor das revelações: as N inclusas saem das mais baratas
 export function printTotals(item) {
   const sizes = Array.isArray(item?.print_sizes) ? item.print_sizes : [];
@@ -516,6 +534,30 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white/70 p-10 text-center text-slate-500">Nenhuma seleção ainda. Clique em <strong>Nova seleção</strong>.</div>
       ) : null}
 
+      {items.length > 0 ? (() => {
+        const groups = { naoAbriu: 0, abriu: 0, escolhendo: 0, vencido: 0, enviada: 0 };
+        for (const item of items) {
+          const n = Array.isArray(item.selected) ? item.selected.length : 0;
+          if (item.status === "enviada") groups.enviada += 1;
+          else if (item.expires_at && item.expires_at < today) groups.vencido += 1;
+          else if (n > 0) groups.escolhendo += 1;
+          else if (item.views > 0) groups.abriu += 1;
+          else groups.naoAbriu += 1;
+        }
+        const chips = [
+          [groups.naoAbriu, "ainda não abriram", "bg-slate-100 text-slate-700"],
+          [groups.abriu, "abriram e não escolheram", "bg-slate-100 text-slate-700"],
+          [groups.escolhendo, "escolhendo", "bg-sky-100 text-sky-800"],
+          [groups.vencido, "com prazo vencido", "bg-amber-100 text-amber-800"],
+          [groups.enviada, "enviadas", "bg-emerald-100 text-emerald-800"],
+        ].filter(([n]) => n > 0);
+        return (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {chips.map(([n, text, tone]) => <span key={text} className={`rounded-full px-3 py-1 font-medium ${tone}`}><strong>{n}</strong> {text}</span>)}
+          </div>
+        );
+      })() : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
           const total = Array.isArray(item.photos) ? item.photos.length : 0;
@@ -554,6 +596,12 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   <span className="font-semibold">{count}</span>
                   <span className="text-slate-500">de {total} fotos{item.included_count ? ` • ${item.included_count} inclusas` : ""}</span>
                 </div>
+                <p className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-500">
+                  <Eye className="h-3.5 w-3.5" />
+                  {item.views > 0
+                    ? <>Abriu {item.views}x • último acesso {timeAgo(item.last_viewed_at)}{!sent && item.last_saved_at ? ` • última escolha ${timeAgo(item.last_saved_at)}` : ""}</>
+                    : "O cliente ainda não abriu o link"}
+                </p>
                 {extras > 0 ? <p className="text-xs font-medium text-amber-700">{extras} extra{extras > 1 ? "s" : ""}{Number(item.extra_price) ? ` = ${brl(extras * Number(item.extra_price))}` : ""}</p> : null}
                 {printInfo.units > 0 ? (
                   <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
