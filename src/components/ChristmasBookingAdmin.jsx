@@ -24,6 +24,7 @@ import {
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { buildPixPayload } from "@/lib/pix";
 import { openExternal } from "@/lib/openExternal";
+import { PAY_PUBLIC_BASE } from "@/lib/payments";
 import BookingLeadsPanel from "@/components/BookingLeadsPanel";
 import { paymentDeadline } from "@/components/OverdueBookingsAlert";
 
@@ -181,7 +182,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     return slots.find((slot) => new Date(slot.starts_at).getTime() === target) || null;
   }
 
-  function upgradeMessage(booking, extra) {
+  function upgradeMessage(booking, extra, cardUrl = "") {
     const first = String(booking.name || "").trim().split(" ")[0];
     const minutes = Number(campaign?.slot_minutes || 30);
     const start = localTime(booking.starts_at);
@@ -197,13 +198,15 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       lines.push(`💰 *${booking.payment_choice === "total" ? "Valor para confirmar" : "Sinal para confirmar"}:* ${formatBRL(booking.deposit_amount)}`);
       const pix = pixFor(booking);
       if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
+      if (cardUrl) lines.push("", `💳 Prefere cartão de crédito (até 12x)? Pague por aqui e a reserva é confirmada na hora: ${cardUrl}`);
     } else if (extra > 0) {
       lines.push(`➕ *Valor adicional:* ${formatBRL(extra)}`);
       const pix = campaign?.pix_key
         ? buildPixPayload({ key: campaign.pix_key, name: campaign.pix_name || "Emerson Honorato Retratos", city: campaign.pix_city || "Sideropolis", amount: extra, txid: `NATAL1H${String(booking.id).replace(/-/g, "").slice(0, 10)}` })
         : "";
-      if (pix) lines.push("", "Se preferir já acertar, Pix copia e cola do valor adicional:", pix, "", "Ou, se preferir, pode pagar no dia do ensaio. 🙏");
-      else lines.push("", "O valor adicional pode ser pago no dia do ensaio. 🙏");
+      if (pix) lines.push("", "Se preferir já acertar, Pix copia e cola do valor adicional:", pix);
+      if (cardUrl) lines.push("", `💳 Ou no cartão de crédito (até 12x): ${cardUrl}`);
+      lines.push("", pix || cardUrl ? "Se preferir, também pode pagar no dia do ensaio. 🙏" : "O valor adicional pode ser pago no dia do ensaio. 🙏");
     }
     return lines.join("\n");
   }
@@ -230,7 +233,16 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     setBusy(false);
     if (error) return setMessage(`Não foi possível transformar em 1 hora: ${error.message}`);
     const updated = { ...booking, ...(data?.booking || {}) };
-    setUpgradeNotice({ booking: updated, extra: Number(data?.extra ?? extra) });
+    const extraValue = Number(data?.extra ?? extra);
+    // Link de pagamento com cartão (Mercado Pago): novo sinal ou valor adicional
+    let cardUrl = "";
+    const cardRes = updated.status === "aguardando_sinal"
+      ? await supabase.rpc("booking_card_checkout", { p_booking_id: updated.id })
+      : extraValue >= 1
+        ? await supabase.rpc("admin_booking_extra_charge", { p_booking_id: updated.id, p_amount: extraValue })
+        : { data: null };
+    if (!cardRes.error && cardRes.data?.slug) cardUrl = `${PAY_PUBLIC_BASE}${cardRes.data.slug}`;
+    setUpgradeNotice({ booking: updated, extra: extraValue, cardUrl });
     onBookingUpdated?.(updated, campaign);
     load();
   }
@@ -684,9 +696,10 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
             {upgradeNotice.booking.status === "aguardando_sinal"
               ? `O sinal foi recalculado para ${formatBRL(upgradeNotice.booking.deposit_amount)}.`
               : upgradeNotice.extra > 0 ? `Diferença a cobrar: ${formatBRL(upgradeNotice.extra)}.` : "Sem diferença a cobrar."}
+            {upgradeNotice.cardUrl ? " A mensagem já vai com Pix e link para pagar no cartão (até 12x)." : ""}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => openExternal(buildWhatsAppLink(upgradeNotice.booking.whatsapp, upgradeMessage(upgradeNotice.booking, upgradeNotice.extra)))}>
+            <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => openExternal(buildWhatsAppLink(upgradeNotice.booking.whatsapp, upgradeMessage(upgradeNotice.booking, upgradeNotice.extra, upgradeNotice.cardUrl)))}>
               <Send className="mr-2 h-4 w-4" />Enviar cobrança pelo WhatsApp
             </Button>
             <Button variant="ghost" className="rounded-2xl" onClick={() => setUpgradeNotice(null)}>Fechar</Button>
