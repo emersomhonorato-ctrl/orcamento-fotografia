@@ -102,6 +102,9 @@ export default function PublicPhotoSelection({ slug }) {
   const saveTimer = useRef(null);
   const [prints, setPrints] = useState([]);
   const latest = useRef({ selected: [], note: "", prints: [] });
+  // arrastar com o dedo no visualizador
+  const swipe = useRef(null);
+  const [dragX, setDragX] = useState(0);
 
   const load = useCallback(async (pinTry) => {
     const { data: result, error: rpcError } = await supabase.rpc("get_selection", { p_slug: slug, p_pin: pinTry || null });
@@ -435,7 +438,7 @@ export default function PublicPhotoSelection({ slug }) {
 
       {/* visualizador */}
       {current ? (
-        <div className="fixed inset-0 z-40 flex flex-col bg-black/95">
+        <div className="fixed inset-0 z-40 flex flex-col bg-black">
           <div className="flex items-center justify-between px-4 py-3 text-sm text-white/80">
             <span>{shortName(current.name)} • {viewer + 1} de {visible.length}</span>
             <span className={`ml-auto mr-2 rounded-full px-3 py-1 text-xs font-semibold ${included > 0 && extras > 0 ? "bg-amber-400/20 text-amber-200" : included > 0 && selected.length >= included ? "bg-emerald-400/20 text-emerald-200" : "bg-white/10 text-white/80"}`}>
@@ -443,8 +446,38 @@ export default function PublicPhotoSelection({ slug }) {
             </span>
             <button type="button" onClick={() => closeViewer()} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
           </div>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-            <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
+          <div
+            className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2"
+            style={{ touchAction: "pan-y pinch-zoom" }}
+            onTouchStart={(event) => {
+              if (event.touches.length !== 1) { swipe.current = null; return; }
+              swipe.current = { x: event.touches[0].clientX, y: event.touches[0].clientY, horizontal: null };
+            }}
+            onTouchMove={(event) => {
+              const start = swipe.current;
+              if (!start || event.touches.length !== 1) return;
+              const dx = event.touches[0].clientX - start.x;
+              const dy = event.touches[0].clientY - start.y;
+              if (start.horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) start.horizontal = Math.abs(dx) > Math.abs(dy);
+              if (!start.horizontal) return;
+              const atEdge = (dx > 0 && viewer === 0) || (dx < 0 && viewer === visible.length - 1);
+              setDragX(atEdge ? dx / 4 : dx);
+            }}
+            onTouchEnd={(event) => {
+              const start = swipe.current;
+              swipe.current = null;
+              if (!start?.horizontal) { setDragX(0); return; }
+              const dx = (event.changedTouches[0]?.clientX ?? start.x) - start.x;
+              const limit = Math.min(80, window.innerWidth * 0.18);
+              if (dx < -limit && viewer < visible.length - 1) setViewer(viewer + 1);
+              else if (dx > limit && viewer > 0) setViewer(viewer - 1);
+              setDragX(0);
+            }}
+            onTouchCancel={() => { swipe.current = null; setDragX(0); }}
+          >
+            <div className="flex max-h-full max-w-full items-center justify-center" style={{ transform: `translateX(${dragX}px)`, transition: dragX ? "none" : "transform 200ms ease-out" }}>
+              <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
+            </div>
             {viewer > 0 ? <button type="button" onClick={() => setViewer(viewer - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Anterior">‹</button> : null}
             {viewer < visible.length - 1 ? <button type="button" onClick={() => setViewer(viewer + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Próxima">›</button> : null}
           </div>
@@ -456,6 +489,7 @@ export default function PublicPhotoSelection({ slug }) {
               </button>
             ) : null}
             <span className="hidden text-xs text-white/40 sm:inline">← → para navegar • espaço para escolher</span>
+            {visible.length > 1 ? <span className="text-xs text-white/40 sm:hidden">Arraste para o lado ↔</span> : null}
           </div>
           {printsEnabled && (!locked || printMap.has(current.name)) ? (
             <div className="mx-auto mb-4 w-full max-w-xl px-4">
