@@ -33,6 +33,7 @@ import MonthGoalBar from "@/components/MonthGoalBar";
 import WeekAgenda from "@/components/WeekAgenda";
 import HelpGuide from "@/components/HelpGuide";
 import ChristmasDashboard from "@/components/ChristmasDashboard";
+import DuesAndBirthdays from "@/components/DuesAndBirthdays";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
 import { applyCardPayments, historyOf } from "@/lib/finance";
@@ -2874,6 +2875,9 @@ export default function App() {
               onSave={(monthlyGoal) => updateAppState({ settings: { ...settings, monthlyGoal } })}
             />
           </section>
+          <SafeSection name="Cobranças e aniversários">
+            <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} />
+          </SafeSection>
           <SafeSection name="Painel do Natal">
             <ChristmasDashboard onOpenBookings={() => setActiveTab("natal")} />
           </SafeSection>
