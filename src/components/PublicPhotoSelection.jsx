@@ -25,18 +25,52 @@ const brl = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "curr
 const PAGE_SIZE = 48;
 const shortName = (name = "") => String(name).replace(/\.[A-Za-z0-9]{2,5}$/, "");
 
-function Photo({ photo, size, className, alt }) {
+// Marca d'água discreta (prévia): texto repetido na diagonal por cima das fotos
+function watermarkBackground(label) {
+  const text = String(label || "").replace(/[<>&"]/g, "").slice(0, 60);
+  const width = Math.max(360, text.length * 10 + 80);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${Math.round(width * 0.42)}'><text x='50%' y='50%' text-anchor='middle' dominant-baseline='middle' transform='rotate(-22 ${width / 2} ${Math.round(width * 0.21)})' fill='white' fill-opacity='0.17' font-family='Arial, sans-serif' font-size='15' letter-spacing='1'>${text}</text></svg>`;
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+}
+
+const noSave = { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" };
+const blockEvent = (event) => event.preventDefault();
+
+function Photo({ photo, size, className, alt, watermark = "", framed = false }) {
   const [src, setSrc] = useState(thumbUrl(photo.id, size));
-  return (
+  const image = (
     <img
       src={src}
       alt={alt || shortName(photo.name)}
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
+      draggable={false}
+      onContextMenu={blockEvent}
+      onDragStart={blockEvent}
+      style={noSave}
       onError={() => setSrc((current) => (current.includes("lh3.") ? current : altThumbUrl(photo.id, size)))}
       className={className}
     />
+  );
+  if (!watermark) return image;
+  const overlay = (
+    <span aria-hidden="true" onContextMenu={blockEvent} className="pointer-events-auto absolute inset-0 select-none" style={{ ...noSave, backgroundImage: watermarkBackground(watermark), backgroundRepeat: "repeat" }} />
+  );
+  // No visualizador, a marca fica do tamanho exato da foto
+  if (framed) {
+    return (
+      <span className="relative inline-flex max-h-full max-w-full" onContextMenu={blockEvent}>
+        {image}
+        {overlay}
+      </span>
+    );
+  }
+  return (
+    <>
+      {image}
+      {overlay}
+    </>
   );
 }
 
@@ -236,6 +270,7 @@ export default function PublicPhotoSelection({ slug }) {
 
   const wa = (text) => `https://api.whatsapp.com/send?phone=${STUDIO_WHATSAPP}&text=${encodeURIComponent(text)}`;
   const first = String(data?.client_name || "").trim().split(/\s+/)[0];
+  const watermarkText = `EMERSON HONORATO RETRATOS • PRÉVIA • ${String(data?.client_name || "").trim().toUpperCase()}`;
 
   const shell = (children) => (
     <div className="flex min-h-screen items-center justify-center bg-[#0f0d0b] px-5 py-12 text-white">
@@ -284,6 +319,7 @@ export default function PublicPhotoSelection({ slug }) {
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.34em] text-[#e9c77b]">{state === "enviada" ? "Escolha enviada" : "Escolha suas favoritas"}</p>
         <h1 className="mt-2 text-4xl leading-tight sm:text-6xl" style={SERIF}>{data.title}</h1>
         <p className="mt-2 text-sm text-white/70">{data.client_name}{data.event_date ? ` • ${formatDateBR(data.event_date)}` : ""} • {photos.length} fotos</p>
+        <p className="mx-auto mt-3 max-w-xl text-xs leading-5 text-white/55">📸 Estas são prévias em baixa, com marca d'água. As fotos finais, tratadas, em alta e sem marca, chegam na entrega.</p>
         {state === "enviada" ? (
           <div className="mx-auto mt-6 max-w-lg rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-5">
             <p className="text-lg font-semibold">Recebi sua escolha, {first}! 💛</p>
@@ -335,7 +371,7 @@ export default function PublicPhotoSelection({ slug }) {
               return (
                 <div key={photo.id} className={`group relative overflow-hidden rounded-lg bg-white/5 ${isSel ? "ring-2 ring-rose-400" : ""}`}>
                   <button type="button" onClick={() => setViewer(index)} className="block aspect-[4/5] w-full">
-                    <Photo photo={photo} size={360} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+                    <Photo photo={photo} size={360} watermark={watermarkText} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
                   </button>
                   <button
                     type="button"
@@ -396,7 +432,7 @@ export default function PublicPhotoSelection({ slug }) {
             <button type="button" onClick={() => closeViewer()} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
           </div>
           <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
-            <Photo key={current.id} photo={current} size={1200} className="max-h-full max-w-full object-contain" />
+            <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
             {viewer > 0 ? <button type="button" onClick={() => setViewer(viewer - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Anterior">‹</button> : null}
             {viewer < visible.length - 1 ? <button type="button" onClick={() => setViewer(viewer + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Próxima">›</button> : null}
           </div>
