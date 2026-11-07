@@ -405,10 +405,19 @@ export default function PublicPhotoSelection({ slug }) {
                 {selected.length} escolhida{selected.length === 1 ? "" : "s"}
                 {included > 0 ? <span className="font-normal text-white/60"> de {included} inclusas</span> : null}
               </p>
-              {extras > 0 ? (
-                <p className="text-xs text-amber-300">{extras} extra{extras > 1 ? "s" : ""}{extraPrice > 0 ? ` × ${brl(extraPrice)} = ${brl(extras * extraPrice)}` : ""}</p>
-              ) : included > 0 ? (
-                <div className="mt-1 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.min(100, (selected.length / included) * 100)}%` }} /></div>
+              {included > 0 ? (
+                <>
+                  <div className="mt-1.5 h-2 w-full max-w-sm overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full transition-all duration-300 ${extras > 0 ? "bg-amber-400" : selected.length >= included ? "bg-emerald-400" : "bg-rose-400"}`} style={{ width: `${Math.min(100, (selected.length / included) * 100)}%` }} />
+                  </div>
+                  <p className={`mt-1 text-xs ${extras > 0 ? "text-amber-300" : selected.length >= included ? "text-emerald-300" : "text-white/60"}`}>
+                    {extras > 0
+                      ? `Passou ${extras} do pacote${extraPrice > 0 ? ` • ${extras} × ${brl(extraPrice)} = ${brl(extras * extraPrice)}` : ""}`
+                      : selected.length >= included
+                        ? "Pacote completo ✓ Pode enviar ou escolher extras."
+                        : `Faltam ${included - selected.length} para completar o pacote`}
+                  </p>
+                </>
               ) : null}
               {printUnits > 0 ? (
                 <p className="text-xs text-[#e9c77b]">
@@ -429,6 +438,9 @@ export default function PublicPhotoSelection({ slug }) {
         <div className="fixed inset-0 z-40 flex flex-col bg-black/95">
           <div className="flex items-center justify-between px-4 py-3 text-sm text-white/80">
             <span>{shortName(current.name)} • {viewer + 1} de {visible.length}</span>
+            <span className={`ml-auto mr-2 rounded-full px-3 py-1 text-xs font-semibold ${included > 0 && extras > 0 ? "bg-amber-400/20 text-amber-200" : included > 0 && selected.length >= included ? "bg-emerald-400/20 text-emerald-200" : "bg-white/10 text-white/80"}`}>
+              ♥ {selected.length}{included > 0 ? ` de ${included}` : ""}
+            </span>
             <button type="button" onClick={() => closeViewer()} className="rounded-full px-3 py-1.5 text-lg hover:bg-white/10" aria-label="Fechar">✕</button>
           </div>
           <div className="relative flex min-h-0 flex-1 items-center justify-center px-2">
