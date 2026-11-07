@@ -104,6 +104,7 @@ export default function PublicPhotoSelection({ slug }) {
   const latest = useRef({ selected: [], note: "", prints: [] });
   // arrastar com o dedo no visualizador
   const swipe = useRef(null);
+  const [payment, setPayment] = useState(null);
   const [dragX, setDragX] = useState(0);
 
   const load = useCallback(async (pinTry) => {
@@ -124,6 +125,18 @@ export default function PublicPhotoSelection({ slug }) {
     const timer = setTimeout(() => load(null), 0);
     return () => clearTimeout(timer);
   }, [load]);
+
+  // escolha enviada: busca (ou cria) o link de pagamento dos extras/revelações
+  const loadPayment = useCallback(async (pinTry) => {
+    const { data: result, error: rpcError } = await supabase.rpc("selection_payment", { p_slug: slug, p_pin: pinTry || null });
+    if (!rpcError && result) setPayment(result);
+  }, [slug]);
+
+  useEffect(() => {
+    if (state !== "enviada") return undefined;
+    const timer = setTimeout(() => loadPayment(pinValue), 0);
+    return () => clearTimeout(timer);
+  }, [state, pinValue, loadPayment]);
 
   useEffect(() => {
     if (data?.client_name) document.title = `Escolha das fotos — ${data.client_name}`;
@@ -327,6 +340,18 @@ export default function PublicPhotoSelection({ slug }) {
           <div className="mx-auto mt-6 max-w-lg rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-5">
             <p className="text-lg font-semibold">Recebi sua escolha, {first}! 💛</p>
             <p className="mt-1 text-sm text-white/75">{selected.length} fotos escolhidas{printUnits ? ` e ${printUnits} revelaç${printUnits > 1 ? "ões" : "ão"}` : ""}{data.submitted_at ? ` em ${new Date(data.submitted_at).toLocaleString("pt-BR")}` : ""}. Agora é comigo: vou tratar cada uma com carinho.</p>
+            {payment?.status === "pendente" ? (
+              <div className="mt-4 rounded-2xl bg-black/25 p-4 text-left">
+                <p className="text-sm text-white/80">Fotos extras e revelações{Number(payment.paid) > 0 ? ` (já recebi ${brl(payment.paid)}, falta a diferença)` : ""}:</p>
+                <p className="mt-1 text-2xl font-semibold text-[#e9c77b]">{brl(payment.amount)}</p>
+                <a href={`/pagar/${payment.slug}`} className="mt-3 flex w-full items-center justify-center rounded-2xl bg-[#e9c77b] px-5 py-3 text-sm font-bold text-[#1b1610] hover:bg-[#f3d692]">Pagar agora — Pix ou cartão</a>
+                <p className="mt-2 text-[11px] text-white/50">Pagamento seguro pelo Mercado Pago. Se preferir, pode pagar depois por este mesmo link.</p>
+              </div>
+            ) : payment?.status === "manual" ? (
+              <p className="mt-3 text-sm text-[#e9c77b]">Total das fotos extras e revelações: <strong>{brl(payment.amount)}</strong>. Vou te mandar como pagar pelo WhatsApp.</p>
+            ) : payment?.status === "pago" ? (
+              <p className="mt-3 text-sm font-semibold text-emerald-300">Pagamento recebido ✓ Obrigado!</p>
+            ) : null}
             <a href={wa(`Olá, Emerson! Enviei minha escolha de fotos (${data.title}).`)} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex rounded-2xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold">Falar no WhatsApp</a>
           </div>
         ) : state === "expired" ? (
@@ -539,7 +564,7 @@ export default function PublicPhotoSelection({ slug }) {
                 <p className="mt-0.5">{printCost > 0 ? <>Valor: <strong>{brl(printCost)}</strong>{printsIncluded ? ` (já ${printsIncluded > 1 ? `descontadas ${printsIncluded} inclusas` : "descontada 1 inclusa"})` : ""}</> : "Inclusas no pacote 💛"}</p>
               </div>
             ) : null}
-            {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — combino o pagamento com você depois.</p> : null}
+            {totalToPay > 0 ? <p className="mt-3 text-sm font-semibold text-[#1b1610]">Total a pagar: {brl(totalToPay)} — depois de enviar, já aparece o botão para pagar (Pix ou cartão).</p> : null}
             <label className="mt-4 block text-sm font-medium">
               Algum pedido especial? (opcional)
               <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} placeholder="Ex.: a foto EME_1230 em preto e branco…" className="mt-1 min-h-[90px] w-full rounded-2xl border border-[#e4dbd0] px-4 py-3 text-sm focus:border-[#a8875a] focus:outline-none" />
