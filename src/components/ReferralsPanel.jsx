@@ -21,7 +21,7 @@ export default function ReferralsPanel({ settings = {}, onUpdateSettings }) {
     setState("loading");
     const [deliveries, requests, bookings] = await Promise.all([
       supabase.from("photo_deliveries").select("client_name, referral_code").not("referral_code", "is", null).limit(2000),
-      supabase.from("budget_requests").select("id, name, created_at, referral_code, how_found").not("referral_code", "is", null).order("created_at", { ascending: false }).limit(500),
+      supabase.from("budget_requests").select("id, name, created_at, referral_code, how_found, referred_by").or("referral_code.not.is.null,how_found.eq.Indicação").order("created_at", { ascending: false }).limit(500),
       supabase.from("bookings").select("id, name, status, starts_at, notes, created_at").ilike("notes", "%Indica%").order("created_at", { ascending: false }).limit(500),
     ]);
     if (deliveries.error || requests.error || bookings.error) {
@@ -48,7 +48,7 @@ export default function ReferralsPanel({ settings = {}, onUpdateSettings }) {
         const code = String(r.referral_code || "").toUpperCase();
         return {
           key: `request-${r.id}`,
-          who: byCode.get(code) || code,
+          who: byCode.get(code) || String(r.referred_by || "").trim() || code || "Não disse quem indicou",
           code,
           guest: r.name,
           origin: "Pedido de orçamento",
@@ -62,7 +62,8 @@ export default function ReferralsPanel({ settings = {}, onUpdateSettings }) {
   }, []);
 
   useEffect(() => {
-    load();
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
   }, [load]);
 
   function toggleGiven(row) {
