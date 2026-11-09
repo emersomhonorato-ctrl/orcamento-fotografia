@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Eye, EyeOff, ImagePlus, KeyRound, Link2, Pencil, Plus, Save, Send, Star, Trash2, X } from "lucide-react";
+import { Copy, Eye, EyeOff, ImagePlus, KeyRound, Link2, Pencil, Plus, QrCode, Save, Send, Star, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   makeDeliverySlug, DEFAULT_COVER_FOCUS, coverFocusStyle, focusFromClick } from "@/lib/delivery";
 import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
+import DeliveryQrCard from "@/components/DeliveryQrCard";
 
 function addDays(days) {
   const date = new Date();
@@ -253,6 +254,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   }
 
   const linkFor = (item) => `${DELIVERY_PUBLIC_BASE}${item.slug}`;
+  const [qrItem, setQrItem] = useState(null);
 
   async function copyLink(item) {
     const link = linkFor(item);
@@ -501,6 +503,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
         </div>
       ) : null}
 
+      {qrItem ? <DeliveryQrCard url={linkFor(qrItem)} item={qrItem} onClose={() => setQrItem(null)} /> : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {deliveries.map((item) => {
           const [label, tone] = statusOf(item);
@@ -532,6 +536,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => sendWhatsApp(item)}><Send className="mr-1.5 h-3.5 w-3.5" />Enviar</Button>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => copyLink(item)}><Copy className="mr-1.5 h-3.5 w-3.5" />{copiedId === item.id ? "Copiado!" : "Link"}</Button>
+                  <Button size="sm" variant="outline" className="rounded-xl" title="Cartão com QR Code para imprimir" onClick={() => setQrItem(item)}><QrCode className="mr-1.5 h-3.5 w-3.5" />QR</Button>
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openExternal(linkFor(item).replace(DELIVERY_PUBLIC_BASE, `${window.location.origin}/entrega/`))}><Eye className="mr-1.5 h-3.5 w-3.5" />Ver</Button>
                   {!item.review_clicked_at ? (
                     <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-800 hover:bg-amber-50" title="Pedir avaliação no Google pelo WhatsApp" onClick={() => askReview(item)}><Star className="mr-1.5 h-3.5 w-3.5" />Avaliação</Button>
