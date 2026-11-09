@@ -3177,7 +3177,7 @@ export default function App() {
             <SafeSection name="Entregas">
               <PhotoDeliveryAdmin records={records} />
               <div className="mt-6">
-                <ReferralsPanel settings={settings} onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))} />
+                <ReferralsPanel settings={settings} clients={appState.clients || []} onUpdateSettings={(fields) => setAppState((current) => normalizeAppState({ ...current, settings: { ...current.settings, ...fields } }))} />
               </div>
             </SafeSection>
           </TabsContent>
