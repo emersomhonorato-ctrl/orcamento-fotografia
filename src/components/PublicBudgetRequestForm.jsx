@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { formatCpfInput, isValidBirthDate, isValidCpf } from "@/lib/cpf";
 import { supabase } from "@/supabase";
 import LegalConsent from "@/components/LegalConsent";
+import { formatPhoneInput, isValidBrazilPhone } from "@/lib/phone";
 
 // Página pública: o cliente abre pelo link enviado no WhatsApp e pede um orçamento.
 // Só faz INSERT na tabela budget_requests (o banco não permite ler pedidos sem login).
@@ -39,12 +40,6 @@ const emptyForm = {
   website: "", // armadilha para robôs (campo invisível)
 };
 
-function formatPhoneInput(value) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
 
 function Field({ label, hint, required, children }) {
   return (
@@ -107,8 +102,8 @@ export default function PublicBudgetRequestForm() {
       setErrorMessage("Informe seu nome e sobrenome.");
       return;
     }
-    if (form.whatsapp.replace(/\D/g, "").length < 10) {
-      setErrorMessage("Informe um WhatsApp com DDD.");
+    if (!isValidBrazilPhone(form.whatsapp)) {
+      setErrorMessage("Informe um WhatsApp válido com DDD, por exemplo (48) 99999-9999.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) {

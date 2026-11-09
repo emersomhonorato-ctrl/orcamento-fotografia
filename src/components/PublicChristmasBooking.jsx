@@ -16,28 +16,16 @@ import {
   themeEmoji,
 } from "@/lib/bookings";
 import LegalConsent from "@/components/LegalConsent";
+import { formatPhoneInput, isValidBrazilPhone } from "@/lib/phone";
 
 // Página pública: o cliente escolhe pacote, dia e horário do ensaio temático (Natal, Dia das Mães...) e reserva.
 
 const inputClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#b3261e] focus:ring-4 focus:ring-[#b3261e]/10";
 
-function formatPhoneInput(value) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
 
 const LEAD_KEY = "eh-natal-lead";
 
-// Celular ou fixo do Brasil: DDD válido + 8 dígitos (fixo) ou 9 começando com 9 (celular)
-function isValidBrazilPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
-  if (!/^[1-9][1-9]\d{8,9}$/.test(digits)) return false;
-  if (/^(\d)\1+$/.test(digits.slice(2))) return false;
-  return digits.length === 10 ? /^[2-5]/.test(digits.slice(2)) : digits[2] === "9";
-}
 
 function StepTitle({ number, children }) {
   return (
@@ -250,7 +238,7 @@ export default function PublicChristmasBooking() {
     if (!selectedPackage) return setErrorMessage("Escolha um pacote.");
     if (!selectedSlot) return setErrorMessage("Escolha o dia e o horário.");
     if (form.name.trim().split(/\s+/).filter((part) => part.length >= 2).length < 2) return setErrorMessage("Informe nome e sobrenome.");
-    if (form.whatsapp.replace(/\D/g, "").length < 10) return setErrorMessage("Informe um WhatsApp com DDD.");
+    if (!isValidBrazilPhone(form.whatsapp)) return setErrorMessage("Informe um WhatsApp válido com DDD, por exemplo (48) 99999-9999.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return setErrorMessage("Informe um e-mail válido.");
     if (!isValidCpf(form.cpf)) return setErrorMessage("Informe um CPF válido (é usado no contrato).");
     if (!isValidBirthDate(form.birth_date)) return setErrorMessage("Informe sua data de nascimento.");

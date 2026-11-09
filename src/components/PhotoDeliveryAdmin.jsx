@@ -19,6 +19,8 @@ import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
 import DeliveryQrCard from "@/components/DeliveryQrCard";
 import { listDriveImages } from "@/lib/driveList";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 function addDays(days) {
   const date = new Date();
@@ -449,7 +451,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1"><Label>Nome do cliente *</Label><Input className="rounded-2xl" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
               <div className="space-y-1"><Label>Título *</Label><Input className="rounded-2xl" placeholder="Ex.: Ensaio Gestante, Casamento Ana & João" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-              <div className="space-y-1"><Label>WhatsApp do cliente</Label><Input className="rounded-2xl" placeholder="(48) 99999-9999" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: e.target.value })} /></div>
+              <div className="space-y-1"><Label>WhatsApp do cliente</Label><Input className="rounded-2xl" placeholder="(48) 99999-9999" inputMode="tel" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: formatPhoneLoose(e.target.value) })} /><PhoneHint value={form.client_whatsapp} /></div>
               <div className="space-y-1"><Label>Data do evento</Label><Input type="date" className="rounded-2xl" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} /></div>
             </div>
 
