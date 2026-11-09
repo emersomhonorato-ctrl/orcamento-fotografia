@@ -13,6 +13,8 @@ import { baseFileName, buildLightroomCollection, downloadTextFile } from "@/lib/
 import { PAY_PUBLIC_BASE, methodLabel } from "@/lib/payments";
 import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -457,7 +459,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1"><Label>Nome do cliente * (vira o nome da coleção no Lightroom)</Label><Input className="rounded-2xl" placeholder="Ex.: Ana e Juan" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
               <div className="space-y-1"><Label>Título *</Label><Input className="rounded-2xl" placeholder="Ex.: Casamento Ana e Juan" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-              <div className="space-y-1"><Label>WhatsApp do cliente</Label><Input className="rounded-2xl" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: e.target.value })} /></div>
+              <div className="space-y-1"><Label>WhatsApp do cliente</Label><Input className="rounded-2xl" inputMode="tel" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: formatPhoneLoose(e.target.value) })} /><PhoneHint value={form.client_whatsapp} /></div>
               <div className="space-y-1"><Label>Data do evento</Label><Input type="date" className="rounded-2xl" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} /></div>
             </div>
             <div className="space-y-1">

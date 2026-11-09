@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/utils/formatters";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 export default function EventModal({
   open,
@@ -180,17 +182,21 @@ export default function EventModal({
             <Label>Telefone</Label>
             <Input
               value={form.phone}
-              onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, phone: formatPhoneLoose(event.target.value) }))}
+              inputMode="tel"
               className="rounded-2xl"
             />
+            <PhoneHint value={form.phone} />
           </div>
           <div className="space-y-2">
             <Label>WhatsApp</Label>
             <Input
               value={form.whatsapp}
-              onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, whatsapp: formatPhoneLoose(event.target.value) }))}
+              inputMode="tel"
               className="rounded-2xl"
             />
+            <PhoneHint value={form.whatsapp} />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Endereço</Label>

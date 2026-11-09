@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 export default function ClientModal({ open, onOpenChange, clientForm, setClientForm, onSave, onCancel }) {
   return (
@@ -60,17 +62,21 @@ export default function ClientModal({ open, onOpenChange, clientForm, setClientF
             <Label>Telefone</Label>
             <Input
               value={clientForm.phone}
-              onChange={(event) => setClientForm((current) => ({ ...current, phone: event.target.value }))}
+              onChange={(event) => setClientForm((current) => ({ ...current, phone: formatPhoneLoose(event.target.value) }))}
+              inputMode="tel"
               className="rounded-2xl"
             />
+            <PhoneHint value={clientForm.phone} />
           </div>
           <div className="space-y-2">
             <Label>WhatsApp</Label>
             <Input
               value={clientForm.whatsapp}
-              onChange={(event) => setClientForm((current) => ({ ...current, whatsapp: event.target.value }))}
+              onChange={(event) => setClientForm((current) => ({ ...current, whatsapp: formatPhoneLoose(event.target.value) }))}
+              inputMode="tel"
               className="rounded-2xl"
             />
+            <PhoneHint value={clientForm.whatsapp} />
           </div>
           <div className="space-y-2">
             <Label>Cidade</Label>

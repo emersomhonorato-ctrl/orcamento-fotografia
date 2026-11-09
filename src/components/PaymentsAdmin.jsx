@@ -9,6 +9,8 @@ import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR } from "@/lib/delivery";
 import { PAY_PUBLIC_BASE, PAYMENT_STATUS, brl, installmentLabel, methodLabel } from "@/lib/payments";
 import { openExternal } from "@/lib/openExternal";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 function addDays(days) {
   const date = new Date();
@@ -313,7 +315,7 @@ export default function PaymentsAdmin({ records = [] }) {
               </select>
             </div>
             <div className="space-y-1"><Label>Nome do cliente</Label><Input className="rounded-2xl" value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
-            <div className="space-y-1"><Label>WhatsApp</Label><Input className="rounded-2xl" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: e.target.value })} /></div>
+            <div className="space-y-1"><Label>WhatsApp</Label><Input className="rounded-2xl" inputMode="tel" value={form.client_whatsapp} onChange={(e) => setForm({ ...form, client_whatsapp: formatPhoneLoose(e.target.value) })} /><PhoneHint value={form.client_whatsapp} /></div>
             <div className="space-y-1 sm:col-span-2"><Label>O que está cobrando</Label><Input className="rounded-2xl" placeholder="Ex.: Sinal do casamento 14/03/2027" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             <div className="space-y-1"><Label>Valor (R$)</Label><Input className="rounded-2xl" inputMode="decimal" placeholder="Ex.: 1.500,00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
             <div className="space-y-1">
