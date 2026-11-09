@@ -18,6 +18,7 @@ import {
 import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
 import DeliveryQrCard from "@/components/DeliveryQrCard";
+import { listDriveImages } from "@/lib/driveList";
 
 function addDays(days) {
   const date = new Date();
@@ -58,6 +59,20 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   const [extrasDraft, setExtrasDraft] = useState(null);
   const [referralCounts, setReferralCounts] = useState({});
 
+  const [apiKey, setApiKey] = useState("");
+
+  // Lê do Drive a lista de fotos (para a página do cliente ter "Baixar" em cada foto)
+  async function readPhotos(driveUrl) {
+    if (!apiKey) return null;
+    try {
+      const list = await listDriveImages(driveUrl, apiKey);
+      return list.map((photo) => ({ id: photo.id, name: photo.name }));
+    } catch (error) {
+      setMessage(`A entrega foi salva, mas não consegui ler a lista de fotos do Drive: ${error.message}`);
+      return null;
+    }
+  }
+
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("photo_deliveries").select("*").order("created_at", { ascending: false }).limit(500);
     if (error) {
@@ -65,7 +80,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       return;
     }
     setDeliveries(data || []);
-    const settingsRes = await supabase.from("studio_settings").select("google_review_url, products, referral_reward").eq("id", 1).maybeSingle();
+    const settingsRes = await supabase.from("studio_settings").select("google_review_url, products, referral_reward, google_api_key").eq("id", 1).maybeSingle();
+    setApiKey(settingsRes.data?.google_api_key || "");
     if (!settingsRes.error) {
       setReviewUrl(settingsRes.data?.google_review_url || "");
       setExtras({
@@ -225,6 +241,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       active: Boolean(form.active),
       updated_at: new Date().toISOString(),
     };
+    const photos = await readPhotos(payload.drive_url);
+    if (photos) payload.photos = photos;
     const previous = form.id ? deliveries.find((item) => item.id === form.id) : null;
     const { error } = form.id
       ? await supabase.from("photo_deliveries").update(payload).eq("id", form.id)
@@ -235,7 +253,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       await supabase.storage.from(COVER_BUCKET).remove([previous.cover_path]);
     }
     setForm(null);
-    setMessage(form.id ? "Entrega atualizada." : "Entrega criada! Agora é só enviar o link para o cliente.");
+    if (photos || !apiKey) setMessage(form.id ? "Entrega atualizada." : "Entrega criada! Agora é só enviar o link para o cliente.");
     load();
   }
 
@@ -249,7 +267,23 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   }
 
   async function toggleActive(item) {
-    await supabase.from("photo_deliveries").update({ active: !item.active, updated_at: new Date().toISOString() }).eq("id", item.id);
+    const update = { active: !item.active, updated_at: new Date().toISOString() };
+    if (!item.active) {
+      const photos = await readPhotos(item.drive_url);
+      if (photos) update.photos = photos;
+    }
+    await supabase.from("photo_deliveries").update(update).eq("id", item.id);
+    load();
+  }
+
+  async function refreshPhotos(item) {
+    setBusy(true);
+    const photos = await readPhotos(item.drive_url);
+    if (photos) {
+      await supabase.from("photo_deliveries").update({ photos, updated_at: new Date().toISOString() }).eq("id", item.id);
+      setMessage(`${item.client_name}: ${photos.length} fotos na galeria, cada uma com o botão Baixar.`);
+    }
+    setBusy(false);
     load();
   }
 
@@ -524,6 +558,14 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                   {item.pin ? `🔑 Senha ${item.pin} • ` : ""}
                   {item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}
                   {item.last_viewed_at ? ` • última visita ${new Date(item.last_viewed_at).toLocaleDateString("pt-BR")}` : ""}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {Array.isArray(item.photos) && item.photos.length
+                    ? `📷 ${item.photos.length} fotos com botão Baixar • `
+                    : "📁 Galeria do Drive (sem botão de baixar por foto) • "}
+                  <button type="button" className="font-medium text-slate-700 underline-offset-2 hover:underline disabled:opacity-50" disabled={busy || !apiKey} title={apiKey ? "Ler de novo as fotos da pasta do Drive" : "Cadastre a chave do Google na aba Seleção"} onClick={() => refreshPhotos(item)}>
+                    Atualizar fotos
+                  </button>
                 </p>
                 {item.referral_code ? (
                   <p className="text-[11px] text-slate-500">🎁 Código de indicação <strong>{item.referral_code}</strong>{referralCounts[item.referral_code] ? ` • ${referralCounts[item.referral_code]} indicação(ões) recebida(s)` : ""}</p>

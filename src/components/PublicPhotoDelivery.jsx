@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/supabase";
 import { STUDIO_WHATSAPP, driveEmbedUrl, formatDateBR, coverFocusStyle } from "@/lib/delivery";
 import { openExternal } from "@/lib/openExternal";
@@ -16,6 +16,24 @@ function useSerifFont() {
     link.href = "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap";
     document.head.appendChild(link);
   }, []);
+}
+
+const downloadUrl = (id) => `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`;
+
+// Miniatura do Drive, com um segundo endereço se o primeiro falhar
+function DeliveryThumb({ id, size, className }) {
+  const [src, setSrc] = useState(`https://drive.google.com/thumbnail?id=${id}&sz=w${size}`);
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      draggable={false}
+      className={className}
+      onError={() => setSrc((current) => (current.includes("lh3.") ? current : `https://lh3.googleusercontent.com/d/${id}=w${size}`))}
+    />
+  );
 }
 
 function firstName(name = "") {
@@ -42,6 +60,27 @@ export default function PublicPhotoDelivery({ slug }) {
   const [pin, setPin] = useState("");
   const [checking, setChecking] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const [viewer, setViewer] = useState(-1);
+  const swipeStart = useRef(null);
+
+  useEffect(() => {
+    if (state !== "ok") return;
+    supabase.rpc("get_delivery_photos", { p_slug: slug, p_pin: pin.trim() || null }).then(({ data: list }) => {
+      if (Array.isArray(list)) setPhotos(list.filter((item) => item?.id));
+    });
+  }, [state, slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (viewer < 0) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setViewer(-1);
+      if (event.key === "ArrowRight") setViewer((v) => Math.min(photos.length - 1, v + 1));
+      if (event.key === "ArrowLeft") setViewer((v) => Math.max(0, v - 1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewer, photos.length]);
 
   async function load(pinValue) {
     const { data: result, error } = await supabase.rpc("get_delivery", { p_slug: slug, p_pin: pinValue || null });
@@ -183,13 +222,13 @@ export default function PublicPhotoDelivery({ slug }) {
 
       <main className="mx-auto max-w-5xl px-5">
         {/* Mensagem + ações */}
-        <section className="-mt-10 rounded-[32px] bg-white p-7 shadow-[0_30px_80px_rgba(27,22,16,0.12)] sm:p-10">
+        <section className="relative z-10 -mt-10 rounded-[32px] bg-white p-7 pt-9 shadow-[0_30px_80px_rgba(27,22,16,0.12)] sm:p-10 sm:pt-12">
           <div className="grid gap-8 md:grid-cols-[1.3fr_1fr] md:items-center">
             <div>
               <h2 className="text-3xl sm:text-4xl" style={SERIF}>Olá, {name}!</h2>
               <p className="mt-3 whitespace-pre-line text-[15px] leading-7 text-[#4a4036]">
                 {data.message ||
-                  "Foi um prazer registrar esse momento. Separei cada foto com muito carinho — espero que você ame o resultado tanto quanto eu amei fazer."}
+                  "Foi um prazer registrar esse momento. Separei cada foto com muito carinho, espero que você ame o resultado tanto quanto eu amei fazer."}
               </p>
               {data.expires_at ? (
                 <p className="mt-4 inline-flex rounded-full bg-[#f7f3ee] px-3 py-1 text-xs font-medium text-[#7a6650]">
@@ -226,11 +265,24 @@ export default function PublicPhotoDelivery({ slug }) {
               <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#a8875a]">Galeria</p>
               <h2 className="mt-1 text-4xl" style={SERIF}>Suas fotos</h2>
             </div>
-            <a href={data.drive_url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#7a6650] underline-offset-4 hover:underline">
-              Abrir no Google Drive ↗
-            </a>
           </div>
-          {embed ? (
+          {photos.length ? (
+            <>
+              <p className="-mt-3 mb-4 text-sm text-[#7a6650]">{photos.length} fotos • toque em <strong>⬇ Baixar</strong> para salvar só a que quiser</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+                {photos.map((photo, index) => (
+                  <figure key={photo.id} className="group relative overflow-hidden rounded-2xl bg-[#efe8df]">
+                    <button type="button" className="block w-full" onClick={() => setViewer(index)} aria-label={`Ampliar ${photo.name}`}>
+                      <DeliveryThumb id={photo.id} size={600} className="aspect-[4/5] w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+                    </button>
+                    <a href={downloadUrl(photo.id)} className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-[#1b1610] shadow-md hover:bg-white" aria-label={`Baixar ${photo.name}`}>
+                      <span aria-hidden="true">⬇</span> Baixar
+                    </a>
+                  </figure>
+                ))}
+              </div>
+            </>
+          ) : embed ? (
             <div className="relative overflow-hidden rounded-[28px] border border-[#e4dbd0] bg-white shadow-sm">
               {!galleryLoaded ? (
                 <div className="absolute inset-0 grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
@@ -343,11 +395,15 @@ export default function PublicPhotoDelivery({ slug }) {
           <div className="rounded-[28px] bg-[#1b1610] p-7 text-white sm:p-10">
             <h2 className="text-3xl" style={SERIF}>Como baixar</h2>
             <div className="mt-6 grid gap-5 sm:grid-cols-3">
-              {[
+              {(photos.length ? [
+                ["1", "Uma foto", "Toque em “⬇ Baixar” na foto que quiser (ou abra a foto e toque em “Baixar esta foto”)."],
+                ["2", "Todas de uma vez", "Toque em “Baixar todas as fotos”. No computador, clique em “Fazer download” no topo: vem um arquivo .zip."],
+                ["3", "No celular", "A foto vai para os Arquivos/Downloads. No iPhone, abra e toque em compartilhar → “Salvar imagem” para ir para a galeria."],
+              ] : [
                 ["1", "Abra no Drive", "Toque em “Baixar todas as fotos”. Não precisa ter conta Google."],
                 ["2", "Baixe tudo", "No computador, clique em “Fazer download” no topo: as fotos vêm num arquivo .zip."],
                 ["3", "No celular", "Abra a foto, toque nos ⋮ três pontinhos e escolha “Fazer download”."],
-              ].map(([n, title, text]) => (
+              ]).map(([n, title, text]) => (
                 <div key={n} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e9c77b] text-sm font-bold text-[#1b1610]">{n}</span>
                   <p className="mt-3 font-semibold">{title}</p>
@@ -361,6 +417,35 @@ export default function PublicPhotoDelivery({ slug }) {
           </div>
         </section>
       </main>
+
+      {viewer >= 0 && photos[viewer] ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+          <div className="flex items-center gap-3 px-4 py-3 text-sm">
+            <span className="text-white/70">{viewer + 1} de {photos.length}</span>
+            <a href={downloadUrl(photos[viewer].id)} className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[#e9c77b] px-4 py-2 text-sm font-bold text-[#1b1610] hover:bg-[#f3d692]">
+              <span aria-hidden="true">⬇</span> Baixar esta foto
+            </a>
+            <button type="button" className="rounded-full px-3 py-2 text-xl leading-none text-white/80 hover:bg-white/10" onClick={() => setViewer(-1)} aria-label="Fechar">×</button>
+          </div>
+          <div
+            className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-4"
+            onTouchStart={(event) => { swipeStart.current = event.touches[0]?.clientX ?? null; }}
+            onTouchEnd={(event) => {
+              const start = swipeStart.current;
+              swipeStart.current = null;
+              if (start == null) return;
+              const dx = (event.changedTouches[0]?.clientX ?? start) - start;
+              if (dx < -60) setViewer((v) => Math.min(photos.length - 1, v + 1));
+              if (dx > 60) setViewer((v) => Math.max(0, v - 1));
+            }}
+          >
+            <DeliveryThumb key={photos[viewer].id} id={photos[viewer].id} size={1600} className="max-h-full max-w-full object-contain" />
+            {viewer > 0 ? <button type="button" className="absolute left-2 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20 sm:block" onClick={() => setViewer(viewer - 1)} aria-label="Anterior">‹</button> : null}
+            {viewer < photos.length - 1 ? <button type="button" className="absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20 sm:block" onClick={() => setViewer(viewer + 1)} aria-label="Próxima">›</button> : null}
+          </div>
+          <p className="pb-4 text-center text-xs text-white/50 sm:hidden">Arraste para o lado para ver as outras ↔</p>
+        </div>
+      ) : null}
 
       <footer className="border-t border-[#e4dbd0] py-8 text-center">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#1b1610] p-1.5">
