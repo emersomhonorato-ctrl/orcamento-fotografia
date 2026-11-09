@@ -1099,7 +1099,7 @@ export default function App() {
           notes: [
             `Cadastrado pelo formulário de pedido em ${String(request.created_at || "").slice(0, 10).split("-").reverse().join("/")}.`,
             request.service ? `Interesse: ${request.service}${request.event_date ? ` (${request.event_date.split("-").reverse().join("/")})` : ""}.` : "",
-            request.how_found ? `Conheceu por: ${request.how_found}.` : "",
+            request.how_found ? `Conheceu por: ${request.how_found}${request.referred_by ? ` (${request.referred_by})` : ""}.` : "",
           ].filter(Boolean).join(" "),
         }));
       });
@@ -1371,7 +1371,7 @@ export default function App() {
     let active = true;
     supabase
       .from("budget_requests")
-      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found, cpf, birth_date, marketing_opt_in")
+      .select("id, created_at, status, name, whatsapp, email, service, event_date, location, how_found, referred_by, cpf, birth_date, marketing_opt_in")
       .order("created_at", { ascending: false })
       .limit(100)
       .then(({ data, error }) => {
@@ -1563,7 +1563,7 @@ export default function App() {
       request.details ? `Pedido do cliente: ${request.details}` : "",
       request.event_time ? `Horário desejado: ${request.event_time}` : "",
       request.people ? `Pessoas/convidados: ${request.people}` : "",
-      request.how_found ? `Conheceu por: ${request.how_found}` : "",
+      request.how_found ? `Conheceu por: ${request.how_found}${request.referred_by ? ` (indicado por ${request.referred_by})` : ""}` : "",
     ].filter(Boolean);
 
     const linkedClient = findMatchingClient({ name: request.name, email: request.email, whatsapp: request.whatsapp });

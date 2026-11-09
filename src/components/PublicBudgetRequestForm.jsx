@@ -37,6 +37,7 @@ const emptyForm = {
   people: "",
   details: "",
   how_found: "",
+  referred_by: "",
   website: "", // armadilha para robôs (campo invisível)
 };
 
@@ -147,6 +148,7 @@ export default function PublicBudgetRequestForm() {
       people: form.people.trim().slice(0, 60) || null,
       details: form.details.trim().slice(0, 2000) || null,
       how_found: form.how_found || null,
+      referred_by: form.how_found === "Indicação" && !referralCode ? form.referred_by.trim().slice(0, 120) || null : null,
       ...(referralCode ? { referral_code: referralCode } : {}),
     };
 
@@ -262,6 +264,11 @@ export default function PublicBudgetRequestForm() {
                   ))}
                 </select>
               </Field>
+              {form.how_found === "Indicação" && !referralCode ? (
+                <Field label="Quem te indicou?" hint="Assim eu consigo agradecer quem te indicou 💛">
+                  <input className={inputClass} value={form.referred_by} onChange={update("referred_by")} maxLength={120} placeholder="Nome de quem indicou" />
+                </Field>
+              ) : null}
 
               {/* Campo invisível: pessoas não veem; robôs costumam preencher */}
               <input
