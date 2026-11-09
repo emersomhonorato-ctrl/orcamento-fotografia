@@ -105,6 +105,7 @@ export default function PublicPhotoSelection({ slug }) {
   // arrastar com o dedo no visualizador
   const swipe = useRef(null);
   const [payment, setPayment] = useState(null);
+  const [coverId, setCoverId] = useState("");
   const [dragX, setDragX] = useState(0);
 
   const load = useCallback(async (pinTry) => {
@@ -127,6 +128,12 @@ export default function PublicPhotoSelection({ slug }) {
   }, [load]);
 
   // escolha enviada: busca (ou cria) o link de pagamento dos extras/revelações
+  // foto de capa escolhida pelo fotógrafo
+  useEffect(() => {
+    if (!data) return;
+    supabase.rpc("get_selection_cover", { p_slug: slug, p_pin: pinValue || null }).then(({ data: id }) => setCoverId(typeof id === "string" ? id : ""));
+  }, [data, slug, pinValue]);
+
   const loadPayment = useCallback(async (pinTry) => {
     const { data: result, error: rpcError } = await supabase.rpc("selection_payment", { p_slug: slug, p_pin: pinTry || null });
     if (!rpcError && result) setPayment(result);
@@ -330,7 +337,13 @@ export default function PublicPhotoSelection({ slug }) {
 
   return (
     <div className="min-h-screen bg-[#0f0d0b] pb-36 text-white">
-      <header className="mx-auto max-w-6xl px-5 pb-6 pt-8 text-center">
+      {coverId ? (
+        <div className="relative h-[46vh] min-h-[260px] w-full overflow-hidden sm:h-[58vh]">
+          <Photo photo={{ id: coverId, name: "capa" }} size={1600} alt="" watermark={watermarkText} className="h-full w-full object-cover object-[50%_30%]" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-[#0f0d0b]" />
+        </div>
+      ) : null}
+      <header className={`relative mx-auto max-w-6xl px-5 pb-6 text-center ${coverId ? "-mt-24 pt-0" : "pt-8"}`}>
         <img src={LOGO} alt="Emerson Honorato Retratos" className="mx-auto h-14 w-14 object-contain" />
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.34em] text-[#e9c77b]">{state === "enviada" ? "Escolha enviada" : "Escolha suas favoritas"}</p>
         <h1 className="mt-2 text-4xl leading-tight sm:text-6xl" style={SERIF}>{data.title}</h1>

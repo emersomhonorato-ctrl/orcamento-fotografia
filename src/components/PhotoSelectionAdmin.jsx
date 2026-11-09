@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, CreditCard, Download, Eye, Heart, KeyRound, Link2, Pencil, Plus, Printer, RefreshCw, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
+import { Copy, CreditCard, Download, Eye, Heart, Image as ImageIcon, KeyRound, Link2, Pencil, Plus, Printer, RefreshCw, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { openExternal } from "@/lib/openExternal";
 import DriveImportButton from "@/components/DriveImportButton";
 import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
+import SelectionCoverPicker from "@/components/SelectionCoverPicker";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -91,6 +92,7 @@ const EMPTY = {
 
 export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) {
   const [items, setItems] = useState([]);
+  const [coverItem, setCoverItem] = useState(null);
   const [state, setState] = useState("loading");
   const [apiKey, setApiKey] = useState("");
   const [keyDraft, setKeyDraft] = useState(null);
@@ -101,6 +103,17 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
   const [copied, setCopied] = useState("");
   const [defaultSizes, setDefaultSizes] = useState(DEFAULT_PRINT_SIZES);
   const [payments, setPayments] = useState({});
+
+  async function saveCover(item, coverId) {
+    const { error } = await supabase.from("photo_selections").update({ cover_id: coverId || null }).eq("id", item.id);
+    if (error) {
+      setMessage(`Não consegui salvar a capa: ${error.message}`);
+      return;
+    }
+    setItems((current) => current.map((row) => (row.id === item.id ? { ...row, cover_id: coverId || null } : row)));
+    setMessage(coverId ? `Capa de ${item.client_name} salva.` : `Capa de ${item.client_name} removida.`);
+    setCoverItem(null);
+  }
 
   const load = useCallback(async () => {
     const [{ data, error }, settingsRes] = await Promise.all([
@@ -553,6 +566,8 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
         );
       })() : null}
 
+      {coverItem ? <SelectionCoverPicker item={coverItem} onClose={() => setCoverItem(null)} onPick={(coverId) => saveCover(coverItem, coverId)} /> : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => {
           const total = Array.isArray(item.photos) ? item.photos.length : 0;
@@ -562,7 +577,8 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
           const amountDue = extras * Number(item.extra_price || 0) + printInfo.cost;
           const photoList = Array.isArray(item.photos) ? item.photos : [];
           const firstChosen = Array.isArray(item.selected) && item.selected.length ? photoList.find((photo) => photo.name === item.selected[0]) : null;
-          const cover = firstChosen || (photoList.length ? photoList[Math.floor(photoList.length / 3)] : null);
+          const chosenCover = item.cover_id ? photoList.find((photo) => photo.id === item.cover_id) || { id: item.cover_id } : null;
+          const cover = chosenCover || firstChosen || (photoList.length ? photoList[Math.floor(photoList.length / 3)] : null);
           const sent = item.status === "enviada";
           const expired = !sent && item.expires_at && item.expires_at < today;
           const [label, tone] = sent
@@ -580,6 +596,9 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                 {cover ? <img src={`https://drive.google.com/thumbnail?id=${cover.id}&sz=w800`} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%" }} onError={(event) => { if (!event.currentTarget.src.includes("lh3.")) event.currentTarget.src = `https://lh3.googleusercontent.com/d/${cover.id}=w800`; }} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
                 <span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
+                <button type="button" className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur hover:bg-black/70" onClick={() => setCoverItem(item)}>
+                  <ImageIcon className="h-3.5 w-3.5" />{item.cover_id ? "Trocar capa" : "Escolher capa"}
+                </button>
                 <div className="absolute bottom-3 left-4 right-4 text-white">
                   <p className="truncate text-lg font-semibold">{item.client_name}</p>
                   <p className="truncate text-xs text-white/80">{item.title}{item.event_date ? ` • ${formatDateBR(item.event_date)}` : ""}</p>
