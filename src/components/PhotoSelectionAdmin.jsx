@@ -16,6 +16,7 @@ import DriveImportButton from "@/components/DriveImportButton";
 import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
 import SelectionCoverPicker from "@/components/SelectionCoverPicker";
+import LightroomExportDialog from "@/components/LightroomExportDialog";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -93,6 +94,7 @@ const EMPTY = {
 export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) {
   const [items, setItems] = useState([]);
   const [coverItem, setCoverItem] = useState(null);
+  const [lightroomItem, setLightroomItem] = useState(null);
   const [state, setState] = useState("loading");
   const [apiKey, setApiKey] = useState("");
   const [keyDraft, setKeyDraft] = useState(null);
@@ -397,10 +399,9 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
   }
 
   function downloadLightroom(item) {
-    const names = (item.selected || []).slice().sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+    const names = item.selected || [];
     if (!names.length) return setMessage("Essa seleção ainda não tem fotos escolhidas.");
-    const content = buildLightroomCollection(item.client_name, names);
-    downloadTextFile(`selecao-${slugify(item.client_name) || "cliente"}.lrsmcol`, content);
+    setLightroomItem({ title: item.client_name, fileName: `selecao-${slugify(item.client_name) || "cliente"}.lrsmcol`, names });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -566,6 +567,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
         );
       })() : null}
 
+      {lightroomItem ? <LightroomExportDialog {...lightroomItem} onClose={() => setLightroomItem(null)} /> : null}
       {coverItem ? <SelectionCoverPicker item={coverItem} onClose={() => setCoverItem(null)} onPick={(coverId) => saveCover(coverItem, coverId)} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

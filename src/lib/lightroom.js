@@ -27,7 +27,8 @@ export function buildLightroomCollection(title, fileNames = [], id = newCollecti
     "\tvalue = {",
   ];
   names.forEach((name) => {
-    lines.push("\t\t{", '\t\t\tcriteria = "filename",', '\t\t\toperation = "contains",', `\t\t\tvalue = ${luaString(name)},`, "\t\t},");
+    // "any" = "contém" no Lightroom (o arquivo não aceita "contains")
+    lines.push("\t\t{", '\t\t\tcriteria = "filename",', '\t\t\toperation = "any",', `\t\t\tvalue = ${luaString(name)},`, '\t\t\tvalue2 = "",', "\t\t},");
   });
   lines.push('\t\tcombine = "union",', "\t},", "\tversion = 0,", "}", "");
   return lines.join("\n");
