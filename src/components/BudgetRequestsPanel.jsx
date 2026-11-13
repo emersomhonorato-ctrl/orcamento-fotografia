@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, CalendarDays, ClipboardList, Copy, ExternalLink, FilePlus2, MapPin, MessageCircle, RefreshCw, Send, Users } from "lucide-react";
+import { Archive, CalendarDays, ClipboardList, Copy, ExternalLink, FilePlus2, MapPin, MessageCircle, Pencil, RefreshCw, Send, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,8 @@ import { supabase } from "@/supabase";
 import { formatDateBR } from "@/utils/formatters";
 import { buildWhatsAppLink, buildWhatsAppShareLink } from "@/utils/whatsappMessages";
 import { openExternal } from "@/lib/openExternal";
+import { formatPhoneLoose } from "@/lib/phone";
+import PhoneHint from "@/components/PhoneHint";
 
 export const PUBLIC_REQUEST_URL = "https://orcamento.emersonhonoratoretratos.com.br/pedido";
 
@@ -30,12 +32,44 @@ function formatCreatedAt(value) {
   return `${formatDateBR(value.slice(0, 10))} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onRequestsLoaded }) {
+export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onRequestsLoaded, onRequestCorrected }) {
   const [requests, setRequests] = useState([]);
   const [state, setState] = useState("loading"); // loading | ready | missing | error
   const [showArchived, setShowArchived] = useState(false);
   const [clientPhone, setClientPhone] = useState("");
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(null); // { id, name, whatsapp, email }
+  const [editMessage, setEditMessage] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  async function saveCorrection() {
+    if (!editing) return;
+    const original = requests.find((item) => item.id === editing.id);
+    const changes = {
+      name: editing.name.trim(),
+      whatsapp: editing.whatsapp.trim(),
+      email: editing.email.trim().toLowerCase() || original?.email || "",
+    };
+    if (!changes.name) {
+      setEditMessage("O nome não pode ficar vazio.");
+      return;
+    }
+    setSavingEdit(true);
+    setEditMessage("");
+    const { error } = await supabase.from("budget_requests").update(changes).eq("id", editing.id);
+    setSavingEdit(false);
+    if (error) {
+      setEditMessage(
+        /pedidos_campos_obrigatorios/.test(error.message || "")
+          ? "Não salvou: o pedido precisa de nome e sobrenome e de um e-mail válido."
+          : `Não consegui salvar: ${error.message}`,
+      );
+      return;
+    }
+    setRequests((current) => current.map((item) => (item.id === editing.id ? { ...item, ...changes } : item)));
+    onRequestCorrected?.(original, { ...original, ...changes });
+    setEditing(null);
+  }
 
   const load = useCallback(async () => {
     const query = supabase.from("budget_requests").select("*").order("created_at", { ascending: false }).limit(100);
@@ -206,7 +240,27 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
                     {request.location ? <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{request.location}</span> : null}
                     {request.people ? <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{request.people}</span> : null}
                   </div>
-                  <p className="mt-1 text-sm text-slate-600">{[request.whatsapp, request.email].filter(Boolean).join(" • ")}</p>
+                  {editing?.id === request.id ? (
+                    <div className="mt-3 grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-3">
+                      <label className="text-xs font-medium text-slate-600">Nome
+                        <Input className="mt-1 rounded-xl" value={editing.name} onChange={(event) => setEditing((current) => ({ ...current, name: event.target.value }))} />
+                      </label>
+                      <label className="text-xs font-medium text-slate-600">WhatsApp
+                        <Input className="mt-1 rounded-xl" inputMode="tel" value={editing.whatsapp} onChange={(event) => setEditing((current) => ({ ...current, whatsapp: formatPhoneLoose(event.target.value) }))} />
+                        <PhoneHint value={editing.whatsapp} />
+                      </label>
+                      <label className="text-xs font-medium text-slate-600">E-mail
+                        <Input className="mt-1 rounded-xl" type="email" value={editing.email} onChange={(event) => setEditing((current) => ({ ...current, email: event.target.value }))} />
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
+                        <Button size="sm" className="rounded-xl" disabled={savingEdit} onClick={saveCorrection}>{savingEdit ? "Salvando…" : "Salvar correção"}</Button>
+                        <Button size="sm" variant="ghost" className="rounded-xl" disabled={savingEdit} onClick={() => { setEditing(null); setEditMessage(""); }}>Cancelar</Button>
+                        {editMessage ? <span className="text-xs font-medium text-red-700">{editMessage}</span> : <span className="text-xs text-slate-500">O cliente cadastrado com o número antigo também é corrigido.</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-600">{[request.whatsapp, request.email].filter(Boolean).join(" • ")}</p>
+                  )}
                   {request.details ? <p className="mt-2 whitespace-pre-line rounded-xl bg-white/70 p-3 text-sm leading-6 text-slate-700">{request.details}</p> : null}
                   {request.how_found ? <p className="mt-2 text-xs text-slate-400">Conheceu por: {request.how_found}{request.referred_by ? ` — indicado por ${request.referred_by}` : ""}</p> : null}
                   {request.referral_code ? <p className="mt-1 inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">🎁 Indicação: código {request.referral_code}</p> : null}
@@ -217,6 +271,11 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
                     <Button size="sm" variant="outline" className="rounded-xl" onClick={() => replyOnWhatsApp(request)}>
                       <MessageCircle className="mr-1.5 h-4 w-4" /> Responder
                     </Button>
+                    {editing?.id !== request.id ? (
+                      <Button size="sm" variant="ghost" className="rounded-xl text-slate-600" onClick={() => { setEditMessage(""); setEditing({ id: request.id, name: request.name || "", whatsapp: formatPhoneLoose(request.whatsapp || ""), email: request.email || "" }); }}>
+                        <Pencil className="mr-1.5 h-4 w-4" /> Corrigir dados
+                      </Button>
+                    ) : null}
                     {request.status !== "arquivado" ? (
                       <Button size="sm" variant="ghost" className="rounded-xl text-slate-500" onClick={() => setStatus(request, "arquivado")}>
                         <Archive className="mr-1.5 h-4 w-4" /> Arquivar

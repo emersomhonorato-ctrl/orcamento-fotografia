@@ -1112,6 +1112,34 @@ export default function App() {
     });
   }, []);
 
+  // Pedido de orçamento corrigido (telefone/e-mail/nome errado): corrige também o cliente cadastrado a partir dele
+  const correctClientFromRequest = useCallback((before = {}, after = {}) => {
+    const oldPhone = normalizePhoneDigits(before.whatsapp);
+    const oldEmail = String(before.email || "").trim().toLowerCase();
+    const oldName = String(before.name || "").trim().toLowerCase();
+    setAppState((current) => {
+      const list = current.clients || [];
+      const index = list.findIndex((client) => {
+        const phones = [normalizePhoneDigits(client.phone), normalizePhoneDigits(client.whatsapp)].filter(Boolean);
+        if (oldPhone && phones.includes(oldPhone)) return true;
+        if (oldEmail && String(client.email || "").trim().toLowerCase() === oldEmail) return true;
+        return Boolean(oldName) && String(client.name || "").trim().toLowerCase() === oldName && !phones.length;
+      });
+      if (index < 0) return current;
+      const found = list[index];
+      const updated = {
+        ...found,
+        name: after.name || found.name,
+        email: after.email ?? found.email,
+        whatsapp: normalizePhoneDigits(found.whatsapp) === oldPhone || !found.whatsapp ? after.whatsapp || "" : found.whatsapp,
+        phone: normalizePhoneDigits(found.phone) === oldPhone || !found.phone ? after.whatsapp || "" : found.phone,
+      };
+      const clients = [...list];
+      clients[index] = updated;
+      return normalizeAppState({ ...current, clients });
+    });
+  }, []);
+
   // Reservas da agenda de Natal -> viram agendamento na Agenda + cliente cadastrado (uma vez só)
   // Pagamentos com cartão (Mercado Pago) ligados a um trabalho viram baixa automática no Financeiro
   useEffect(() => {
@@ -3303,6 +3331,7 @@ export default function App() {
                 settings={settings}
                 onCreateBudget={createBudgetFromRequest}
                 onRequestsLoaded={hasHydratedRemote ? importClientsFromRequests : undefined}
+                onRequestCorrected={correctClientFromRequest}
               />
 
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
