@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, CreditCard, Download, Eye, Heart, Image as ImageIcon, KeyRound, Link2, Pencil, Plus, Printer, RefreshCw, RotateCcw, Save, Send, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,14 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
   const [keyDraft, setKeyDraft] = useState(null);
   const [showKeyHelp, setShowKeyHelp] = useState(false);
   const [form, setForm] = useState(null);
+  const formRef = useRef(null);
+  const formKey = form ? form.id || "nova" : "";
+  // ao tocar no lápis (ou em Nova seleção) a tela vai até o formulário, que fica no topo da lista
+  useEffect(() => {
+    if (!formKey) return;
+    const timer = setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    return () => clearTimeout(timer);
+  }, [formKey]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState("");
@@ -256,10 +264,31 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
     const { error } = form.id
       ? await supabase.from("photo_selections").update(payload).eq("id", form.id)
       : await supabase.from("photo_selections").insert({ ...payload, slug: makeDeliverySlug(payload.client_name) });
+    if (error) {
+      setBusy(false);
+      return setMessage(`Erro ao salvar: ${error.message}`);
+    }
+    // entrega já criada: a pasta das fotos tratadas passa para ela (e a lista de fotos para o botão Baixar)
+    let deliveryNote = "";
+    const editing = form.id ? items.find((row) => row.id === form.id) : null;
+    if (editing?.delivery_id && payload.final_drive_url && payload.final_drive_url !== (editing.final_drive_url || "")) {
+      const deliveryPatch = { drive_url: payload.final_drive_url, updated_at: new Date().toISOString() };
+      if (apiKey) {
+        try {
+          const finals = await listDriveImages(payload.final_drive_url, apiKey);
+          deliveryPatch.photos = finals.map((photo) => ({ id: photo.id, name: photo.name }));
+        } catch {
+          // sem a lista, a entrega mostra a pasta do Drive
+        }
+      }
+      const { error: deliveryError } = await supabase.from("photo_deliveries").update(deliveryPatch).eq("id", editing.delivery_id);
+      deliveryNote = deliveryError
+        ? ` Atenção: não consegui atualizar a entrega (${deliveryError.message}).`
+        : ` A entrega também foi atualizada com a pasta das fotos prontas${deliveryPatch.photos ? ` (${deliveryPatch.photos.length} fotos)` : ""}. Falta só ativar em Entregas.`;
+    }
     setBusy(false);
-    if (error) return setMessage(`Erro ao salvar: ${error.message}`);
     setForm(null);
-    setMessage(`Seleção salva com ${photos.length} fotos. Agora é só enviar o link para o cliente.`);
+    setMessage(form.id ? `Seleção salva.${deliveryNote}` : `Seleção salva com ${photos.length} fotos. Agora é só enviar o link para o cliente.`);
     load();
   }
 
@@ -453,7 +482,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       {message ? <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{message}</p> : null}
 
       {form ? (
-        <Card className="studio-panel rounded-3xl border-0 bg-white/95 shadow-sm">
+        <Card ref={formRef} className="studio-panel scroll-mt-4 rounded-3xl border-0 bg-white/95 shadow-sm">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{form.id ? "Editar seleção" : "Nova seleção"}</h3>
