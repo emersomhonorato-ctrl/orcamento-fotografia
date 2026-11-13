@@ -1685,16 +1685,19 @@ export default function App() {
       whatsapp: form.whatsapp,
     });
 
+    // o que foi digitado no formulário vale; o cadastro do cliente só completa o que ficou em branco
+    const previous = form.id ? appState.events.find((item) => item.id === form.id) : null;
+    const typed = (value) => String(value || "").trim();
     const payload = normalizeRecord({
       ...form,
       id: form.id || crypto.randomUUID(),
       clientId: matchedClient?.id || form.clientId || "",
       clientName: matchedClient?.name || form.clientName,
-      clientCpf: matchedClient?.cpf || form.clientCpf,
-      clientAddress: matchedClient?.address || form.clientAddress,
-      email: matchedClient?.email || form.email,
-      phone: matchedClient?.phone || form.phone,
-      whatsapp: matchedClient?.whatsapp || form.whatsapp,
+      clientCpf: typed(form.clientCpf) || matchedClient?.cpf || "",
+      clientAddress: typed(form.clientAddress) || matchedClient?.address || "",
+      email: typed(form.email) || matchedClient?.email || "",
+      phone: typed(form.phone) || matchedClient?.phone || "",
+      whatsapp: typed(form.whatsapp) || matchedClient?.whatsapp || "",
       recordType,
       amount: Number(totalFromItems > 0 ? totalFromItems : form.amount || 0),
       amountPaid: Number(form.amountPaid || 0),
@@ -1714,10 +1717,22 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     });
 
+    // telefone/e-mail corrigido no trabalho: corrige também o cadastro do cliente que tinha o dado antigo
+    let nextClients = null;
+    if (matchedClient && previous) {
+      const changed = {};
+      const sameDigits = (a, b) => normalizePhoneDigits(a) && normalizePhoneDigits(a) === normalizePhoneDigits(b);
+      if (typed(form.whatsapp) && !sameDigits(form.whatsapp, previous.whatsapp) && (!matchedClient.whatsapp || sameDigits(matchedClient.whatsapp, previous.whatsapp))) changed.whatsapp = typed(form.whatsapp);
+      if (typed(form.phone) && !sameDigits(form.phone, previous.phone) && (!matchedClient.phone || sameDigits(matchedClient.phone, previous.phone))) changed.phone = typed(form.phone);
+      if (typed(form.email) && typed(form.email).toLowerCase() !== typed(previous.email).toLowerCase() && (!matchedClient.email || typed(matchedClient.email).toLowerCase() === typed(previous.email).toLowerCase())) changed.email = typed(form.email);
+      if (Object.keys(changed).length) nextClients = clients.map((client) => (client.id === matchedClient.id ? { ...client, ...changed } : client));
+    }
+
     updateAppState({
       events: appState.events.some((item) => item.id === payload.id)
         ? appState.events.map((item) => (item.id === payload.id ? payload : item))
         : [...appState.events, payload],
+      ...(nextClients ? { clients: nextClients } : {}),
     });
 
     setIsEventModalOpen(false);
