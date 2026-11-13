@@ -101,6 +101,11 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
   }, [bookings]);
 
   const days = useMemo(() => Array.from(groupSlotsByDay(slots).entries()), [slots]);
+  // hoje e os próximos dias na lista; os que já passaram ficam no histórico (mais recente primeiro)
+  const todayKey = localDateKey(new Date());
+  const upcomingDays = useMemo(() => days.filter(([dayKey]) => dayKey >= todayKey), [days, todayKey]);
+  const pastDays = useMemo(() => days.filter(([dayKey]) => dayKey < todayKey).reverse(), [days, todayKey]);
+  const [showHistory, setShowHistory] = useState(false);
   const totals = useMemo(() => {
     const confirmed = bookings.filter((booking) => booking.status === "confirmado");
     const awaiting = bookings.filter((booking) => booking.status === "aguardando_sinal");
@@ -714,13 +719,13 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         <Button variant="ghost" size="sm" className="rounded-xl" onClick={load}><RefreshCw className="mr-1.5 h-4 w-4" />Atualizar</Button>
       </div>
 
-      {days.length === 0 ? (
+      {upcomingDays.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white/80 p-8 text-center text-slate-500">
-          Nenhum horário criado ainda. Use "Criar horários" acima.
+          {days.length ? "Não há mais dias com horários daqui para frente. Os dias que já passaram estão no histórico abaixo." : "Nenhum horário criado ainda. Use \"Criar horários\" acima."}
         </div>
       ) : (
         <div className="space-y-4">
-          {days.map(([dayKey, daySlots]) => (
+          {upcomingDays.map(([dayKey, daySlots]) => (
             <div key={dayKey} className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="font-semibold text-slate-900">
@@ -798,6 +803,46 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
           ))}
         </div>
       )}
+
+      {pastDays.length ? (
+        <div className="rounded-[26px] border border-slate-200 bg-slate-50/80 p-4">
+          <button type="button" className="flex w-full items-center justify-between gap-2 text-left" onClick={() => setShowHistory((value) => !value)}>
+            <span className="font-semibold text-slate-800">
+              Dias que já passaram <span className="font-normal text-slate-500">({pastDays.length} dia{pastDays.length > 1 ? "s" : ""} • {pastDays.reduce((sum, [, daySlots]) => sum + daySlots.filter((slot) => bookingBySlot.get(slot.id) && !bookingBySlot.get(slot.id).isContinuation).length, 0)} ensaios)</span>
+            </span>
+            <span className="text-sm font-medium text-slate-600">{showHistory ? "Esconder" : "Ver histórico"}</span>
+          </button>
+          {showHistory ? (
+            <div className="mt-3 space-y-3">
+              {pastDays.map(([dayKey, daySlots]) => {
+                const booked = daySlots.map((slot) => ({ slot, booking: bookingBySlot.get(slot.id) })).filter((row) => row.booking && !row.booking.isContinuation);
+                return (
+                  <div key={dayKey} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {capitalize(weekdayLabel(dayKey))} • {dayMonthLabel(dayKey)}
+                      <span className="ml-2 text-xs font-normal text-slate-500">{booked.length ? `${booked.length} ensaio${booked.length > 1 ? "s" : ""}` : "sem reservas"}</span>
+                    </p>
+                    {booked.length ? (
+                      <ul className="mt-2 divide-y divide-slate-100 text-sm">
+                        {booked.map(({ slot, booking }) => (
+                          <li key={slot.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
+                            <span className="w-12 font-semibold tabular-nums text-slate-700">{localTime(slot.starts_at)}</span>
+                            <span className="min-w-[9rem] flex-1 font-medium text-slate-900">{booking.name}{booking.is_double ? " (1 hora)" : ""}</span>
+                            <span className="text-xs text-slate-500">{booking.package_photos} fotos • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${booking.status === "aguardando_sinal" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                              {booking.status === "aguardando_sinal" ? `sinal pendente ${formatBRL(booking.deposit_amount)}` : Number(booking.deposit_amount || 0) >= bookingTotal(booking) ? "pago completo" : `sinal ${formatBRL(booking.deposit_amount)}`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
