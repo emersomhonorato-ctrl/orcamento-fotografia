@@ -3220,7 +3220,7 @@ export default function App() {
 
           <TabsContent value="hds" className="mt-6">
             <SafeSection name="HDs">
-              <HdControlPanel />
+              <HdControlPanel events={onlyEvents} />
             </SafeSection>
           </TabsContent>
 
