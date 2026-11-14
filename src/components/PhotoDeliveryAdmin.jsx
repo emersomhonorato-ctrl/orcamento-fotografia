@@ -21,6 +21,7 @@ import DeliveryQrCard from "@/components/DeliveryQrCard";
 import { listDriveImages } from "@/lib/driveList";
 import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
+import DeliveredStamp, { DeliveredToggles } from "@/components/DeliveredStamp";
 
 function addDays(days) {
   const date = new Date();
@@ -49,6 +50,7 @@ const EMPTY_FORM = {
 
 export default function PhotoDeliveryAdmin({ records = [] }) {
   const [deliveries, setDeliveries] = useState([]);
+  const [marks, setMarks] = useState({});
   const [state, setState] = useState("loading");
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +77,14 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
     }
   }
 
+  async function toggleMark(mark, field) {
+    const value = mark[field] ? null : new Date().toISOString();
+    if (!value && !window.confirm("Desmarcar esta entrega?")) return;
+    const { error } = await supabase.from("photo_selections").update({ [field]: value }).eq("id", mark.id);
+    if (error) { alert(`Erro ao marcar entrega: ${error.message}`); return; }
+    setMarks((current) => ({ ...current, [mark.delivery_id]: { ...mark, [field]: value } }));
+  }
+
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("photo_deliveries").select("*").order("created_at", { ascending: false }).limit(500);
     if (error) {
@@ -82,6 +92,12 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       return;
     }
     setDeliveries(data || []);
+    const marksRes = await supabase.from("photo_selections").select("id, delivery_id, digital_delivered_at, prints_delivered_at").not("delivery_id", "is", null);
+    if (!marksRes.error) {
+      const map = {};
+      (marksRes.data || []).forEach((row) => { map[row.delivery_id] = row; });
+      setMarks(map);
+    }
     const settingsRes = await supabase.from("studio_settings").select("google_review_url, products, referral_reward, google_api_key").eq("id", 1).maybeSingle();
     setApiKey(settingsRes.data?.google_api_key || "");
     if (!settingsRes.error) {
@@ -544,11 +560,13 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {deliveries.map((item) => {
           const [label, tone] = statusOf(item);
+          const mark = marks[item.id];
           return (
             <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               <div className="relative h-48 bg-[#1b1610]">
                 {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" style={coverFocusStyle(item.cover_focus)} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <DeliveredStamp digital={mark?.digital_delivered_at} prints={mark?.prints_delivered_at} />
                 <span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
                 <div className="absolute bottom-3 left-4 right-4 text-white">
                   <p className="truncate text-lg font-semibold">{item.client_name}</p>
@@ -556,6 +574,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 </div>
               </div>
               <div className="space-y-3 p-4">
+                {mark ? <DeliveredToggles digital={mark.digital_delivered_at} prints={mark.prints_delivered_at} onToggle={(field) => toggleMark(mark, field)} /> : null}
                 <p className="text-xs text-slate-500">
                   {item.pin ? `🔑 Senha ${item.pin} • ` : ""}
                   {item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}

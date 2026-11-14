@@ -17,6 +17,7 @@ import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
 import SelectionCoverPicker from "@/components/SelectionCoverPicker";
 import LightroomExportDialog from "@/components/LightroomExportDialog";
+import DeliveredStamp, { DeliveredToggles } from "@/components/DeliveredStamp";
 
 const DEFAULT_PRINT_SIZES = [
   { size: "10x15", price: 5 },
@@ -306,6 +307,14 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
     }
     setBusy(false);
     load();
+  }
+
+  async function toggleDelivered(item, field) {
+    const value = item[field] ? null : new Date().toISOString();
+    if (!value && !window.confirm("Desmarcar esta entrega?")) return;
+    const { error } = await supabase.from("photo_selections").update({ [field]: value }).eq("id", item.id);
+    if (error) return setMessage(/column/i.test(error.message) ? "Falta atualizar o banco para marcar entregas." : `Erro ao marcar entrega: ${error.message}`);
+    setItems((current) => current.map((row) => (row.id === item.id ? { ...row, [field]: value } : row)));
   }
 
   async function reopen(item) {
@@ -626,6 +635,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
               <div className="relative h-48 bg-[#1b1610]">
                 {cover ? <img src={`https://drive.google.com/thumbnail?id=${cover.id}&sz=w800`} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%" }} onError={(event) => { if (!event.currentTarget.src.includes("lh3.")) event.currentTarget.src = `https://lh3.googleusercontent.com/d/${cover.id}=w800`; }} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
+                <DeliveredStamp digital={item.digital_delivered_at} prints={item.prints_delivered_at} />
                 <span className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
                 <button type="button" className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur hover:bg-black/70" onClick={() => setCoverItem(item)}>
                   <ImageIcon className="h-3.5 w-3.5" />{item.cover_id ? "Trocar capa" : "Escolher capa"}
@@ -668,6 +678,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                     <span>✅ Galeria de entrega criada (rascunho). Quando as fotos estiverem prontas, abra em <strong>Entregas</strong>, confira a pasta e ative.</span>
                   </button>
                 ) : null}
+                {sent ? <DeliveredToggles digital={item.digital_delivered_at} prints={item.prints_delivered_at} onToggle={(field) => toggleDelivered(item, field)} /> : null}
                 {item.reopened_at && !sent ? <p className="text-[11px] font-medium text-sky-700">Reaberta em {new Date(item.reopened_at).toLocaleString("pt-BR")}</p> : null}
                 {item.client_note ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">“{item.client_note}”</p> : null}
                 <p className="text-[11px] text-slate-500">{item.pin ? `🔑 ${item.pin} • ` : ""}{item.expires_at ? `até ${formatDateBR(item.expires_at)}` : "sem prazo"}{item.submitted_at ? ` • enviada em ${new Date(item.submitted_at).toLocaleString("pt-BR")}` : ""}</p>
