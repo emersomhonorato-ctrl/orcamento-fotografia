@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, HardDrive, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, HardDrive, Link2, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,66 @@ const HD_COLORS = [
   "bg-pink-100 text-pink-900",
 ];
 
-const emptyWork = { id: null, hd: "", number: "", folder: "", name: "", size_gb: "", file_count: "", modified_on: "", is_work: true, note: "" };
+const emptyWork = { id: null, hd: "", number: "", folder: "", name: "", size_gb: "", file_count: "", modified_on: "", is_work: true, note: "", event_id: null, event_label: null };
+
+export function eventLabel(event) {
+  if (!event) return "";
+  return [event.eventDate ? formatDateBR(event.eventDate) : "Sem data", event.clientName || "Sem nome", event.eventType].filter(Boolean).join(" · ");
+}
+
+// Busca e liga a pasta do HD a um trabalho (evento) cadastrado no app.
+function EventPicker({ events, value, label, onPick }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => {
+    const q = normalize(query.trim());
+    return events
+      .filter((event) => !q || normalize(`${event.clientName} ${event.eventType} ${event.eventDate ? formatDateBR(event.eventDate) : ""}`).includes(q))
+      .slice(0, 8);
+  }, [events, query]);
+
+  if (value) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+        <Link2 className="h-4 w-4 shrink-0" />
+        <span className="flex-1">{label || "Trabalho ligado"}</span>
+        <button type="button" className="text-xs font-semibold underline" onClick={() => { onPick(null); setOpen(true); }}>Trocar</button>
+        <button type="button" className="text-xs font-semibold text-red-700 underline" onClick={() => onPick(null)}>Tirar</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          id="work-event"
+          className="pl-9"
+          value={query}
+          placeholder="Buscar pelo nome do cliente"
+          onFocus={() => setOpen(true)}
+          onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+        />
+      </div>
+      {open ? (
+        <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200">
+          {matches.map((event) => (
+            <button
+              key={event.id}
+              type="button"
+              className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+              onClick={() => { onPick(event); setQuery(""); setOpen(false); }}
+            >
+              {eventLabel(event)}
+            </button>
+          ))}
+          {!matches.length ? <p className="px-3 py-2 text-sm text-slate-500">Nenhum trabalho encontrado.</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 const emptyDisk = { id: null, name: "", capacity: "", capacityUnit: "GB", used_gb: "", measured_on: "", notes: "" };
 
 function gb(value) {
@@ -167,7 +226,19 @@ function DiskDialog({ value, onChange, onSave, onDelete, onClose, saving, canDel
   );
 }
 
-function WorkDialog({ value, disks, onChange, onSave, onDelete, onClose, saving, nextNumber }) {
+function WorkDialog({ value, disks, events, onChange, onSave, onDelete, onClose, saving, nextNumber }) {
+  function pickEvent(event) {
+    if (!event) {
+      onChange({ event_id: null, event_label: null });
+      return;
+    }
+    const fields = { event_id: String(event.id), event_label: eventLabel(event) };
+    const number = value.number || String(nextNumber);
+    if (!value.id && !value.number) fields.number = number;
+    if (!value.name.trim()) fields.name = `${pad(number)} - ${[event.clientName, event.eventType].filter(Boolean).join(" ")}`.trim();
+    onChange(fields);
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={onClose}>
       <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
@@ -176,6 +247,11 @@ function WorkDialog({ value, disks, onChange, onSave, onDelete, onClose, saving,
           <button type="button" className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100" onClick={onClose} aria-label="Fechar"><X className="h-4 w-4" /></button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label htmlFor="work-event">Trabalho no app (cliente)</Label>
+            <EventPicker events={events} value={value.event_id} label={value.event_label} onPick={pickEvent} />
+            <p className="text-[11px] text-slate-500">Liga esta pasta ao trabalho realizado. Se o nome da pasta estiver vazio, ele é preenchido sozinho.</p>
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="work-hd">HD</Label>
             <select id="work-hd" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={value.hd} onChange={(event) => onChange({ hd: event.target.value })}>
@@ -225,7 +301,7 @@ function WorkDialog({ value, disks, onChange, onSave, onDelete, onClose, saving,
   );
 }
 
-export default function HdControlPanel() {
+export default function HdControlPanel({ events = [] }) {
   const [disks, setDisks] = useState([]);
   const [works, setWorks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -277,6 +353,10 @@ export default function HdControlPanel() {
   }, [works]);
 
   const numbering = useMemo(() => numberingSummary(works), [works]);
+  const sortedEvents = useMemo(
+    () => [...events].filter((event) => event && event.id).sort((a, b) => String(b.eventDate || "").localeCompare(String(a.eventDate || ""))),
+    [events],
+  );
   const duplicateNumbers = useMemo(() => new Set(numbering.duplicates.map(([n]) => n)), [numbering]);
   const copyWhere = useMemo(() => {
     const map = new Map();
@@ -292,7 +372,7 @@ export default function HdControlPanel() {
       if (hdFilter !== "Todos" && work.hd !== hdFilter) return false;
       if (!showAll && !work.is_work) return false;
       if (!q) return true;
-      return normalize(`${work.name} ${work.folder} ${work.note} ${work.number ?? ""}`).includes(q);
+      return normalize(`${work.name} ${work.folder} ${work.note} ${work.event_label || ""} ${work.number ?? ""}`).includes(q);
     });
   }, [works, hdFilter, query, showAll]);
 
@@ -309,6 +389,8 @@ export default function HdControlPanel() {
       file_count: work.file_count ?? "",
       folder: work.folder === "(raiz)" ? "" : work.folder || "",
       note: work.note || "",
+      event_id: work.event_id || null,
+      event_label: work.event_label || null,
     });
   }
 
@@ -368,6 +450,8 @@ export default function HdControlPanel() {
       modified_on: workForm.modified_on || null,
       is_work: workForm.is_work,
       note: workForm.note.trim() || null,
+      event_id: workForm.event_id || null,
+      event_label: workForm.event_label || null,
       updated_at: new Date().toISOString(),
     };
     setSaving(true);
@@ -501,6 +585,7 @@ export default function HdControlPanel() {
                         <td className={`px-3 py-2 font-semibold ${repeated ? "text-red-700" : ""}`}>{work.number !== null && work.number !== undefined ? pad(work.number) : "—"}</td>
                         <td className="px-3 py-2 font-medium">
                           <button type="button" className="text-left hover:underline" onClick={(event) => { event.stopPropagation(); openWork(work); }}>{work.name}</button>
+                          {work.event_label ? <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-emerald-800"><Link2 className="h-3 w-3" />{work.event_label}</span> : null}
                         </td>
                         <td className="px-3 py-2 text-slate-600">{work.folder}</td>
                         <td className="px-3 py-2 text-right">{gb(work.size_gb)}</td>
@@ -631,6 +716,7 @@ export default function HdControlPanel() {
           value={workForm}
           disks={disks}
           nextNumber={numbering.next}
+          events={sortedEvents}
           saving={saving}
           onChange={(fields) => setWorkForm((current) => ({ ...current, ...fields }))}
           onSave={saveWork}
