@@ -46,6 +46,7 @@ const EMPTY_FORM = {
   pin: "",
   expires_at: "",
   active: true,
+  scrapbook: false,
 };
 
 export default function PhotoDeliveryAdmin({ records = [] }) {
@@ -61,6 +62,8 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
   const [reviewDraft, setReviewDraft] = useState(null);
   const [extras, setExtras] = useState({ products: [], referral_reward: "" });
   const [extrasDraft, setExtrasDraft] = useState(null);
+  const [scrapbook, setScrapbook] = useState({ price_10x15: "", price_15x21: "", text: "" });
+  const [scrapbookDraft, setScrapbookDraft] = useState(null);
   const [referralCounts, setReferralCounts] = useState({});
 
   const [apiKey, setApiKey] = useState("");
@@ -98,7 +101,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       (marksRes.data || []).forEach((row) => { map[row.delivery_id] = row; });
       setMarks(map);
     }
-    const settingsRes = await supabase.from("studio_settings").select("google_review_url, products, referral_reward, google_api_key").eq("id", 1).maybeSingle();
+    const settingsRes = await supabase.from("studio_settings").select("*").eq("id", 1).maybeSingle();
     setApiKey(settingsRes.data?.google_api_key || "");
     if (!settingsRes.error) {
       setReviewUrl(settingsRes.data?.google_review_url || "");
@@ -106,6 +109,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
         products: Array.isArray(settingsRes.data?.products) ? settingsRes.data.products : [],
         referral_reward: settingsRes.data?.referral_reward || "",
       });
+      setScrapbook({ price_10x15: "", price_15x21: "", text: "", ...(settingsRes.data?.scrapbook || {}) });
     }
     const refRes = await supabase.from("budget_requests").select("referral_code").not("referral_code", "is", null).limit(2000);
     if (!refRes.error && refRes.data) {
@@ -144,6 +148,20 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
     setExtras({ products, referral_reward: String(extrasDraft.referral_reward || "").trim() });
     setExtrasDraft(null);
     setMessage("Álbuns/impressões e prêmio de indicação salvos.");
+  }
+
+  async function saveScrapbook() {
+    if (!scrapbookDraft) return;
+    const value = {
+      price_10x15: String(scrapbookDraft.price_10x15 || "").trim(),
+      price_15x21: String(scrapbookDraft.price_15x21 || "").trim(),
+      text: String(scrapbookDraft.text || "").trim(),
+    };
+    const { error } = await supabase.from("studio_settings").upsert({ id: 1, scrapbook: value, updated_at: new Date().toISOString() });
+    if (error) return setMessage(/scrapbook/i.test(error.message) ? "Falta atualizar o banco para o álbum scrapbook." : `Erro ao salvar: ${error.message}`);
+    setScrapbook(value);
+    setScrapbookDraft(null);
+    setMessage("Álbum scrapbook salvo.");
   }
 
   async function askReview(item) {
@@ -194,6 +212,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       ...EMPTY_FORM,
       ...Object.fromEntries(Object.entries(item).map(([key, value]) => [key, value ?? ""])),
       active: item.active !== false,
+      scrapbook: item.scrapbook === true,
     });
   }
 
@@ -257,6 +276,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       pin: clean(form.pin) || null,
       expires_at: form.expires_at || null,
       active: Boolean(form.active),
+      scrapbook: Boolean(form.scrapbook),
       updated_at: new Date().toISOString(),
     };
     const photos = await readPhotos(payload.drive_url);
@@ -438,6 +458,41 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
         </CardContent>
       </Card>
 
+      <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+        <CardContent className="space-y-3 pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-lg font-semibold">Álbum scrapbook (10×15 e 15×21)</h3>
+              <p className="text-sm text-slate-500">Aparece só nas entregas em que você marcar “Oferecer álbum scrapbook”. O valor é opcional.</p>
+            </div>
+            {!scrapbookDraft ? (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setScrapbookDraft({ ...scrapbook })}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
+            ) : null}
+          </div>
+          {scrapbookDraft ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1"><Label>Valor do 10×15</Label><Input className="rounded-xl" placeholder="Ex.: R$ 89 (vazio = não mostra valor)" value={scrapbookDraft.price_10x15} onChange={(e) => setScrapbookDraft({ ...scrapbookDraft, price_10x15: e.target.value })} /></div>
+                <div className="space-y-1"><Label>Valor do 15×21</Label><Input className="rounded-xl" placeholder="Ex.: R$ 129 (vazio = não mostra valor)" value={scrapbookDraft.price_15x21} onChange={(e) => setScrapbookDraft({ ...scrapbookDraft, price_15x21: e.target.value })} /></div>
+              </div>
+              <div className="space-y-1">
+                <Label>Texto de apresentação (opcional)</Label>
+                <Textarea className="min-h-[70px] rounded-2xl" value={scrapbookDraft.text} placeholder="Vazio = usa o texto padrão: um álbum para a família montar junta, com as fotos reveladas para colar e personalizar." onChange={(e) => setScrapbookDraft({ ...scrapbookDraft, text: e.target.value })} />
+              </div>
+              <div className="flex gap-2">
+                <Button className="rounded-2xl" onClick={saveScrapbook}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+                <Button variant="ghost" className="rounded-2xl" onClick={() => setScrapbookDraft(null)}>Cancelar</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">
+              <p>10×15: {scrapbook.price_10x15 || "sem valor"} • 15×21: {scrapbook.price_15x21 || "sem valor"}</p>
+              <p className="mt-1 text-xs text-slate-500">{deliveries.filter((item) => item.scrapbook).length} entrega(s) com a oferta ligada.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {form ? (
         <Card className="studio-panel rounded-3xl border-0 bg-white/95 shadow-sm">
           <CardContent className="space-y-5 pt-6">
@@ -537,6 +592,10 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
                   Link ativo
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={Boolean(form.scrapbook)} onChange={(e) => setForm({ ...form, scrapbook: e.target.checked })} />
+                  Oferecer álbum scrapbook neste link (ensaios especiais)
                 </label>
               </div>
             </div>

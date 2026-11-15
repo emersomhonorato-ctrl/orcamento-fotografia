@@ -4,6 +4,7 @@ import { STUDIO_WHATSAPP, driveEmbedUrl, formatDateBR, coverFocusStyle } from "@
 import { openExternal } from "@/lib/openExternal";
 
 const LOGO = "/Emerson%20Honorato%20Retratos%20Logo.png";
+import ScrapbookOffer from "@/components/ScrapbookOffer";
 const SERIF = { fontFamily: "'Cormorant Garamond', Georgia, 'Times New Roman', serif" };
 
 function useSerifFont() {
@@ -62,12 +63,16 @@ export default function PublicPhotoDelivery({ slug }) {
   const [galleryLoaded, setGalleryLoaded] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [viewer, setViewer] = useState(-1);
+  const [scrapbook, setScrapbook] = useState(null);
   const swipeStart = useRef(null);
 
   useEffect(() => {
     if (state !== "ok") return;
     supabase.rpc("get_delivery_photos", { p_slug: slug, p_pin: pin.trim() || null }).then(({ data: list }) => {
       if (Array.isArray(list)) setPhotos(list.filter((item) => item?.id));
+    });
+    supabase.rpc("get_delivery_scrapbook", { p_slug: slug, p_pin: pin.trim() || null }).then(({ data: offer }) => {
+      if (offer?.enabled) setScrapbook(offer);
     });
   }, [state, slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -307,6 +312,8 @@ export default function PublicPhotoDelivery({ slug }) {
             </a>
           )}
         </section>
+
+        <ScrapbookOffer offer={scrapbook} title={data.title} whatsappLink={whatsappLink} />
 
         {/* Álbuns e impressões */}
         {Array.isArray(data.products) && data.products.length ? (
