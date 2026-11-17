@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/lib/delivery";
-import templateUrl from "@/assets/am-modelo.xlsx?url";
 import { buildReportWorkbook, itemCosts, nextTitle, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
 
 // Planilhas da AM Formaturas: lança os trabalhos do mês (com KM e despesas) e gera a planilha de pagamento.
@@ -358,14 +357,8 @@ export default function AmReportsPanel({ events = [] }) {
     if (!report) return;
     setDownloading(true);
     try {
-      const [{ default: ExcelJS }, template] = await Promise.all([
-        import("exceljs"),
-        fetch(templateUrl).then((res) => {
-          if (!res.ok) throw new Error("modelo da planilha não encontrado");
-          return res.arrayBuffer();
-        }),
-      ]);
-      const wb = await buildReportWorkbook(ExcelJS, report, items, payment, template);
+      const { default: ExcelJS } = await import("exceljs");
+      const wb = await buildReportWorkbook(ExcelJS, report, items, payment);
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
