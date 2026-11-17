@@ -52,18 +52,32 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
       list.push(item);
       byParent.set(item.parentEventId, list);
     }
-    return events
-      .filter((record) => getSessionPlan(record)?.kind === "mensal")
-      .map((record) => {
-        const sessions = (byParent.get(record.id) || []).sort((a, b) => String(a.eventDate || "9999").localeCompare(String(b.eventDate || "9999")));
-        const inMonth = (key) => sessions.find((s) => sessionMonthKey(s) === key) || null;
+    // um cartão por cliente: contrato mais novo + sessões de todos os contratos dele
+    const groups = new Map();
+    for (const record of events) {
+      if (getSessionPlan(record)?.kind !== "mensal") continue;
+      const key = record.clientId || normalize(record.clientName).trim() || record.id;
+      const list = groups.get(key) || [];
+      list.push(record);
+      groups.set(key, list);
+    }
+    const stamp = (r) => `${r.eventDate || ""}|${r.createdAt || ""}`;
+    return [...groups.values()]
+      .map((contractsOfClient) => {
+        const sorted = [...contractsOfClient].sort((a, b) => stamp(b).localeCompare(stamp(a)));
+        const record = sorted[0];
+        const sessions = sorted
+          .flatMap((r) => byParent.get(r.id) || [])
+          .sort((a, b) => String(a.eventDate || "9999").localeCompare(String(b.eventDate || "9999")));
+        const inMonth = (key) => sessions.find((x) => sessionMonthKey(x) === key) || null;
         return {
           record,
+          older: sorted.slice(1),
           sessions,
-          done: sessions.filter((s) => s.eventDate && s.eventDate < today).length,
+          done: sessions.filter((x) => x.eventDate && x.eventDate < today).length,
           current: inMonth(current),
           next: inMonth(next),
-          last: [...sessions].reverse().find((s) => s.eventDate && s.eventDate < today) || null,
+          last: [...sessions].reverse().find((x) => x.eventDate && x.eventDate < today) || null,
         };
       })
       .sort((a, b) => Number(Boolean(a.current)) - Number(Boolean(b.current)) || String(a.record.clientName || "").localeCompare(String(b.record.clientName || ""), "pt-BR"));
@@ -149,6 +163,11 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
                 {slot(monthName(nextMonth), c.next)}
               </div>
               {c.last ? <p className="text-xs text-slate-500">Última: {formatDateBR(c.last.eventDate)}{c.last.sessionTheme ? ` · ${c.last.sessionTheme}` : ""}</p> : null}
+              {c.older.length ? (
+                <p className="text-xs text-slate-500">
+                  {c.older.length === 1 ? "Contrato anterior" : `${c.older.length} contratos anteriores`}: {c.older.map((r) => (r.eventDate ? formatDateBR(r.eventDate) : "sem data")).join(", ")} (sessões somadas aqui)
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" className="rounded-xl" onClick={() => onOpenLink(c.record)}><CalendarClock className="mr-1.5 h-4 w-4" />{c.record.monthlyToken ? "Link do cliente" : "Criar link"}</Button>
                 {!c.current ? <Button size="sm" variant="outline" className="rounded-xl" onClick={() => remind(c)}><MessageCircle className="mr-1.5 h-4 w-4" />Lembrar de marcar</Button> : null}
