@@ -73,6 +73,14 @@
       "destination": "/index.html"
     },
     {
+      "source": "/mensal/:codigo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mensal/:codigo/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/privacidade",
       "destination": "/index.html"
     },
