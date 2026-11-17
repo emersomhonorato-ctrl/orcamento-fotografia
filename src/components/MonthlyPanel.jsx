@@ -3,7 +3,7 @@ import { Baby, CalendarCheck, CalendarClock, MessageCircle, Pencil, Plus, Search
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getSessionPlan } from "@/lib/sessions";
+import { getSessionPlan, monthKeyLabel, sessionMonthKey } from "@/lib/sessions";
 import { formatDateBR } from "@/lib/delivery";
 import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
@@ -56,7 +56,7 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
       .filter((record) => getSessionPlan(record)?.kind === "mensal")
       .map((record) => {
         const sessions = (byParent.get(record.id) || []).sort((a, b) => String(a.eventDate || "9999").localeCompare(String(b.eventDate || "9999")));
-        const inMonth = (key) => sessions.find((s) => String(s.eventDate || "").startsWith(key)) || null;
+        const inMonth = (key) => sessions.find((s) => sessionMonthKey(s) === key) || null;
         return {
           record,
           sessions,
@@ -162,7 +162,10 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
                       <li key={s.id} className="flex items-center gap-2 py-1.5">
                         <span className="w-24 tabular-nums">{s.eventDate ? formatDateBR(s.eventDate) : "Sem data"}</span>
                         <span className="text-slate-500">{s.startTime || ""}</span>
-                        <span className="min-w-0 flex-1 truncate text-slate-700">{s.eventType}{s.sessionTheme ? ` — ${s.sessionTheme}` : ""}</span>
+                        <span className="min-w-0 flex-1 truncate text-slate-700">
+                          {s.eventType}{s.sessionTheme ? ` — ${s.sessionTheme}` : ""}
+                          {s.sessionMonth && s.sessionMonth !== String(s.eventDate || "").slice(0, 7) ? <span className="ml-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800">ref. {monthKeyLabel(s.sessionMonth).split(" de ")[0]}</span> : null}
+                        </span>
                         <button type="button" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100" onClick={() => onEdit(s)} aria-label="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                       </li>
                     ))}

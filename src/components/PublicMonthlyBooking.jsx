@@ -97,6 +97,8 @@ export default function PublicMonthlyBooking({ token }) {
 
   function chooseMonth(key) {
     setMonth(key);
+    const planned = data?.months?.find((item) => item.month === key)?.planned_theme;
+    setTheme(planned || "");
     setError("");
     loadTimes(key);
   }
@@ -184,7 +186,10 @@ export default function PublicMonthlyBooking({ token }) {
                   onClick={() => chooseMonth(item.month)}
                   className={`flex items-center justify-between rounded-2xl border-2 px-4 py-3 text-left transition ${month === item.month ? "border-[#1b1610] bg-[#1b1610] text-white" : "border-[#e4dbd0] bg-white hover:border-[#a8875a]"}`}
                 >
-                  <span className="font-semibold">{monthLabel(item.month)}</span>
+                  <span>
+                    <span className="block font-semibold">{monthLabel(item.month)}</span>
+                    {item.planned_theme ? <span className={`block text-xs ${month === item.month ? "text-white/70" : "text-[#1b1610]/60"}`}>Tema do mês: {item.planned_theme}</span> : null}
+                  </span>
                   <span className={`text-sm ${month === item.month ? "text-[#e9c77b]" : "text-[#a8875a]"}`}>Escolher horário</span>
                 </button>
               )
