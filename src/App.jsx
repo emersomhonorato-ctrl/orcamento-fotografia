@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, Bell, Briefcase, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
+import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import CalendarMini from "@/components/CalendarMini";
 import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
+import MonthlyLinkDialog, { newMonthlyToken } from "@/components/MonthlyLinkDialog";
+import MonthlyPanel from "@/components/MonthlyPanel";
 import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
@@ -219,6 +221,7 @@ const MORE_TABS = [
   ["realizados", "Realizados"],
   ["hds", "HDs"],
   ["am", "Planilhas AM"],
+  ["mensal", "Mês a mês"],
   ["servicos", "Serviços"],
   ["configuracoes", "Configurações"],
   ["cancelados", "Cancelados"],
@@ -278,6 +281,7 @@ export default function App() {
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [monthlyLink, setMonthlyLink] = useState(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
@@ -1330,6 +1334,85 @@ export default function App() {
     };
   }, [hasHydratedRemote, isAuthorized, importBookingsAsEvents]);
 
+  // Sessões mensais marcadas pelo cliente no link /mensal -> entram na Agenda ligadas ao contrato
+  const importMonthlyBookings = useCallback((list = []) => {
+    setAppState((current) => {
+      const imported = new Set(current.settings?.importedMonthlyIds || []);
+      const already = new Set((current.events || []).map((item) => item.monthlyBookingId).filter(Boolean));
+      const pending = list.filter((row) => row?.id && row.status === "confirmado" && !imported.has(row.id) && !already.has(row.id));
+      if (!pending.length) return current;
+      const events = [...(current.events || [])];
+      pending.forEach((row) => {
+        imported.add(row.id);
+        const parent = events.find((item) => String(item.id) === String(row.contract_id));
+        if (!parent) return;
+        const number = events.filter((item) => item.parentEventId === parent.id && item.status !== "Cancelado").length + 1;
+        const startTime = localTime(row.starts_at);
+        const minutes = Math.max(30, Math.round((new Date(row.ends_at) - new Date(row.starts_at)) / 60000) || 120);
+        events.push(normalizeRecord({
+          recordType: "evento",
+          clientId: parent.clientId || "",
+          clientName: parent.clientName || row.client_name || "",
+          clientCpf: parent.clientCpf || "",
+          clientAddress: parent.clientAddress || "",
+          email: parent.email || "",
+          phone: parent.phone || "",
+          whatsapp: parent.whatsapp || "",
+          eventType: `Sessão mensal ${number}`,
+          eventDate: localDateKey(row.starts_at),
+          startTime,
+          endTime: addMinutesToTime(startTime, minutes),
+          status: "Confirmado",
+          paymentStatus: "Pago",
+          parentEventId: parent.id,
+          sessionKind: "mensal",
+          sessionNumber: number,
+          sessionTheme: row.theme || "",
+          monthlyBookingId: row.id,
+          notes: [
+            `Marcada pelo cliente no link de agendamento mensal (${new Date(row.created_at || Date.now()).toLocaleString("pt-BR")}).`,
+            row.notes ? `Recado do cliente: ${row.notes}` : "",
+            `Incluído no contrato: ${parent.eventType || "acompanhamento"}.`,
+          ].filter(Boolean).join("\n"),
+          createdAt: row.created_at || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+      });
+      return normalizeAppState({
+        ...current,
+        events,
+        settings: { ...current.settings, importedMonthlyIds: Array.from(imported).slice(-2000) },
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedRemote || !isAuthorized) return undefined;
+    let active = true;
+    const pull = () =>
+      supabase.from("monthly_bookings").select("*").eq("status", "confirmado").order("created_at").limit(1000).then(({ data, error }) => {
+        if (active && !error && data) importMonthlyBookings(data);
+      });
+    pull();
+    const timer = setInterval(pull, 120000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [hasHydratedRemote, isAuthorized, importMonthlyBookings]);
+
+  function openMonthlyLink(record) {
+    let token = record.monthlyToken;
+    if (!token) {
+      token = newMonthlyToken();
+      setAppState((current) => normalizeAppState({
+        ...current,
+        events: (current.events || []).map((item) => (item.id === record.id ? { ...item, monthlyToken: token, updatedAt: new Date().toISOString() } : item)),
+      }));
+    }
+    setMonthlyLink({ id: record.id, token });
+  }
+
   // Respostas do cliente no link do orçamento -> aprova (vira agendamento) ou marca como perdido
   const applyBudgetResponses = useCallback((shares = []) => {
     const map = {};
@@ -2361,6 +2444,12 @@ export default function App() {
             {plan.kind === "mensal" ? `Sessões mensais${sessions.length ? ` (${sessions.length})` : ""}` : plan.label}
           </p>
           <div className="flex-1" />
+          {plan.kind === "mensal" ? (
+            <button type="button" onClick={() => openMonthlyLink(record)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50">
+              <CalendarClock className="h-4 w-4" />
+              Link para o cliente agendar
+            </button>
+          ) : null}
           {canAdd ? (
             <button type="button" onClick={() => openSessionModal(record, plan)} className="studio-primary inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white">
               <Plus className="h-4 w-4" />
@@ -3223,6 +3312,17 @@ export default function App() {
           <TabsContent value="hds" className="mt-6">
             <SafeSection name="HDs">
               <HdControlPanel events={onlyEvents} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="mensal" className="mt-6">
+            <SafeSection name="Mês a mês">
+              <MonthlyPanel
+                events={appState.events || []}
+                onOpenLink={openMonthlyLink}
+                onSchedule={(record) => openSessionModal(record, getSessionPlan(record))}
+                onEdit={editEvent}
+              />
             </SafeSection>
           </TabsContent>
 
@@ -4531,6 +4631,14 @@ export default function App() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {monthlyLink ? (
+        <MonthlyLinkDialog
+          record={appState.events.find((item) => item.id === monthlyLink.id) || { id: monthlyLink.id }}
+          token={monthlyLink.token}
+          onClose={() => setMonthlyLink(null)}
+        />
+      ) : null}
 
       <EventModal
         allEvents={onlyEvents}
