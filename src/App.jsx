@@ -85,6 +85,7 @@ import {
 } from "@/utils/formatters";
 import { openExternal } from "@/lib/openExternal";
 import HdControlPanel from "@/components/HdControlPanel";
+import AmReportsPanel from "@/components/AmReportsPanel";
 
 const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
@@ -217,6 +218,7 @@ const MORE_TABS = [
   ["whatsapp", "WhatsApp"],
   ["realizados", "Realizados"],
   ["hds", "HDs"],
+  ["am", "Planilhas AM"],
   ["servicos", "Serviços"],
   ["configuracoes", "Configurações"],
   ["cancelados", "Cancelados"],
@@ -3221,6 +3223,12 @@ export default function App() {
           <TabsContent value="hds" className="mt-6">
             <SafeSection name="HDs">
               <HdControlPanel events={onlyEvents} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="am" className="mt-6">
+            <SafeSection name="Planilhas AM">
+              <AmReportsPanel events={onlyEvents} />
             </SafeSection>
           </TabsContent>
 
