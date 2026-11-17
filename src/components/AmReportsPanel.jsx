@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/lib/delivery";
-import { PIX_TYPES, buildReportWorkbook, formatDocumentInput, formatPaymentInfo, itemCosts, nextTitle, parsePaymentInfo, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
+import { PIX_TYPES, amStandardFileName, buildAmStandardWorkbook, buildReportWorkbook, formatDocumentInput, formatPaymentInfo, itemCosts, nextTitle, parsePaymentInfo, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
 
 // Planilhas da AM Formaturas: lança os trabalhos do mês (com KM e despesas) e gera a planilha de pagamento.
 
@@ -289,7 +289,7 @@ export default function AmReportsPanel({ events = [] }) {
   const [saving, setSaving] = useState(false);
   const [payment, setPayment] = useState("");
   const [paymentDraft, setPaymentDraft] = useState(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState("");
 
   const amEvents = useMemo(
     () => events.filter((event) => isAmEvent(event) && !/cancel/i.test(event.status || "")).sort((a, b) => String(b.eventDate || "").localeCompare(String(a.eventDate || ""))),
@@ -306,7 +306,7 @@ export default function AmReportsPanel({ events = [] }) {
   const load = useCallback(async (keepId) => {
     const [repRes, linkRes, settingsRes] = await Promise.all([
       supabase.from("am_reports").select("*").order("number", { ascending: false }),
-      supabase.from("am_items").select("event_id, event_type, amount, place, contract, created_at").order("created_at", { ascending: true }).limit(3000),
+      supabase.from("am_items").select("id, work_date, event_id, event_type, amount, place, contract, created_at").order("created_at", { ascending: true }).limit(3000),
       supabase.from("studio_settings").select("am_payment_info").eq("id", 1).maybeSingle(),
     ]);
     if (repRes.error) {
@@ -355,10 +355,56 @@ export default function AmReportsPanel({ events = [] }) {
     };
   }, [allTypes]);
 
+  // Trabalho da agenda já passou e não está na planilha: nem ligado, nem lançado na mesma data.
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("am-agenda-escondidos") || "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+
+  function hideEvent(id) {
+    const next = new Set(hidden);
+    next.add(String(id));
+    setHidden(next);
+    try {
+      localStorage.setItem("am-agenda-escondidos", JSON.stringify([...next]));
+    } catch {
+      // sem armazenamento: esconde só nesta visita
+    }
+  }
+
   const pendingAgenda = useMemo(() => {
     const today = todayKey();
-    return amEvents.filter((event) => event.eventDate && event.eventDate <= today && !linkedIds.has(String(event.id))).slice(0, 12);
-  }, [amEvents, linkedIds]);
+    const freeByDate = new Map();
+    for (const row of allTypes) {
+      if (row.event_id || !row.work_date) continue;
+      const list = freeByDate.get(row.work_date) || [];
+      list.push(normalize(row.event_type));
+      freeByDate.set(row.work_date, list);
+    }
+    const words = (text) => normalize(text).split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+    const candidates = amEvents.filter((event) => event.eventDate && event.eventDate <= today && !linkedIds.has(String(event.id)) && !hidden.has(String(event.id)));
+    const byDate = new Map();
+    for (const event of candidates) byDate.set(event.eventDate, [...(byDate.get(event.eventDate) || []), event]);
+    const pending = [];
+    for (const [date, events] of byDate) {
+      const free = [...(freeByDate.get(date) || [])];
+      // primeiro casa os de tipo parecido, depois o que sobrar na mesma data
+      const rest = [];
+      for (const event of events) {
+        const index = free.findIndex((type) => words(event.eventType).some((w) => type.includes(w)));
+        if (index >= 0) free.splice(index, 1);
+        else rest.push(event);
+      }
+      for (const event of rest) {
+        if (free.length) free.shift();
+        else pending.push(event);
+      }
+    }
+    return pending.sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate))).slice(0, 12);
+  }, [amEvents, linkedIds, allTypes, hidden]);
 
   function openNew(extra = {}) {
     setMessage("");
@@ -425,18 +471,18 @@ export default function AmReportsPanel({ events = [] }) {
     await load(reportForm.id);
   }
 
-  async function download() {
+  async function download(kind = "novo") {
     if (!report) return;
-    setDownloading(true);
+    setDownloading(kind);
     try {
       const { default: ExcelJS } = await import("exceljs");
-      const wb = await buildReportWorkbook(ExcelJS, report, items, payment);
+      const wb = kind === "am" ? await buildAmStandardWorkbook(ExcelJS, report, items, payment) : await buildReportWorkbook(ExcelJS, report, items, payment);
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = reportFileName(report);
+      a.download = kind === "am" ? amStandardFileName(report) : reportFileName(report);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -444,7 +490,7 @@ export default function AmReportsPanel({ events = [] }) {
     } catch (error) {
       setMessage(`Não consegui gerar a planilha: ${error.message}`);
     }
-    setDownloading(false);
+    setDownloading("");
   }
 
   async function closeReport() {
@@ -534,7 +580,8 @@ export default function AmReportsPanel({ events = [] }) {
 
               <div className="flex flex-wrap gap-2">
                 {isOpen ? <Button className="rounded-2xl" onClick={() => openNew()}><Plus className="mr-2 h-4 w-4" />Lançar trabalho</Button> : null}
-                <Button variant="outline" className="rounded-2xl" onClick={download} disabled={downloading || !items.length}><Download className="mr-2 h-4 w-4" />{downloading ? "Gerando…" : "Baixar planilha (.xlsx)"}</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => download("novo")} disabled={Boolean(downloading) || !items.length}><Download className="mr-2 h-4 w-4" />{downloading === "novo" ? "Gerando…" : "Baixar planilha"}</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => download("am")} disabled={Boolean(downloading) || !items.length}><FileSpreadsheet className="mr-2 h-4 w-4" />{downloading === "am" ? "Gerando…" : "Baixar padrão AM"}</Button>
                 {isOpen ? (
                   <Button variant="outline" className="rounded-2xl" onClick={closeReport} disabled={saving || !items.length}><Lock className="mr-2 h-4 w-4" />Fechar relatório</Button>
                 ) : (
@@ -551,11 +598,15 @@ export default function AmReportsPanel({ events = [] }) {
         <Card className="rounded-3xl border border-amber-200 bg-amber-50/70 shadow-none">
           <CardContent className="space-y-2 pt-5">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-950"><CalendarCheck className="h-4 w-4" />Na agenda da AM e ainda não lançados</p>
+            <p className="text-xs text-amber-900/80">Trabalhos já lançados na mesma data não aparecem aqui. Se algum não entra na planilha, toque no × para esconder.</p>
             <div className="flex flex-wrap gap-2">
               {pendingAgenda.map((event) => (
-                <button key={event.id} type="button" className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-left text-sm hover:bg-amber-100" onClick={() => openNew(fromEvent(event))}>
-                  {eventText(event)} <span className="font-semibold text-amber-900">· Lançar</span>
-                </button>
+                <span key={event.id} className="inline-flex items-center overflow-hidden rounded-xl border border-amber-300 bg-white text-sm">
+                  <button type="button" className="px-3 py-2 text-left hover:bg-amber-100" onClick={() => openNew(fromEvent(event))}>
+                    {eventText(event)} <span className="font-semibold text-amber-900">· Lançar</span>
+                  </button>
+                  <button type="button" className="border-l border-amber-200 px-2.5 py-2 text-amber-800 hover:bg-amber-100" title="Não vai para a planilha da AM (esconder)" aria-label="Esconder" onClick={() => hideEvent(event.id)}><X className="h-3.5 w-3.5" /></button>
+                </span>
               ))}
             </div>
           </CardContent>
