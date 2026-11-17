@@ -38,3 +38,29 @@ export const MONTHLY_THEME_IDEAS = [
   "Páscoa",
   "Smash the cake",
 ];
+
+const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+// Mês a que a sessão mensal se refere ("2026-10"); se não foi escolhido, é o mês da data
+export function sessionMonthKey(item) {
+  const chosen = String(item?.sessionMonth || "");
+  if (/^\d{4}-\d{2}$/.test(chosen)) return chosen;
+  return String(item?.eventDate || "").slice(0, 7);
+}
+
+export function monthKeyLabel(key) {
+  const [y, m] = String(key || "").split("-").map(Number);
+  if (!y || !m) return "";
+  return `${MONTH_NAMES[m - 1]} de ${y}`;
+}
+
+// Meses para escolher: 3 antes e 2 depois do mês de referência (ou da data)
+export function sessionMonthOptions(dateKey) {
+  const base = /^\d{4}-\d{2}/.test(String(dateKey || "")) ? new Date(`${String(dateKey).slice(0, 7)}-15T12:00:00`) : new Date();
+  const out = [];
+  for (let i = -3; i <= 2; i += 1) {
+    const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}

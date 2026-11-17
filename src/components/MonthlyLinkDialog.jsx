@@ -20,7 +20,22 @@ export const MONTHLY_DEFAULTS = {
   gap_minutes: 120,
   min_notice_hours: 24,
   months_ahead: 2,
+  themes: {},
 };
+
+function upcomingMonths(count = 4) {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
+const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+function monthName(key) {
+  const name = MONTH_NAMES[Number(key.slice(5, 7)) - 1] || "";
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+}
 
 export function newMonthlyToken() {
   const bytes = new Uint8Array(10);
@@ -60,6 +75,7 @@ export function MonthlySettings({ compact = false }) {
       gap_minutes: Math.max(0, Math.round(Number(String(draft.gap_hours).replace(",", ".")) * 60) || 0),
       min_notice_hours: Math.max(0, Number(draft.min_notice_hours) || 0),
       months_ahead: Math.min(6, Math.max(1, Number(draft.months_ahead) || 2)),
+      themes: Object.fromEntries(Object.entries(draft.themes || {}).map(([k, v]) => [k, String(v || "").trim()]).filter(([, v]) => v)),
     };
     const { error } = await supabase.from("studio_settings").upsert({ id: 1, monthly_booking: value, updated_at: new Date().toISOString() });
     if (error) return setMessage(/monthly_booking/.test(error.message) ? "Falta atualizar o banco (supabase/agendamento-mensal.sql)." : `Erro ao salvar: ${error.message}`);
@@ -85,6 +101,7 @@ export function MonthlySettings({ compact = false }) {
           <li>Sábado e domingo: das {cfg.weekend_from} às {cfg.weekend_to}</li>
           <li>Sessão de {hoursLabel(cfg.duration_minutes)}, com {hoursLabel(cfg.gap_minutes)} livres antes e depois de outro trabalho</li>
           <li>Uma por mês, até {cfg.months_ahead} {Number(cfg.months_ahead) === 1 ? "mês" : "meses"} à frente; antecedência mínima de {cfg.min_notice_hours} h</li>
+          <li>Tema do mês: {upcomingMonths(3).map((key) => `${monthName(key)} ${cfg.themes?.[key] || "—"}`).join(" · ")}</li>
         </ul>
       ) : null}
       {draft ? (
@@ -100,6 +117,18 @@ export function MonthlySettings({ compact = false }) {
             <div className="grid gap-1"><Label htmlFor="mensal-months_ahead">Meses abertos</Label>{field("months_ahead", { inputMode: "numeric" })}</div>
           </div>
           <p className="text-[11px] text-slate-500">"Até" é o horário em que a sessão precisa terminar.</p>
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <p className="text-sm font-semibold">Tema de cada mês</p>
+            <p className="text-[11px] text-slate-500">Aparece no link e já vem preenchido para o cliente (ele pode trocar).</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {upcomingMonths(4).map((key) => (
+                <div key={key} className="grid gap-1">
+                  <Label htmlFor={`tema-${key}`}>{monthName(key)}</Label>
+                  <Input id={`tema-${key}`} value={draft.themes?.[key] || ""} placeholder="Ex.: Natal" onChange={(e) => setDraft({ ...draft, themes: { ...(draft.themes || {}), [key]: e.target.value } })} />
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button className="rounded-2xl" onClick={saveCfg}><Save className="mr-2 h-4 w-4" />Salvar</Button>
             <Button variant="ghost" className="rounded-2xl" onClick={() => setDraft(null)}>Cancelar</Button>

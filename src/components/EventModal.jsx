@@ -1,5 +1,5 @@
 import { PHOTOGRAPHER_OPTIONS, busyOnDate } from "@/lib/team";
-import { MONTHLY_THEME_IDEAS } from "@/lib/sessions";
+import { MONTHLY_THEME_IDEAS, monthKeyLabel, sessionMonthOptions } from "@/lib/sessions";
 import { Save, X } from "lucide-react";
 import BudgetItemsEditor from "@/components/BudgetItemsEditor";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,23 @@ export default function EventModal({
                     </datalist>
                   ) : null}
                 </div>
+                {form.sessionKind === "mensal" ? (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label htmlFor="session-month">Mês de referência</Label>
+                    <select
+                      id="session-month"
+                      className="h-10 w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm md:w-72"
+                      value={form.sessionMonth || ""}
+                      onChange={(event) => setForm((current) => ({ ...current, sessionMonth: event.target.value }))}
+                    >
+                      <option value="">O mês da data da sessão</option>
+                      {[...new Set([...sessionMonthOptions(form.eventDate), form.sessionMonth].filter(Boolean))].sort().map((key) => (
+                        <option key={key} value={key}>{monthKeyLabel(key)}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-stone-500">Use quando a sessão de um mês foi feita em outro (ex.: a de outubro feita em 01/11). O link do cliente libera o mês certo.</p>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
