@@ -3322,6 +3322,13 @@ export default function App() {
                 onOpenLink={openMonthlyLink}
                 onSchedule={(record) => openSessionModal(record, getSessionPlan(record))}
                 onEdit={editEvent}
+                onCancel={(item) => {
+                  const when = new Date().toLocaleDateString("pt-BR");
+                  updateRecordFields(item.id, {
+                    status: "Cancelado",
+                    notes: [item.notes, `Data cancelada em ${when} (aba Mês a mês).`].filter(Boolean).join("\n"),
+                  });
+                }}
               />
             </SafeSection>
           </TabsContent>

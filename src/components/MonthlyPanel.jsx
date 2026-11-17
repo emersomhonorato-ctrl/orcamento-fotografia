@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Baby, CalendarCheck, CalendarClock, MessageCircle, Pencil, Plus, Search } from "lucide-react";
+import { Baby, CalendarCheck, CalendarClock, CalendarX, MessageCircle, Pencil, Plus, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,7 @@ function currentKeys() {
   };
 }
 
-export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEdit }) {
+export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEdit, onCancel }) {
   const [query, setQuery] = useState("");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -101,14 +101,25 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
     openExternal(phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
   }
 
-  function slot(label, session) {
+  function cancel(session, clientName) {
+    const when = `${formatDateBR(session.eventDate)}${session.startTime ? ` às ${session.startTime}` : ""}`;
+    if (!window.confirm(`Cancelar a sessão de ${clientName || "cliente"} em ${when}?\n\nA data sai da agenda e o mês volta a ficar livre no link do cliente.`)) return;
+    onCancel(session);
+  }
+
+  function slot(label, session, clientName) {
     return (
       <div className={`rounded-2xl px-3 py-2 text-sm ${session ? "bg-emerald-50 text-emerald-950" : "bg-amber-50 text-amber-950"}`}>
         <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
         {session ? (
-          <button type="button" className="text-left font-medium hover:underline" onClick={() => onEdit(session)}>
-            {formatDateBR(session.eventDate)}{session.startTime ? ` às ${session.startTime}` : ""}{session.sessionTheme ? ` · ${session.sessionTheme}` : ""}
-          </button>
+          <>
+            <button type="button" className="text-left font-medium hover:underline" onClick={() => onEdit(session)}>
+              {formatDateBR(session.eventDate)}{session.startTime ? ` às ${session.startTime}` : ""}{session.sessionTheme ? ` · ${session.sessionTheme}` : ""}
+            </button>
+            <button type="button" className="mt-1 flex items-center gap-1 text-xs font-semibold text-red-700 hover:underline" onClick={() => cancel(session, clientName)}>
+              <CalendarX className="h-3.5 w-3.5" />Cancelar data
+            </button>
+          </>
         ) : (
           <p className="font-medium">Falta marcar</p>
         )}
@@ -159,8 +170,8 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
                 <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{c.done} {c.done === 1 ? "sessão feita" : "sessões feitas"}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {slot(monthName(thisMonth), c.current)}
-                {slot(monthName(nextMonth), c.next)}
+                {slot(monthName(thisMonth), c.current, c.record.clientName)}
+                {slot(monthName(nextMonth), c.next, c.record.clientName)}
               </div>
               {c.last ? <p className="text-xs text-slate-500">Última: {formatDateBR(c.last.eventDate)}{c.last.sessionTheme ? ` · ${c.last.sessionTheme}` : ""}</p> : null}
               {c.older.length ? (
@@ -185,7 +196,8 @@ export default function MonthlyPanel({ events = [], onOpenLink, onSchedule, onEd
                           {s.eventType}{s.sessionTheme ? ` — ${s.sessionTheme}` : ""}
                           {s.sessionMonth && s.sessionMonth !== String(s.eventDate || "").slice(0, 7) ? <span className="ml-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800">ref. {monthKeyLabel(s.sessionMonth).split(" de ")[0]}</span> : null}
                         </span>
-                        <button type="button" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100" onClick={() => onEdit(s)} aria-label="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button type="button" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100" onClick={() => onEdit(s)} aria-label="Editar" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button type="button" className="rounded-lg p-1 text-red-600 hover:bg-red-50" onClick={() => cancel(s, c.record.clientName)} aria-label="Cancelar data" title="Cancelar data"><CalendarX className="h-3.5 w-3.5" /></button>
                       </li>
                     ))}
                   </ul>
