@@ -14,6 +14,7 @@ import CalendarMini from "@/components/CalendarMini";
 import ClientModal from "@/components/ClientModal";
 import EventModal from "@/components/EventModal";
 import MonthlyLinkDialog, { newMonthlyToken } from "@/components/MonthlyLinkDialog";
+import MonthlyPanel from "@/components/MonthlyPanel";
 import ServiceModal from "@/components/ServiceModal";
 import WhatsAppAgendaTab from "@/components/WhatsAppAgendaTab";
 import BudgetRequestsPanel from "@/components/BudgetRequestsPanel";
@@ -220,6 +221,7 @@ const MORE_TABS = [
   ["realizados", "Realizados"],
   ["hds", "HDs"],
   ["am", "Planilhas AM"],
+  ["mensal", "Mês a mês"],
   ["servicos", "Serviços"],
   ["configuracoes", "Configurações"],
   ["cancelados", "Cancelados"],
@@ -3310,6 +3312,17 @@ export default function App() {
           <TabsContent value="hds" className="mt-6">
             <SafeSection name="HDs">
               <HdControlPanel events={onlyEvents} />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="mensal" className="mt-6">
+            <SafeSection name="Mês a mês">
+              <MonthlyPanel
+                events={appState.events || []}
+                onOpenLink={openMonthlyLink}
+                onSchedule={(record) => openSessionModal(record, getSessionPlan(record))}
+                onEdit={editEvent}
+              />
             </SafeSection>
           </TabsContent>
 

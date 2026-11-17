@@ -33,15 +33,10 @@ function hoursLabel(minutes) {
   return `${String(h).replace(".", ",")} h`;
 }
 
-export default function MonthlyLinkDialog({ record, token, onClose }) {
-  const [copied, setCopied] = useState(false);
+export function MonthlySettings({ compact = false }) {
   const [cfg, setCfg] = useState(null);
   const [draft, setDraft] = useState(null);
   const [message, setMessage] = useState("");
-  const link = `${MONTHLY_PUBLIC_BASE}${token}`;
-  const firstName = String(record.clientName || "").trim().split(/\s+/)[0] || "";
-  const phone = record.whatsapp || record.phone || "";
-  const text = `Olá${firstName ? `, ${firstName}` : ""}! 😊 Por este link você marca as sessões do acompanhamento mensal, escolhendo o dia e o horário livres na minha agenda:\n${link}`;
 
   useEffect(() => {
     let active = true;
@@ -54,16 +49,6 @@ export default function MonthlyLinkDialog({ record, token, onClose }) {
       active = false;
     };
   }, []);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      window.prompt("Copie o link:", link);
-    }
-  }
 
   async function saveCfg() {
     const value = {
@@ -86,6 +71,68 @@ export default function MonthlyLinkDialog({ record, token, onClose }) {
   const field = (key, props = {}) => <Input id={`mensal-${key}`} value={draft[key] ?? ""} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} {...props} />;
 
   return (
+    <div className={compact ? "rounded-2xl border border-slate-200 p-4" : ""}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Horários que o link oferece</p>
+        {cfg && !draft ? (
+          <button type="button" className="text-xs font-semibold underline" onClick={() => setDraft({ ...cfg, duration_hours: String(cfg.duration_minutes / 60).replace(".", ","), gap_hours: String(cfg.gap_minutes / 60).replace(".", ",") })}>Mudar</button>
+        ) : null}
+      </div>
+      {!cfg ? <p className="mt-2 text-sm text-slate-500">Carregando…</p> : null}
+      {cfg && !draft ? (
+        <ul className="mt-2 space-y-1 text-sm text-slate-700">
+          <li>Segunda a sexta: das {cfg.weekday_from} às {cfg.weekday_to}</li>
+          <li>Sábado e domingo: das {cfg.weekend_from} às {cfg.weekend_to}</li>
+          <li>Sessão de {hoursLabel(cfg.duration_minutes)}, com {hoursLabel(cfg.gap_minutes)} livres antes e depois de outro trabalho</li>
+          <li>Uma por mês, até {cfg.months_ahead} {Number(cfg.months_ahead) === 1 ? "mês" : "meses"} à frente; antecedência mínima de {cfg.min_notice_hours} h</li>
+        </ul>
+      ) : null}
+      {draft ? (
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-1"><Label htmlFor="mensal-weekday_from">Seg a sex, a partir de</Label>{field("weekday_from", { type: "time" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-weekday_to">até</Label>{field("weekday_to", { type: "time" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-weekend_from">Sáb e dom, a partir de</Label>{field("weekend_from", { type: "time" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-weekend_to">até</Label>{field("weekend_to", { type: "time" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-duration_hours">Duração (horas)</Label>{field("duration_hours", { inputMode: "decimal" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-gap_hours">Folga entre ensaios (horas)</Label>{field("gap_hours", { inputMode: "decimal" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-min_notice_hours">Antecedência mínima (horas)</Label>{field("min_notice_hours", { inputMode: "numeric" })}</div>
+            <div className="grid gap-1"><Label htmlFor="mensal-months_ahead">Meses abertos</Label>{field("months_ahead", { inputMode: "numeric" })}</div>
+          </div>
+          <p className="text-[11px] text-slate-500">"Até" é o horário em que a sessão precisa terminar.</p>
+          <div className="flex gap-2">
+            <Button className="rounded-2xl" onClick={saveCfg}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+            <Button variant="ghost" className="rounded-2xl" onClick={() => setDraft(null)}>Cancelar</Button>
+          </div>
+        </div>
+      ) : null}
+      {message ? <p className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
+    </div>
+  );
+}
+
+export function monthlyMessage(record, token) {
+  const firstName = String(record.clientName || "").trim().split(/\s+/)[0] || "";
+  return `Olá${firstName ? `, ${firstName}` : ""}! 😊 Por este link você marca as sessões do acompanhamento mensal, escolhendo o dia e o horário livres na minha agenda:\n${MONTHLY_PUBLIC_BASE}${token}`;
+}
+
+export default function MonthlyLinkDialog({ record, token, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${MONTHLY_PUBLIC_BASE}${token}`;
+  const phone = record.whatsapp || record.phone || "";
+  const text = monthlyMessage(record, token);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copie o link:", link);
+    }
+  }
+
+  return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-3" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
@@ -102,43 +149,7 @@ export default function MonthlyLinkDialog({ record, token, onClose }) {
           <Button variant="ghost" className="rounded-2xl" onClick={() => openExternal(link.replace(MONTHLY_PUBLIC_BASE, `${window.location.origin}/mensal/`))}>Ver como o cliente</Button>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Horários que o link oferece</p>
-            {cfg && !draft ? (
-              <button type="button" className="text-xs font-semibold underline" onClick={() => setDraft({ ...cfg, duration_hours: String(cfg.duration_minutes / 60).replace(".", ","), gap_hours: String(cfg.gap_minutes / 60).replace(".", ",") })}>Mudar</button>
-            ) : null}
-          </div>
-          {!cfg ? <p className="mt-2 text-sm text-slate-500">Carregando…</p> : null}
-          {cfg && !draft ? (
-            <ul className="mt-2 space-y-1 text-sm text-slate-700">
-              <li>Segunda a sexta: das {cfg.weekday_from} às {cfg.weekday_to}</li>
-              <li>Sábado e domingo: das {cfg.weekend_from} às {cfg.weekend_to}</li>
-              <li>Sessão de {hoursLabel(cfg.duration_minutes)}, com {hoursLabel(cfg.gap_minutes)} livres antes e depois de outro trabalho</li>
-              <li>Uma por mês, até {cfg.months_ahead} {Number(cfg.months_ahead) === 1 ? "mês" : "meses"} à frente; antecedência mínima de {cfg.min_notice_hours} h</li>
-            </ul>
-          ) : null}
-          {draft ? (
-            <div className="mt-3 grid gap-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-1"><Label htmlFor="mensal-weekday_from">Seg a sex, a partir de</Label>{field("weekday_from", { type: "time" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-weekday_to">até</Label>{field("weekday_to", { type: "time" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-weekend_from">Sáb e dom, a partir de</Label>{field("weekend_from", { type: "time" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-weekend_to">até</Label>{field("weekend_to", { type: "time" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-duration_hours">Duração (horas)</Label>{field("duration_hours", { inputMode: "decimal" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-gap_hours">Folga entre ensaios (horas)</Label>{field("gap_hours", { inputMode: "decimal" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-min_notice_hours">Antecedência mínima (horas)</Label>{field("min_notice_hours", { inputMode: "numeric" })}</div>
-                <div className="grid gap-1"><Label htmlFor="mensal-months_ahead">Meses abertos</Label>{field("months_ahead", { inputMode: "numeric" })}</div>
-              </div>
-              <p className="text-[11px] text-slate-500">"Até" é o horário em que a sessão precisa terminar.</p>
-              <div className="flex gap-2">
-                <Button className="rounded-2xl" onClick={saveCfg}><Save className="mr-2 h-4 w-4" />Salvar</Button>
-                <Button variant="ghost" className="rounded-2xl" onClick={() => setDraft(null)}>Cancelar</Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-        {message ? <p className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{message}</p> : null}
+        <div className="mt-5"><MonthlySettings compact /></div>
       </div>
     </div>
   );
