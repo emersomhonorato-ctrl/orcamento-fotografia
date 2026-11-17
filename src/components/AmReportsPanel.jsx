@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/lib/delivery";
-import { PIX_TYPES, buildReportWorkbook, formatDocumentInput, formatPaymentInfo, itemCosts, nextTitle, parsePaymentInfo, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
+import { PIX_TYPES, amStandardFileName, buildAmStandardWorkbook, buildReportWorkbook, formatDocumentInput, formatPaymentInfo, itemCosts, nextTitle, parsePaymentInfo, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
 
 // Planilhas da AM Formaturas: lança os trabalhos do mês (com KM e despesas) e gera a planilha de pagamento.
 
@@ -289,7 +289,7 @@ export default function AmReportsPanel({ events = [] }) {
   const [saving, setSaving] = useState(false);
   const [payment, setPayment] = useState("");
   const [paymentDraft, setPaymentDraft] = useState(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState("");
 
   const amEvents = useMemo(
     () => events.filter((event) => isAmEvent(event) && !/cancel/i.test(event.status || "")).sort((a, b) => String(b.eventDate || "").localeCompare(String(a.eventDate || ""))),
@@ -425,18 +425,18 @@ export default function AmReportsPanel({ events = [] }) {
     await load(reportForm.id);
   }
 
-  async function download() {
+  async function download(kind = "novo") {
     if (!report) return;
-    setDownloading(true);
+    setDownloading(kind);
     try {
       const { default: ExcelJS } = await import("exceljs");
-      const wb = await buildReportWorkbook(ExcelJS, report, items, payment);
+      const wb = kind === "am" ? await buildAmStandardWorkbook(ExcelJS, report, items, payment) : await buildReportWorkbook(ExcelJS, report, items, payment);
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = reportFileName(report);
+      a.download = kind === "am" ? amStandardFileName(report) : reportFileName(report);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -444,7 +444,7 @@ export default function AmReportsPanel({ events = [] }) {
     } catch (error) {
       setMessage(`Não consegui gerar a planilha: ${error.message}`);
     }
-    setDownloading(false);
+    setDownloading("");
   }
 
   async function closeReport() {
@@ -534,7 +534,8 @@ export default function AmReportsPanel({ events = [] }) {
 
               <div className="flex flex-wrap gap-2">
                 {isOpen ? <Button className="rounded-2xl" onClick={() => openNew()}><Plus className="mr-2 h-4 w-4" />Lançar trabalho</Button> : null}
-                <Button variant="outline" className="rounded-2xl" onClick={download} disabled={downloading || !items.length}><Download className="mr-2 h-4 w-4" />{downloading ? "Gerando…" : "Baixar planilha (.xlsx)"}</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => download("novo")} disabled={Boolean(downloading) || !items.length}><Download className="mr-2 h-4 w-4" />{downloading === "novo" ? "Gerando…" : "Baixar planilha"}</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => download("am")} disabled={Boolean(downloading) || !items.length}><FileSpreadsheet className="mr-2 h-4 w-4" />{downloading === "am" ? "Gerando…" : "Baixar padrão AM"}</Button>
                 {isOpen ? (
                   <Button variant="outline" className="rounded-2xl" onClick={closeReport} disabled={saving || !items.length}><Lock className="mr-2 h-4 w-4" />Fechar relatório</Button>
                 ) : (

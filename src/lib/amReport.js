@@ -310,3 +310,121 @@ export function formatDocumentInput(value) {
   }
   return digits.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d{1,2})$/, "$1-$2");
 }
+
+// Padrão AM: mesmo layout da planilha que a AM recebia (cores, posições, caixa do fotógrafo e
+// rodapé bancário), com a formatação corrigida: uma página, datas dd/mm/aaaa, letras iguais em todas as linhas.
+const AM_MONEY = '_-"R$ "* #,##0.00_-;"-R$ "* #,##0.00_-;_-"R$ "* "-"??_-;_-@_-';
+const AM_MIN_ROWS = 26;
+const AM_PAYMENT_LABELS = ["Nome do Titular", "CPF/CNPJ do Titular", "Banco", "Agência", "Conta", "PIX"];
+
+export function amStandardFileName(report) {
+  return `${String(report.number).padStart(3, "0")} - ${String(report.title || "").trim()} (padrão AM).xlsx`;
+}
+
+export async function buildAmStandardWorkbook(ExcelJS, report, items, paymentInfo = "") {
+  const { fuelPrice, kmPerLiter, wearPerKm } = rates(report);
+  const month = String(report.title || "").trim().toUpperCase();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Emerson Honorato Retratos";
+  wb.calcProperties = { fullCalcOnLoad: true };
+  const ws = wb.addWorksheet((month.split(/\s+/)[0] || "RELATORIO").slice(0, 31), {
+    views: [{ showGridLines: false }],
+    pageSetup: {
+      paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
+      margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+    },
+  });
+  ws.columns = [12, 12, 20, 36, 13, 8, 11, 12, 12, 12, 15].map((width) => ({ width }));
+
+  const font = (opts = {}) => ({ name: "Calibri", size: 11, color: { argb: "FF000000" }, ...opts });
+  const thin = { style: "thin" };
+  const medium = { style: "medium" };
+  const boxThin = { top: thin, left: thin, bottom: thin, right: thin };
+  const boxMedium = { top: medium, left: medium, bottom: medium, right: medium };
+  const center = { horizontal: "center", vertical: "middle" };
+
+  ws.mergeCells("A1:K1");
+  const title = ws.getCell("A1");
+  title.value = `RELATÓRIO DE PAGAMENTO - MÊS DE ${month}`;
+  title.font = font({ bold: true, size: 13, color: { argb: "FF0066CC" } });
+  title.alignment = center;
+  title.border = boxMedium;
+  ws.getRow(1).height = 24;
+
+  ["Data", "Contrato", "Local", "Tipo Evento", "Valor", "KM", "Pedágio", "Combust.", "Desgaste", "Aliment.", "Total"].forEach((text, i) => {
+    const cell = ws.getCell(2, i + 1);
+    cell.value = text;
+    cell.font = font({ bold: true, color: { argb: "FFFF0000" } });
+    cell.alignment = center;
+    cell.border = boxThin;
+  });
+  ws.getRow(2).height = 18;
+
+  const sorted = sortItems(items);
+  const rows = Math.max(AM_MIN_ROWS, sorted.length);
+  const first = 3;
+  const last = first + rows - 1;
+  for (let r = first; r <= last; r += 1) {
+    const item = sorted[r - first];
+    const c = item ? itemCosts(item, report) : { fuel: 0, wear: 0, total: 0 };
+    const row = ws.getRow(r);
+    const values = [
+      item ? dateValue(item.work_date) : null, item ? item.contract || "" : null, item ? item.place || "" : null, item ? item.event_type || "" : null,
+      item ? n(item.amount) : 0, item ? n(item.km) : 0, item ? n(item.toll) : 0,
+      { formula: `F${r}/${kmPerLiter}*${fuelPrice}`, result: c.fuel }, { formula: `F${r}*${wearPerKm}`, result: c.wear },
+      item ? n(item.food) : 0, { formula: `E${r}+G${r}+H${r}+I${r}+J${r}`, result: c.total },
+    ];
+    values.forEach((value, i) => {
+      const cell = row.getCell(i + 1);
+      cell.value = value;
+      cell.border = boxThin;
+      cell.font = font({ bold: i === 1 || i === 3 || i === 4 || i === 10, color: { argb: i === 10 ? "FF0000FF" : "FF000000" } });
+      if (i === 0) { cell.numFmt = "dd/mm/yyyy"; cell.alignment = center; }
+      else if (i <= 3 || i === 5) cell.alignment = { ...center, wrapText: i === 3 };
+      else { cell.numFmt = AM_MONEY; cell.alignment = { vertical: "middle" }; }
+    });
+    row.height = 16;
+  }
+
+  const totalRow = last + 1;
+  const grandTotal = round2(sorted.reduce((sum, item) => sum + itemCosts(item, report).total, 0));
+  ws.mergeCells(totalRow, 4, totalRow + 1, 8);
+  const photographer = ws.getCell(totalRow, 4);
+  photographer.value = "Fotógrafo -> Emerson Honorato";
+  photographer.font = font({ size: 22, color: { argb: "FF0066CC" } });
+  photographer.alignment = center;
+  photographer.border = boxMedium;
+  ws.mergeCells(totalRow, 9, totalRow, 10);
+  const label = ws.getCell(totalRow, 9);
+  label.value = "Total Geral";
+  label.font = font({ bold: true, color: { argb: "FF333399" } });
+  label.alignment = center;
+  label.border = boxMedium;
+  const total = ws.getCell(totalRow, 11);
+  total.value = { formula: `SUM(K${first}:K${last})`, result: grandTotal };
+  total.numFmt = AM_MONEY;
+  total.font = font({ bold: true, size: 12, color: { argb: "FFFF0000" } });
+  total.alignment = { vertical: "middle" };
+  total.border = boxMedium;
+  ws.getRow(totalRow).height = 20;
+  ws.getRow(totalRow + 1).height = 20;
+
+  const lines = paymentLines(paymentInfo);
+  const entries = lines.length ? lines : AM_PAYMENT_LABELS.map((l) => ({ label: `${l} ->`, value: "" }));
+  entries.forEach((entry, i) => {
+    const r = totalRow + 3 + i;
+    const lc = ws.getCell(r, 4);
+    lc.value = entry.label || "";
+    lc.font = font({ bold: true, color: { argb: "FFFF0000" } });
+    lc.alignment = { horizontal: "right", vertical: "middle", indent: 1 };
+    lc.border = boxMedium;
+    ws.mergeCells(r, 5, r, 11);
+    const vc = ws.getCell(r, 5);
+    vc.value = entry.value;
+    vc.font = font();
+    vc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+    vc.border = boxMedium;
+    ws.getRow(r).height = 17;
+  });
+  return wb;
+}
