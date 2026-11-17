@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck, Copy, Download, FileSpreadsheet, Link2, Lock, Pencil, Plus, RefreshCw, Save, Search, Trash2, Unlock, X } from "lucide-react";
+import { CalendarCheck, Landmark, Copy, Download, FileSpreadsheet, Link2, Lock, Pencil, Plus, RefreshCw, Save, Search, Trash2, Unlock, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/supabase";
 import { formatDateBR } from "@/lib/delivery";
-import { buildReportWorkbook, itemCosts, nextTitle, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
+import { PIX_TYPES, buildReportWorkbook, formatDocumentInput, formatPaymentInfo, itemCosts, nextTitle, parsePaymentInfo, reportFileName, reportTotals, sortItems } from "@/lib/amReport";
 
 // Planilhas da AM Formaturas: lança os trabalhos do mês (com KM e despesas) e gera a planilha de pagamento.
 
@@ -201,6 +200,79 @@ function ReportDialog({ value, onChange, onSave, onClose, saving }) {
         </div>
       </div>
     </div>
+  );
+}
+
+const ACCOUNT_TYPES = ["Conta corrente", "Conta poupança", "Conta pagamento"];
+
+function PaymentCard({ saved, draft, onEdit, onChange, onSave, onCancel }) {
+  const filled = [
+    ["Titular", saved.holder],
+    ["CPF/CNPJ", saved.document],
+    ["Banco", saved.bank],
+    ["Agência", saved.agency],
+    ["Conta", [saved.account, saved.account_type].filter(Boolean).join(" · ")],
+    ["PIX", [saved.pix_type, saved.pix].filter(Boolean).join(": ")],
+    ["Observação", saved.extra],
+  ].filter(([, v]) => v);
+  const input = (key, props = {}) => (
+    <Input id={`pay-${key}`} value={draft[key] || ""} onChange={(e) => onChange({ [key]: e.target.value })} {...props} />
+  );
+  const select = "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm";
+  return (
+    <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
+      <CardContent className="space-y-4 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-semibold"><Landmark className="h-4 w-4" />Dados para pagamento</h3>
+            <p className="text-sm text-slate-500">Saem no fim de toda planilha. Preencha uma vez; só muda se a conta mudar.</p>
+          </div>
+          {!draft ? <Button variant="outline" size="sm" className="rounded-xl" onClick={onEdit}><Pencil className="mr-2 h-4 w-4" />{filled.length ? "Editar" : "Preencher"}</Button> : null}
+        </div>
+
+        {draft ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5 sm:col-span-2"><Label htmlFor="pay-holder">Nome do titular</Label>{input("holder", { placeholder: "Nome completo de quem recebe", autoComplete: "off" })}</div>
+              <div className="grid gap-1.5"><Label htmlFor="pay-document">CPF ou CNPJ do titular</Label>{input("document", { inputMode: "numeric", placeholder: "000.000.000-00", autoComplete: "off", onChange: (e) => onChange({ document: formatDocumentInput(e.target.value) }) })}</div>
+              <div className="grid gap-1.5"><Label htmlFor="pay-bank">Banco</Label>{input("bank", { placeholder: "Ex.: Nubank, Caixa, Sicoob", autoComplete: "off" })}</div>
+              <div className="grid gap-1.5"><Label htmlFor="pay-agency">Agência</Label>{input("agency", { inputMode: "numeric", placeholder: "0000", autoComplete: "off" })}</div>
+              <div className="grid gap-1.5"><Label htmlFor="pay-account">Conta (com dígito)</Label>{input("account", { inputMode: "numeric", placeholder: "00000-0", autoComplete: "off" })}</div>
+              <div className="grid gap-1.5 sm:col-span-2">
+                <Label htmlFor="pay-account_type">Tipo de conta</Label>
+                <select id="pay-account_type" className={select} value={draft.account_type || ""} onChange={(e) => onChange({ account_type: e.target.value })}>
+                  <option value="">Não informar</option>
+                  {[...new Set([...ACCOUNT_TYPES, draft.account_type].filter(Boolean))].map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-3 rounded-2xl bg-slate-50 p-3 sm:grid-cols-[180px_1fr]">
+              <div className="grid gap-1.5">
+                <Label htmlFor="pay-pix_type">Chave PIX</Label>
+                <select id="pay-pix_type" className={select} value={draft.pix_type || ""} onChange={(e) => onChange({ pix_type: e.target.value })}>
+                  <option value="">Tipo da chave</option>
+                  {[...new Set([...PIX_TYPES, draft.pix_type].filter(Boolean))].map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-1.5"><Label htmlFor="pay-pix" className="sm:invisible">Chave</Label>{input("pix", { placeholder: "A chave PIX", autoComplete: "off" })}</div>
+            </div>
+            <div className="grid gap-1.5"><Label htmlFor="pay-extra">Observação (opcional)</Label>{input("extra", { placeholder: "Ex.: enviar comprovante por WhatsApp" })}</div>
+            <div className="flex gap-2">
+              <Button className="rounded-2xl" onClick={onSave}><Save className="mr-2 h-4 w-4" />Salvar</Button>
+              <Button variant="ghost" className="rounded-2xl" onClick={onCancel}>Cancelar</Button>
+            </div>
+          </div>
+        ) : filled.length ? (
+          <dl className="grid gap-x-6 gap-y-2 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+            {filled.map(([label, value]) => (
+              <div key={label} className="flex gap-2"><dt className="w-24 shrink-0 font-semibold text-slate-600">{label}</dt><dd className="break-all text-slate-900">{value}</dd></div>
+            ))}
+          </dl>
+        ) : (
+          <p className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">Ainda não preenchido: a planilha sai sem os dados bancários.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -414,7 +486,7 @@ export default function AmReportsPanel({ events = [] }) {
   }
 
   async function savePayment() {
-    const value = String(paymentDraft || "").trim();
+    const value = formatPaymentInfo(paymentDraft || {});
     const { error } = await supabase.from("studio_settings").upsert({ id: 1, am_payment_info: value || null, updated_at: new Date().toISOString() });
     if (error) return setMessage(`Erro ao salvar: ${error.message}`);
     setPayment(value);
@@ -577,28 +649,14 @@ export default function AmReportsPanel({ events = [] }) {
         </Card>
       ) : null}
 
-      <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
-        <CardContent className="space-y-3 pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="text-base font-semibold">Dados para pagamento (rodapé da planilha)</h3>
-              <p className="text-sm text-slate-500">Uma informação por linha, no formato <em>Rótulo -&gt; valor</em> (ex.: Banco -&gt; …).</p>
-            </div>
-            {paymentDraft === null ? <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setPaymentDraft(payment)}><Pencil className="mr-2 h-4 w-4" />Editar</Button> : null}
-          </div>
-          {paymentDraft !== null ? (
-            <div className="space-y-2">
-              <Textarea className="min-h-[140px] rounded-2xl font-mono text-sm" value={paymentDraft} placeholder={"Nome do Titular -> \nBanco -> \nConta -> \nAgência -> \nCPF do Titular -> \nPIX -> "} onChange={(e) => setPaymentDraft(e.target.value)} />
-              <div className="flex gap-2">
-                <Button className="rounded-2xl" onClick={savePayment}><Save className="mr-2 h-4 w-4" />Salvar</Button>
-                <Button variant="ghost" className="rounded-2xl" onClick={() => setPaymentDraft(null)}>Cancelar</Button>
-              </div>
-            </div>
-          ) : (
-            <p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">{payment ? `${payment.split(/\r?\n/).filter(Boolean).length} linha(s) preenchida(s).` : "Ainda não preenchido: a planilha sai sem os dados bancários."}</p>
-          )}
-        </CardContent>
-      </Card>
+      <PaymentCard
+        saved={parsePaymentInfo(payment)}
+        draft={paymentDraft}
+        onEdit={() => setPaymentDraft(parsePaymentInfo(payment))}
+        onChange={(patch) => setPaymentDraft((current) => ({ ...current, ...patch }))}
+        onSave={savePayment}
+        onCancel={() => setPaymentDraft(null)}
+      />
 
       {form ? (
         <ItemDialog

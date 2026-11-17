@@ -247,3 +247,66 @@ export async function buildReportWorkbook(ExcelJS, report, items, paymentInfo = 
   }
   return wb;
 }
+
+// Dados bancários: campos do formulário <-> texto "Rótulo -> valor" guardado no banco.
+export const PAYMENT_FIELDS = [
+  { key: "holder", label: "Nome do Titular" },
+  { key: "document", label: "CPF/CNPJ do Titular" },
+  { key: "bank", label: "Banco" },
+  { key: "agency", label: "Agência" },
+  { key: "account", label: "Conta" },
+  { key: "account_type", label: "Tipo de conta" },
+  { key: "pix", label: "PIX" },
+  { key: "extra", label: "Observação" },
+];
+
+export const PIX_TYPES = ["CPF", "CNPJ", "E-mail", "Celular", "Chave aleatória"];
+
+function plainLabel(text) {
+  return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+export function parsePaymentInfo(text) {
+  const out = { holder: "", document: "", bank: "", agency: "", account: "", account_type: "", pix: "", pix_type: "", extra: "" };
+  const extras = [];
+  for (const line of paymentLines(text)) {
+    const label = plainLabel(line.label.replace(/\s*->\s*$/, ""));
+    const value = line.value;
+    if (!label) {
+      const pix = value.match(/^pix\b\s*(?:\(([^)]*)\))?\s*[:-]?\s*(.*)$/i);
+      if (pix) { out.pix = pix[2].trim(); out.pix_type = (pix[1] || "").trim(); } else extras.push(value);
+    } else if (label.startsWith("pix") || label.includes("chave")) {
+      out.pix = value;
+      const type = label.match(/\(([^)]*)\)/);
+      if (type) out.pix_type = PIX_TYPES.find((t) => plainLabel(t) === plainLabel(type[1])) || type[1].toUpperCase();
+    } else if (label.includes("tipo") && label.includes("conta")) out.account_type = value;
+    else if (label.includes("titular") && !label.includes("cpf") && !label.includes("cnpj")) out.holder = value;
+    else if (label.includes("cpf") || label.includes("cnpj")) out.document = value;
+    else if (label.startsWith("banco")) out.bank = value;
+    else if (label.startsWith("agencia")) out.agency = value;
+    else if (label.startsWith("conta")) out.account = value;
+    else if (label.startsWith("obs")) extras.push(value);
+    else extras.push(`${line.label.replace(/\s*->\s*$/, "")}: ${value}`);
+  }
+  out.extra = extras.join(" · ");
+  return out;
+}
+
+export function formatPaymentInfo(data) {
+  const clean = (v) => String(v || "").trim();
+  return PAYMENT_FIELDS
+    .map(({ key, label }) => {
+      if (key === "pix") return clean(data.pix) ? `${clean(data.pix_type) ? `PIX (${clean(data.pix_type)})` : "PIX"} -> ${clean(data.pix)}` : "";
+      return clean(data[key]) ? `${label} -> ${clean(data[key])}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function formatDocumentInput(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 14);
+  if (digits.length <= 11) {
+    return digits.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+  }
+  return digits.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
