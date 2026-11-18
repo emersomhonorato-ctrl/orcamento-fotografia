@@ -1863,6 +1863,14 @@ export default function App() {
       editedPhotosCount: record.editedPhotosCount || service?.editedPhotosCount || 0,
       photoSize: record.photoSize || service?.photoSize || "",
       budgetValidityDays: record.budgetValidityDays || service?.defaultBudgetValidityDays || settings.budgetValidityDays || 7,
+      budgetDescription: record.budgetDescription || service?.workDescription || "",
+      serviceItemsSnapshot: record.serviceItemsSnapshot || service?.itemDescription || "",
+      contractPaymentMethod: record.contractPaymentMethod || service?.contractPaymentMethod || settings.paymentTerms || "",
+      contractDeliveryTerms: record.contractDeliveryTerms || service?.contractDeliveryTerms || "",
+      receiptMethod: record.receiptMethod || service?.defaultReceiptMethod || "",
+      recommendedDeliveryDays: record.recommendedDeliveryDays || service?.recommendedDeliveryDays || 0,
+      serviceBudgetNotes: service?.defaultBudgetNotes || "",
+      serviceCommercialNotes: service?.defaultNotes || "",
     };
   }
 
