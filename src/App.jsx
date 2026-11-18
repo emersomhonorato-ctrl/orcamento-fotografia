@@ -36,6 +36,7 @@ import WeekAgenda from "@/components/WeekAgenda";
 import HelpGuide from "@/components/HelpGuide";
 import ChristmasDashboard from "@/components/ChristmasDashboard";
 import DuesAndBirthdays from "@/components/DuesAndBirthdays";
+import PaymentLinkDialog from "@/components/PaymentLinkDialog";
 import RecontactPanel from "@/components/RecontactPanel";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
@@ -282,6 +283,7 @@ export default function App() {
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [monthlyLink, setMonthlyLink] = useState(null);
+  const [paymentLinkFor, setPaymentLinkFor] = useState(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
@@ -3013,7 +3015,7 @@ export default function App() {
             />
           </section>
           <SafeSection name="Cobranças e aniversários">
-            <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} />
+            <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} onPaymentLink={setPaymentLinkFor} />
           </SafeSection>
           <SafeSection name="Clientes para chamar de novo">
             <RecontactPanel
@@ -4638,6 +4640,8 @@ export default function App() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {paymentLinkFor ? <PaymentLinkDialog record={paymentLinkFor} onClose={() => setPaymentLinkFor(null)} /> : null}
 
       {monthlyLink ? (
         <MonthlyLinkDialog
