@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
+import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ import HelpGuide from "@/components/HelpGuide";
 import ChristmasDashboard from "@/components/ChristmasDashboard";
 import DuesAndBirthdays from "@/components/DuesAndBirthdays";
 import PaymentLinkDialog from "@/components/PaymentLinkDialog";
+import FollowUpsPanel from "@/components/FollowUpsPanel";
 import RecontactPanel from "@/components/RecontactPanel";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
@@ -284,6 +285,7 @@ export default function App() {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [monthlyLink, setMonthlyLink] = useState(null);
   const [paymentLinkFor, setPaymentLinkFor] = useState(null);
+  const [budgetRequestsVersion, setBudgetRequestsVersion] = useState(0);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
@@ -897,6 +899,19 @@ export default function App() {
       canceled: canceledBudgets.length,
     };
   }, [activeBudgets, canceledBudgets.length, onlyEvents, settings.budgetValidityDays]);
+
+  // "Para fazer hoje": propostas vencendo (até 2 dias antes ou 3 dias depois) e restante a cobrar até 7 dias antes do ensaio
+  const followUps = useMemo(() => {
+    const budgets = activeBudgets
+      .filter((record) => ["Pendente", "Em negociação"].includes(record.status))
+      .map((record) => ({ record, info: getBudgetValidityInfo(record, settings.budgetValidityDays) }))
+      .filter(({ info }) => info.daysLeft !== null && info.daysLeft >= -3 && info.daysLeft <= 2)
+      .sort((a, b) => a.info.daysLeft - b.info.daysLeft);
+    const events = onlyEvents
+      .filter((record) => record.status !== "Cancelado" && Number(record.balance || 0) >= 1 && record.eventDate && record.daysLeft !== null && record.daysLeft >= 0 && record.daysLeft <= 7)
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+    return { budgets, events };
+  }, [activeBudgets, onlyEvents, settings.budgetValidityDays]);
 
   const commercialActions = useMemo(() => {
     const reminderDays = Number(settings.reminderDaysBefore || 0);
@@ -1697,6 +1712,7 @@ export default function App() {
       startTime: /^\d{1,2}:\d{2}$/.test(String(request.event_time || "").trim()) ? String(request.event_time).trim().padStart(5, "0") : "",
       location: request.location || "",
       notes: noteLines.join("\n"),
+      budgetRequestId: request.id || "",
     });
   }
 
@@ -1824,8 +1840,31 @@ export default function App() {
       ...(nextClients ? { clients: nextClients } : {}),
     });
 
+    // Orçamento criado a partir de um pedido: só agora o pedido sai da lista (como "convertido")
+    if (!previous && form.budgetRequestId) {
+      supabase
+        .from("budget_requests")
+        .update({ status: "convertido" })
+        .eq("id", form.budgetRequestId)
+        .then(() => setBudgetRequestsVersion((value) => value + 1));
+    }
+
     setIsEventModalOpen(false);
     resetEventForm();
+  }
+
+  // E-mail/CPF completados na tela de link de pagamento: grava no trabalho e no cadastro do cliente (se estiver vazio lá)
+  function saveContactFromPaymentLink(record, changes) {
+    const event = appState.events.find((item) => item.id === record.id);
+    if (!event) return;
+    const client = event.clientId ? clients.find((item) => item.id === event.clientId) : null;
+    const clientChanges = {};
+    if (client && changes.email && !String(client.email || "").trim()) clientChanges.email = changes.email;
+    if (client && changes.clientCpf && !String(client.cpf || "").trim()) clientChanges.cpf = changes.clientCpf;
+    updateAppState({
+      events: appState.events.map((item) => (item.id === record.id ? { ...item, ...changes, updatedAt: new Date().toISOString() } : item)),
+      ...(Object.keys(clientChanges).length ? { clients: clients.map((item) => (item.id === client.id ? { ...item, ...clientChanges } : item)) } : {}),
+    });
   }
 
   function getRecordForBudgetPDF(record) {
@@ -2040,6 +2079,12 @@ export default function App() {
 
   function editService(service) {
     setServiceForm({ ...normalizeService(service), price: String(service.price || "") });
+    setIsServiceModalOpen(true);
+  }
+
+  // Variação: copia tudo do serviço (textos, prazos, pagamento) para criar outra versão, ex.: "Estúdio" e "Externo"
+  function duplicateService(service) {
+    setServiceForm({ ...normalizeService(service), id: "", name: `${service.name} (variação)`, price: String(service.price || "") });
     setIsServiceModalOpen(true);
   }
 
@@ -3022,6 +3067,9 @@ export default function App() {
               onSave={(monthlyGoal) => updateAppState({ settings: { ...settings, monthlyGoal } })}
             />
           </section>
+          <SafeSection name="Para fazer hoje">
+            <FollowUpsPanel budgets={followUps.budgets} events={followUps.events} onOpen={editEvent} onPaymentLink={setPaymentLinkFor} />
+          </SafeSection>
           <SafeSection name="Cobranças e aniversários">
             <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} onPaymentLink={setPaymentLinkFor} />
           </SafeSection>
@@ -3480,6 +3528,7 @@ export default function App() {
                 onCreateBudget={createBudgetFromRequest}
                 onRequestsLoaded={hasHydratedRemote ? importClientsFromRequests : undefined}
                 onRequestCorrected={correctClientFromRequest}
+                refreshKey={budgetRequestsVersion}
               />
 
               <Card className="studio-panel rounded-3xl border-0 bg-white/90 shadow-sm">
@@ -3921,6 +3970,10 @@ export default function App() {
                             <Button variant="outline" className="rounded-2xl" onClick={() => editService(service)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               Editar
+                            </Button>
+                            <Button variant="outline" className="rounded-2xl" title="Copia este serviço para criar outra versão (ex.: Estúdio e Externo)" onClick={() => duplicateService(service)}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Criar variação
                             </Button>
                             <Button variant="destructive" className="rounded-2xl" onClick={() => removeService(service.id)}>
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -4649,7 +4702,7 @@ export default function App() {
         </Tabs>
       </div>
 
-      {paymentLinkFor ? <PaymentLinkDialog record={paymentLinkFor} onClose={() => setPaymentLinkFor(null)} /> : null}
+      {paymentLinkFor ? <PaymentLinkDialog record={paymentLinkFor} onClose={() => setPaymentLinkFor(null)} onSaveContact={saveContactFromPaymentLink} /> : null}
 
       {monthlyLink ? (
         <MonthlyLinkDialog

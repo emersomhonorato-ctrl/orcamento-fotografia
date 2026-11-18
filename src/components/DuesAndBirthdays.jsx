@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/supabase";
 import { Cake, CreditCard, MessageCircle, Wallet } from "lucide-react";
 import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
@@ -49,7 +50,29 @@ function birthdayMessage(client) {
 // Dashboard: quem está devendo (com botão de cobrar) e aniversariantes da semana
 export default function DuesAndBirthdays({ events = [], clients = [], onCharge, onOpen, onPaymentLink }) {
   const [showAll, setShowAll] = useState(false);
+  const [inReview, setInReview] = useState({});
   const today = localKey(new Date());
+
+  // Pagamentos de cartão em análise no Mercado Pago (para não mandar outro link e o cliente pagar duas vezes)
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("payments")
+      .select("event_id, amount, mp_status")
+      .eq("status", "pendente")
+      .in("mp_status", ["in_process", "pending", "authorized", "in_mediation"])
+      .then(({ data }) => {
+        if (!active || !data) return;
+        const map = {};
+        data.forEach((item) => {
+          if (item.event_id) map[item.event_id] = (map[item.event_id] || 0) + Number(item.amount || 0);
+        });
+        setInReview(map);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const dues = useMemo(
     () =>
@@ -85,6 +108,11 @@ export default function DuesAndBirthdays({ events = [], clients = [], onCharge, 
                   {record.clientName || "Sem nome"} <span className="hidden font-normal text-stone-500 sm:inline">• {record.eventType || "Trabalho"}</span>
                 </button>
                 {late ? <span className="hidden rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 sm:inline">já realizado</span> : null}
+                {inReview[String(record.id)] ? (
+                  <span title="Pagamento de cartão em análise no Mercado Pago: espere antes de cobrar de novo" className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                    {brl(inReview[String(record.id)])} em análise
+                  </span>
+                ) : null}
                 <span className="font-semibold tabular-nums text-amber-800">{brl(record.balance)}</span>
                 {onPaymentLink ? (
                   <button type="button" title="Gerar link de pagamento (Pix, débito ou crédito)" className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100" onClick={() => onPaymentLink(record)}>

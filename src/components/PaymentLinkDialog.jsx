@@ -21,7 +21,17 @@ function plain(value) {
   return Number(value || 0).toFixed(2).replace(".", ",");
 }
 
-export default function PaymentLinkDialog({ record, onClose }) {
+const IN_REVIEW = ["in_process", "pending", "authorized", "in_mediation"];
+
+function cpfDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function validEmail(value) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(value || "").trim());
+}
+
+export default function PaymentLinkDialog({ record, onClose, onSaveContact }) {
   const total = Number(record.computedAmount || record.amount || 0);
   const paid = Number(record.amountPaid || 0);
   const balance = Math.max(0, Number(record.balance ?? total - paid));
@@ -35,6 +45,11 @@ export default function PaymentLinkDialog({ record, onClose }) {
   const [payment, setPayment] = useState(null);
   const [copied, setCopied] = useState(false);
   const [openLinks, setOpenLinks] = useState([]);
+  const [email, setEmail] = useState(String(record.email || "").trim());
+  const [cpf, setCpf] = useState(String(record.clientCpf || "").trim());
+  const [ignoreReview, setIgnoreReview] = useState(false);
+  const missingEmail = !validEmail(record.email);
+  const missingCpf = ![11, 14].includes(cpfDigits(record.clientCpf).length);
 
   const amount = kind === "sinal" ? half : kind === "saldo" ? balance : parseMoney(other);
   const what = [record.eventType || "Serviço fotográfico", record.eventDate ? formatDateBR(record.eventDate) : ""].filter(Boolean).join(" — ");
@@ -51,9 +66,22 @@ export default function PaymentLinkDialog({ record, onClose }) {
   }, [record.id]);
 
   const sameOpen = useMemo(() => openLinks.find((item) => Math.abs(Number(item.amount) - amount) < 0.01) || null, [openLinks, amount]);
+  // Pagamento de cartão que o Mercado Pago está analisando: se gerar outro link, o cliente pode pagar duas vezes
+  const inReview = useMemo(() => openLinks.filter((item) => IN_REVIEW.includes(String(item.mp_status || ""))), [openLinks]);
+  const blockedByReview = inReview.length > 0 && !ignoreReview;
 
   async function create() {
     if (amount < 1) return setMessage("Coloque um valor de pelo menos R$ 1,00.");
+    if (blockedByReview) return setMessage("Tem um pagamento em análise no Mercado Pago. Espere a análise ou confirme abaixo que quer gerar outro link.");
+    const typedEmail = email.trim();
+    const typedCpf = cpf.trim();
+    if (typedEmail && !validEmail(typedEmail)) return setMessage("O e-mail parece incompleto. Confira ou deixe em branco.");
+    if (typedCpf && ![11, 14].includes(cpfDigits(typedCpf).length)) return setMessage("O CPF precisa ter 11 números (ou CNPJ com 14).");
+    // Salva no trabalho o que foi completado aqui: o Mercado Pago usa esses dados para aprovar o cartão
+    const changes = {};
+    if (typedEmail && typedEmail !== String(record.email || "").trim()) changes.email = typedEmail;
+    if (typedCpf && typedCpf !== String(record.clientCpf || "").trim()) changes.clientCpf = typedCpf;
+    if (Object.keys(changes).length) await onSaveContact?.(record, changes);
     if (sameOpen) {
       setPayment(sameOpen);
       return;
@@ -67,7 +95,7 @@ export default function PaymentLinkDialog({ record, onClose }) {
         event_id: String(record.id),
         client_name: record.clientName || "Cliente",
         client_whatsapp: record.whatsapp || record.phone || null,
-        client_email: record.email || null,
+        client_email: email.trim() || record.email || null,
         description,
         amount,
         max_installments: Math.min(12, Math.max(1, Number(installments) || 1)),
@@ -141,9 +169,30 @@ export default function PaymentLinkDialog({ record, onClose }) {
               </select>
             </div>
             <p className="rounded-2xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">O cliente escolhe na página do Mercado Pago: <strong>Pix</strong>, <strong>débito</strong> ou <strong>crédito</strong>. Quando ele paga, o valor entra sozinho como recebido neste trabalho.</p>
+            {missingEmail || missingCpf ? (
+              <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs leading-5 text-amber-900">
+                  <strong>Falta {[missingEmail ? "e-mail" : "", missingCpf ? "CPF" : ""].filter(Boolean).join(" e ")} do cliente.</strong> Sem isso, o cartão pode cair em análise ou ser recusado pelo Mercado Pago. Complete aqui (fica salvo no trabalho) ou peça para pagar no Pix.
+                </p>
+                {missingEmail ? <Input placeholder="E-mail do cliente" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-white" /> : null}
+                {missingCpf ? <Input placeholder="CPF do cliente" inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} className="bg-white" /> : null}
+              </div>
+            ) : null}
+            {inReview.length ? (
+              <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-900">
+                <p>
+                  <strong>⚠️ Pagamento em análise:</strong> {inReview.map((item) => `${brl(item.amount)} (${item.description})`).join("; ")}. O Mercado Pago ainda pode aprovar. Se o cliente pagar de novo, ele paga duas vezes.
+                </p>
+                <p>Espere a análise (até 2 dias) ou cancele esse pagamento no app do Mercado Pago antes de mandar outro link.</p>
+                <label className="flex items-center gap-2 font-semibold">
+                  <input type="checkbox" checked={ignoreReview} onChange={(e) => setIgnoreReview(e.target.checked)} />
+                  Já resolvi no Mercado Pago, gerar outro link mesmo assim
+                </label>
+              </div>
+            ) : null}
             {sameOpen ? <p className="text-xs text-amber-700">Já existe um link aberto de {brl(sameOpen.amount)} para este trabalho; vou usar o mesmo.</p> : null}
             {message ? <p className="rounded-2xl bg-red-50 p-3 text-sm text-red-800">{message}</p> : null}
-            <Button className="w-full rounded-2xl" disabled={busy || amount < 1} onClick={create}>{busy ? "Criando…" : `Gerar link de ${brl(amount)}`}</Button>
+            <Button className="w-full rounded-2xl" disabled={busy || amount < 1 || blockedByReview} onClick={create}>{busy ? "Criando…" : `Gerar link de ${brl(amount)}`}</Button>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
