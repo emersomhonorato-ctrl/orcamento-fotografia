@@ -435,17 +435,6 @@ function labeledParagraph(doc, layout, label, text, options = {}) {
   layout.state.y += 1.6;
 }
 
-function measureLabeledParagraphs(doc, entries, width) {
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.4);
-  return entries
-    .filter(([, text]) => has(text))
-    .reduce((sum, [, text]) => {
-      const lines = parseRichText(text).reduce((count, block) => (block.type === "gap" ? count : count + doc.splitTextToSize(block.text, width - 5).length), 0);
-      return sum + 4.6 + lines * 4.5 + 2.8;
-    }, 0);
-}
-
 function itemsTable(doc, layout, items) {
   const col = { name: PAGE.marginX + 4, qty: 128, unit: 158, total: PAGE.width - PAGE.marginX - 4 };
   const drawHead = () => {
@@ -687,28 +676,57 @@ export function generateBudgetPDF(record = {}, settings = {}) {
 
   // Condições (esquerda) + total (direita), lado a lado para economizar página
   const paymentTerms = clean(record.contractPaymentMethod || settings.paymentTerms);
+  const percentMatch = paymentTerms.match(/(\d{1,3})\s*%/);
+  const depositPercent = percentMatch ? Number(percentMatch[1]) : 0;
+  const depositLine = total > 0 && depositPercent > 0 && depositPercent < 100
+    ? `Sinal para reservar (${depositPercent}%): ${formatCurrency((total * depositPercent) / 100)}  •  Restante: ${formatCurrency(total - (total * depositPercent) / 100)}`
+    : "";
+  const methods = clean(record.receiptMethod);
+  const paymentText = [
+    depositLine,
+    paymentTerms,
+    has(methods) && !/pix|cart[aã]o|dinheiro|transfer/i.test(paymentTerms) ? `Aceito: ${methods}` : "",
+  ].filter(has).join("\n");
+
   const deliveryTerms = clean(record.contractDeliveryTerms);
-  const notes = clean(record.notes);
-  const deliveryText = [deliveries, deliveryTerms].filter(has).join("\n");
-  const conditions = [["Forma de pagamento", paymentTerms], ["Entrega", deliveryText], ["Observações", notes]];
-  const leftWidth = PAGE.contentWidth - 82 - 8;
-  const conditionsHeight = measureLabeledParagraphs(doc, conditions, leftWidth);
-  const signatureHeight = settings.signatureDataUrl ? 27 : 26;
-  layout.ensure(Math.max(conditionsHeight + 6, 17 + 8 + signatureHeight));
-  const zoneTop = layout.state.y;
-  const boxHeight = totalBox(doc, layout, "Investimento total", formatCurrency(total), "", { advance: false });
-  layout.state.y = zoneTop + boxHeight + 8;
+  const deliveryDays = Number(record.recommendedDeliveryDays || 0);
+  const deliveryText = [
+    deliveries,
+    deliveryTerms,
+    !has(deliveryTerms) && deliveryDays ? `Prazo estimado de entrega: até ${deliveryDays} dias.` : "",
+  ].filter(has).join("\n");
+
+  const comparableNote = (value) => pdfSafe(clean(value)).toLowerCase().replace(/[^a-z0-9à-ü]+/g, "");
+  const noteParts = [];
+  // "Conheceu por" é anotação interna: não vai para o cliente
+  const clientNotes = clean(record.notes).split("\n").filter((line) => !/^conheceu por\b/i.test(line.trim())).join("\n");
+  [clientNotes, record.serviceBudgetNotes || record.serviceCommercialNotes].forEach((value) => {
+    const text = clean(value);
+    if (!has(text)) return;
+    const key = comparableNote(text);
+    if (!key || noteParts.some((part) => comparableNote(part).includes(key) || key.includes(comparableNote(part)))) return;
+    noteParts.push(text);
+  });
+  const notes = noteParts.join("\n");
+  const conditions = [["Forma de pagamento", paymentText], ["Entrega", deliveryText], ["Observações", notes]];
+  totalBox(doc, layout, "Investimento total", formatCurrency(total));
+
+  // Condições em largura total, para nada ficar espremido ou cortado
+  if (conditions.some(([, text]) => has(text))) {
+    sectionTitle(doc, layout, "Condições");
+    conditions.forEach(([label, text]) => labeledParagraph(doc, layout, label, text));
+    layout.state.y += 2;
+  }
+
   const signerName = clean(settings.studioResponsible) || studioName;
+  layout.ensure(settings.signatureDataUrl ? 30 : 28);
   signatureBlock(doc, layout, settings, signerName, signerName === studioName ? "" : studioName, {
     compact: true,
     x: PAGE.width - PAGE.marginX - 82,
     width: 82,
     skipEnsure: true,
   });
-  const rightEnd = layout.state.y;
-  layout.state.y = zoneTop + 3.4;
-  conditions.forEach(([label, text]) => labeledParagraph(doc, layout, label, text, { width: leftWidth }));
-  layout.state.y = Math.max(layout.state.y, rightEnd) + 2;
+  layout.state.y += 2;
 
   // Como confirmar
   const channels = [
