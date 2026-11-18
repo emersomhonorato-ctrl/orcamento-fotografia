@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Eye, EyeOff, ImagePlus, KeyRound, Link2, Pencil, Plus, QrCode, Save, Send, Star, Trash2, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
       return;
     }
     setDeliveries(data || []);
-    const marksRes = await supabase.from("photo_selections").select("id, delivery_id, digital_delivered_at, prints_delivered_at").not("delivery_id", "is", null);
+    const marksRes = await supabase.from("photo_selections").select("id, delivery_id, drive_url, digital_delivered_at, prints_delivered_at").not("delivery_id", "is", null);
     if (!marksRes.error) {
       const map = {};
       (marksRes.data || []).forEach((row) => { map[row.delivery_id] = row; });
@@ -304,7 +304,57 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
     load();
   }
 
+  // A entrega veio de uma seleção e ainda aponta para a pasta das fotos em baixa
+  const usesSelectionFolder = (item) => {
+    const sel = marks[item.id];
+    return Boolean(item.selection_id && sel?.drive_url && driveFolderId(sel.drive_url) && driveFolderId(sel.drive_url) === driveFolderId(item.drive_url));
+  };
+
+  // Ao abrir a aba: confere sozinho as entregas recentes e traz as fotos novas que entraram na pasta
+  const autoChecked = useRef(new Set());
+  useEffect(() => {
+    if (state !== "ready" || !apiKey) return undefined;
+    let active = true;
+    const limit = Date.now() - 45 * 24 * 3600 * 1000;
+    const recent = deliveries.filter((item) =>
+      !autoChecked.current.has(item.id) &&
+      isDriveFolder(item.drive_url) &&
+      !usesSelectionFolder(item) &&
+      new Date(item.updated_at || item.created_at).getTime() >= limit,
+    ).slice(0, 20);
+    if (!recent.length) return undefined;
+    (async () => {
+      const changed = [];
+      for (const item of recent) {
+        if (!active) return;
+        autoChecked.current.add(item.id);
+        try {
+          const list = (await listDriveImages(item.drive_url, apiKey)).map((photo) => ({ id: photo.id, name: photo.name }));
+          const before = new Set((Array.isArray(item.photos) ? item.photos : []).map((photo) => photo.id));
+          const differs = list.length !== before.size || list.some((photo) => !before.has(photo.id));
+          if (list.length && differs) {
+            const { error } = await supabase.from("photo_deliveries").update({ photos: list }).eq("id", item.id);
+            if (!error) changed.push(`${item.client_name} (${list.length} fotos)`);
+          }
+        } catch {
+          // pasta sem acesso: fica como está; o botão Atualizar fotos mostra o erro
+        }
+      }
+      if (active && changed.length) {
+        setMessage(`Fotos novas encontradas no Drive e já atualizadas: ${changed.join(", ")}.`);
+        load();
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [state, apiKey, deliveries, marks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function toggleActive(item) {
+    if (!item.active && usesSelectionFolder(item)) {
+      setMessage(`${item.client_name}: esta entrega ainda está com a pasta das fotos em baixa da seleção. Cole a pasta das fotos tratadas (na Seleção ou editando a entrega) antes de ativar.`);
+      return;
+    }
     const update = { active: !item.active, updated_at: new Date().toISOString() };
     if (!item.active) {
       const photos = await readPhotos(item.drive_url);
@@ -361,6 +411,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const statusOf = (item) => {
+    if (usesSelectionFolder(item)) return ["Falta a pasta das fotos tratadas", "bg-red-100 text-red-800"];
     if (!item.active && item.selection_id) return ["Rascunho da seleção — confira a pasta e ative", "bg-amber-100 text-amber-800"];
     if (!item.active) return ["Desativada", "bg-slate-100 text-slate-600"];
     if (item.expires_at && item.expires_at < today) return ["Expirada", "bg-amber-100 text-amber-800"];
