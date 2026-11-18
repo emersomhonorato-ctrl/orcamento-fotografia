@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Cake, MessageCircle, Wallet } from "lucide-react";
+import { Cake, CreditCard, MessageCircle, Wallet } from "lucide-react";
 import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 
@@ -47,7 +47,7 @@ function birthdayMessage(client) {
 }
 
 // Dashboard: quem está devendo (com botão de cobrar) e aniversariantes da semana
-export default function DuesAndBirthdays({ events = [], clients = [], onCharge, onOpen }) {
+export default function DuesAndBirthdays({ events = [], clients = [], onCharge, onOpen, onPaymentLink }) {
   const [showAll, setShowAll] = useState(false);
   const today = localKey(new Date());
 
@@ -86,6 +86,11 @@ export default function DuesAndBirthdays({ events = [], clients = [], onCharge, 
                 </button>
                 {late ? <span className="hidden rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 sm:inline">já realizado</span> : null}
                 <span className="font-semibold tabular-nums text-amber-800">{brl(record.balance)}</span>
+                {onPaymentLink ? (
+                  <button type="button" title="Gerar link de pagamento (Pix, débito ou crédito)" className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100" onClick={() => onPaymentLink(record)}>
+                    <CreditCard className="h-3.5 w-3.5" />Link de pagamento
+                  </button>
+                ) : null}
                 {phoneOf(record) ? (
                   <button type="button" title="Mandar cobrança pelo WhatsApp" className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100" onClick={() => onCharge?.(record)}>
                     <MessageCircle className="h-3.5 w-3.5" />Cobrar
