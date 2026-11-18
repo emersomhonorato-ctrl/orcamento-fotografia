@@ -673,7 +673,7 @@ export default function PhotoDeliveryAdmin({ records = [] }) {
           const mark = marks[item.id];
           return (
             <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="relative h-48 bg-[#1b1610]">
+              <div className="relative aspect-[3/2] bg-[#1b1610]">
                 {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" style={coverFocusStyle(item.cover_focus)} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                 <DeliveredStamp digital={mark?.digital_delivered_at} prints={mark?.prints_delivered_at} />
