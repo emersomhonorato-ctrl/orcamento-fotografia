@@ -632,7 +632,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                   : ["Ainda não abriu", "bg-slate-100 text-slate-600"];
           return (
             <div key={item.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="relative h-48 bg-[#1b1610]">
+              <div className="relative aspect-[3/2] bg-[#1b1610]">
                 {cover ? <img src={`https://drive.google.com/thumbnail?id=${cover.id}&sz=w800`} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" style={{ objectPosition: "50% 30%" }} onError={(event) => { if (!event.currentTarget.src.includes("lh3.")) event.currentTarget.src = `https://lh3.googleusercontent.com/d/${cover.id}=w800`; }} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
                 <DeliveredStamp digital={item.digital_delivered_at} prints={item.prints_delivered_at} />
