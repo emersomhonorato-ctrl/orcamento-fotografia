@@ -13,6 +13,7 @@ import PublicPayment from "./components/PublicPayment.jsx";
 import PublicLegalPage from "./components/PublicLegalPage.jsx";
 import PublicHelpPage from "./components/PublicHelpPage.jsx";
 import PublicHelpFooter from "./components/PublicHelpFooter.jsx";
+import UpdateNotice from "./components/UpdateNotice.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
@@ -75,6 +76,7 @@ createRoot(document.getElementById("root")).render(
     <PreviewErrorBoundary>
       {monthlyMatch ? <PublicMonthlyBooking token={monthlyMatch[1].toLowerCase()} /> : isHelpPage ? <PublicHelpPage /> : legalMatch ? <PublicLegalPage page={legalMatch[1].toLowerCase()} /> : paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
       {helpContext ? <PublicHelpFooter context={helpContext} dark={helpContext === "selecao"} /> : null}
+      {import.meta.env.PROD ? <UpdateNotice /> : null}
     </PreviewErrorBoundary>
   </StrictMode>,
 );
