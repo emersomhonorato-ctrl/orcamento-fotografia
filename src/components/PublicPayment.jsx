@@ -97,17 +97,17 @@ export default function PublicPayment({ slug }) {
                     {Number(payment.installments) > 1 ? ` em ${payment.installments}x` : ""}
                   </p>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-600">No cartão {installmentLabel(payment.amount, payment.max_installments)} — ou Pix</p>
+                  <p className="mt-2 text-sm text-slate-600">Pix, débito ou crédito ({installmentLabel(payment.amount, payment.max_installments)})</p>
                 )}
               </div>
 
               {!paid && !closed ? (
                 <>
                   {returned === "falhou" ? (
-                    <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-800">O pagamento não foi aprovado. Você pode tentar de novo com outro cartão ou pagar com Pix.</p>
+                    <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-800">O cartão não foi aprovado pelo Mercado Pago. O jeito mais rápido é pagar com <strong>Pix</strong> (aprova na hora) — ou tente outro cartão.</p>
                   ) : null}
                   {pendingReturn ? (
-                    <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">Seu pagamento está em análise no Mercado Pago. Assim que for aprovado, esta página mostra a confirmação — pode fechar, eu também sou avisado.</p>
+                    <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">Seu pagamento está em análise no Mercado Pago (pode levar até 2 dias). Assim que for aprovado, esta página mostra a confirmação e eu sou avisado. <strong>Não pague de novo</strong> enquanto estiver em análise — se preferir resolver agora, fale comigo no WhatsApp.</p>
                   ) : null}
                   <button
                     type="button"
@@ -115,8 +115,13 @@ export default function PublicPayment({ slug }) {
                     disabled={busy}
                     className="mt-5 w-full rounded-2xl bg-[#1b1610] px-5 py-4 text-base font-semibold text-[#f6f1ea] shadow-lg transition hover:bg-black disabled:opacity-60"
                   >
-                    {busy ? "Abrindo pagamento…" : "Pagar com cartão ou Pix"}
+                    {busy ? "Abrindo pagamento…" : "Pagar com Pix ou cartão"}
                   </button>
+                  {!pendingReturn ? (
+                    <p className="mt-3 rounded-2xl bg-emerald-50 p-3 text-center text-xs leading-5 text-emerald-900">
+                      💡 <strong>Pix é o mais rápido:</strong> cai na hora e não passa por análise. Na página do Mercado Pago, escolha <strong>Pix</strong> e copie o código no app do seu banco.
+                    </p>
+                  ) : null}
                   {error ? <p className="mt-2 text-center text-sm text-red-700">{error}</p> : null}
                   <p className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
                     🔒 Pagamento seguro pelo Mercado Pago. Seus dados do cartão não passam pelo estúdio.
