@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
+import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Gift, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import ChristmasDashboard from "@/components/ChristmasDashboard";
 import DuesAndBirthdays from "@/components/DuesAndBirthdays";
 import PaymentLinkDialog from "@/components/PaymentLinkDialog";
 import FollowUpsPanel from "@/components/FollowUpsPanel";
+import ReferralLinkDialog from "@/components/ReferralLinkDialog";
 import RecontactPanel from "@/components/RecontactPanel";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
@@ -169,6 +170,35 @@ function toLocalISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
+// Indique e ganhe: quem chega pelo link de indicação de outro cliente ganha este desconto
+const REFERRAL_DISCOUNT_PERCENT = 10;
+const isReferralDiscountItem = (item) => item.type === "Desconto" && /^Desconto de indicação/i.test(String(item.name || ""));
+
+// Recalcula a linha "Desconto de indicação (10%)" sobre os outros itens, a cada vez que o orçamento é salvo
+function applyReferralDiscount(items = [], record = {}) {
+  const percent = Number(record.referralDiscountPercent || 0);
+  if (!percent) return items;
+  const others = items.filter((item) => !isReferralDiscountItem(item));
+  const base = others.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0);
+  if (base <= 0) return others;
+  const who = String(record.referredByName || "").trim();
+  return [
+    ...others,
+    {
+      id: items.find(isReferralDiscountItem)?.id || crypto.randomUUID(),
+      serviceId: "",
+      type: "Desconto",
+      name: `Desconto de indicação (${percent}%)`,
+      description: who ? `Indicação de ${who}` : "Cliente indicado",
+      itemDescription: "",
+      workDescription: "",
+      scopeItems: [],
+      quantity: 1,
+      unitPrice: -Math.round(base * percent) / 100,
+    },
+  ];
+}
+
 function getBudgetValidityInfo(record = {}, defaultDays = 7) {
   const days = Number(record.budgetValidityDays || defaultDays || 7);
   const baseRaw = record.budgetSentAt || record.createdAt;
@@ -286,6 +316,7 @@ export default function App() {
   const [monthlyLink, setMonthlyLink] = useState(null);
   const [paymentLinkFor, setPaymentLinkFor] = useState(null);
   const [budgetRequestsVersion, setBudgetRequestsVersion] = useState(0);
+  const [referralLinkFor, setReferralLinkFor] = useState(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
@@ -1696,6 +1727,7 @@ export default function App() {
       request.event_time ? `Horário desejado: ${request.event_time}` : "",
       request.people ? `Pessoas/convidados: ${request.people}` : "",
       request.how_found ? `Conheceu por: ${request.how_found}${request.referred_by ? ` (indicado por ${request.referred_by})` : ""}` : "",
+      request.referral_code ? `🎁 Indicação${request.referred_by ? ` de ${request.referred_by}` : ""} (código ${String(request.referral_code).toUpperCase()}): ${REFERRAL_DISCOUNT_PERCENT}% de desconto` : "",
     ].filter(Boolean);
 
     const linkedClient = findMatchingClient({ name: request.name, email: request.email, whatsapp: request.whatsapp });
@@ -1713,6 +1745,10 @@ export default function App() {
       location: request.location || "",
       notes: noteLines.join("\n"),
       budgetRequestId: request.id || "",
+      // Indicado por outro cliente: ganha o desconto de indicação (aplicado sozinho ao salvar)
+      ...(request.referral_code
+        ? { referralCode: String(request.referral_code).toUpperCase(), referredByName: request.referred_by || "", referralDiscountPercent: REFERRAL_DISCOUNT_PERCENT }
+        : {}),
     });
   }
 
@@ -1779,7 +1815,7 @@ export default function App() {
       return;
     }
 
-    const items = normalizeItems(form.items || []);
+    const items = applyReferralDiscount(normalizeItems(form.items || []), form);
     const totalFromItems = getItemsTotal(items);
     const recordType = deriveRecordType(form);
     const statusOptions = getStatusOptions(recordType);
@@ -3816,6 +3852,10 @@ export default function App() {
                                 <Pencil className="mr-2 h-4 w-4" />
                                 {isRegistered ? "Editar" : "Cadastrar cliente"}
                               </Button>
+                              <Button variant="outline" className="rounded-2xl border-emerald-300 text-emerald-800 hover:bg-emerald-50" title="Link para o cliente indicar amigos: eles ganham 10% e ele ganha 5 fotos extras" onClick={() => setReferralLinkFor(client)}>
+                                <Gift className="mr-2 h-4 w-4" />
+                                Link de indicação
+                              </Button>
                               {isRegistered ? (
                                 <Button variant="destructive" className="rounded-2xl" onClick={() => removeClient(client.id)}>
                                   <Trash2 className="mr-2 h-4 w-4" />
@@ -4702,6 +4742,7 @@ export default function App() {
         </Tabs>
       </div>
 
+      {referralLinkFor ? <ReferralLinkDialog client={referralLinkFor} onClose={() => setReferralLinkFor(null)} /> : null}
       {paymentLinkFor ? <PaymentLinkDialog record={paymentLinkFor} onClose={() => setPaymentLinkFor(null)} onSaveContact={saveContactFromPaymentLink} /> : null}
 
       {monthlyLink ? (

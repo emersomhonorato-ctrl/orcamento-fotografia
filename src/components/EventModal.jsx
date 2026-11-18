@@ -494,6 +494,26 @@ export default function EventModal({
                 {formatCurrency(displayFormTotal)}
               </Badge>
             </div>
+            {Number(form.referralDiscountPercent || 0) > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                <span className="flex-1">
+                  🎁 <strong>Cliente indicado{form.referredByName ? ` por ${form.referredByName}` : ""}</strong>: o desconto de {form.referralDiscountPercent}% entra sozinho como item ao salvar (e é recalculado se você mudar os valores).
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-emerald-800 underline"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      referralDiscountPercent: 0,
+                      items: (current.items || []).filter((item) => !(item.type === "Desconto" && /^Desconto de indicação/i.test(String(item.name || "")))),
+                    }))
+                  }
+                >
+                  Tirar desconto
+                </button>
+              </div>
+            ) : null}
             <BudgetItemsEditor
               items={form.items || []}
               services={services}

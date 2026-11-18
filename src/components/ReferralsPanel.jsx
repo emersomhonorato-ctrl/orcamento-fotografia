@@ -14,7 +14,7 @@ function referralFromNotes(notes = "") {
 }
 
 // Indique e ganhe: quem indicou, quem veio pela indicação e se o prêmio já foi entregue
-const DEFAULT_REWARD = "5 fotos extras tratadas";
+const DEFAULT_REWARD = "5 fotos extras no pacote";
 const firstName = (name) => String(name || "").trim().split(/\s+/)[0] || "";
 const lower = (value) => String(value || "").trim().toLowerCase();
 
@@ -41,17 +41,23 @@ export default function ReferralsPanel({ settings = {}, onUpdateSettings, client
 
   const load = useCallback(async () => {
     setState("loading");
-    const [deliveries, requests, bookings] = await Promise.all([
+    const [deliveries, requests, bookings, ownCodes] = await Promise.all([
       supabase.from("photo_deliveries").select("client_name, client_whatsapp, referral_code").not("referral_code", "is", null).limit(2000),
       supabase.from("budget_requests").select("id, name, status, created_at, referral_code, how_found, referred_by").or("referral_code.not.is.null,how_found.eq.Indicação").order("created_at", { ascending: false }).limit(500),
       supabase.from("bookings").select("id, name, status, starts_at, notes, created_at").ilike("notes", "%Indica%").order("created_at", { ascending: false }).limit(500),
+      supabase.from("referral_codes").select("code, client_name, client_whatsapp").limit(2000),
     ]);
     if (deliveries.error || requests.error || bookings.error) {
       setState("error");
       return;
     }
-    const byCode = new Map((deliveries.data || []).map((d) => [String(d.referral_code).toUpperCase(), d.client_name]));
-    const phoneByCode = new Map((deliveries.data || []).map((d) => [String(d.referral_code).toUpperCase(), d.client_whatsapp || ""]));
+    // códigos da entrega de fotos + códigos criados pelo botão "Link de indicação" (Clientes)
+    const allCodes = [
+      ...(deliveries.data || []).map((d) => ({ code: d.referral_code, name: d.client_name, phone: d.client_whatsapp })),
+      ...(ownCodes.data || []).map((d) => ({ code: d.code, name: d.client_name, phone: d.client_whatsapp })),
+    ];
+    const byCode = new Map(allCodes.map((d) => [String(d.code).toUpperCase(), d.name]));
+    const phoneByCode = new Map(allCodes.map((d) => [String(d.code).toUpperCase(), d.phone || ""]));
     supabase.from("studio_settings").select("referral_reward").eq("id", 1).maybeSingle().then(({ data }) => {
       const text = String(data?.referral_reward || "").trim();
       // o texto da entrega costuma ser longo; usa só se for curto, senão o padrão
