@@ -32,7 +32,7 @@ function formatCreatedAt(value) {
   return `${formatDateBR(value.slice(0, 10))} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onRequestsLoaded, onRequestCorrected }) {
+export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onRequestsLoaded, onRequestCorrected, refreshKey = 0 }) {
   const [requests, setRequests] = useState([]);
   const [state, setState] = useState("loading"); // loading | ready | missing | error
   const [showArchived, setShowArchived] = useState(false);
@@ -105,7 +105,7 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
     return () => {
       active = false;
     };
-  }, [onRequestsLoaded]);
+  }, [onRequestsLoaded, refreshKey]);
 
   async function setStatus(request, status) {
     setRequests((current) => current.map((item) => (item.id === request.id ? { ...item, status } : item)));
@@ -138,9 +138,9 @@ export default function BudgetRequestsPanel({ settings = {}, onCreateBudget, onR
     if (request.status === "novo") setStatus(request, "respondido");
   }
 
+  // O pedido só vira "convertido" quando o orçamento for salvo (se fechar sem salvar, ele continua aqui)
   function createBudget(request) {
     onCreateBudget(request);
-    setStatus(request, "convertido");
   }
 
   const visible = requests.filter((request) => (showArchived ? true : !["arquivado", "convertido"].includes(request.status)));
