@@ -1,4 +1,4 @@
-import jsPDF from "jspdf";
+import { createPdf } from "./pdfSafeText";
 import {
   formatCurrency,
   formatDateBR,
@@ -1182,7 +1182,7 @@ function prepareBudgetPdfData(record, settings = {}) {
   const normalizedPackageName = String(packageName || "").replace(/\s+/g, " ").trim().toLowerCase();
   const normalizedEventType = String(eventType || "").replace(/\s+/g, " ").trim().toLowerCase();
   const shouldShowPackageCard = normalizedPackageName && normalizedPackageName !== normalizedEventType;
-  const fullWorkLines = splitTextIntoBudgetParagraphLines(new jsPDF(), workDescription, 174);
+  const fullWorkLines = splitTextIntoBudgetParagraphLines(createPdf(), workDescription, 174);
   const firstPageWorkLineLimit = fullWorkLines.length > 16 ? 16 : fullWorkLines.length;
   const displayWorkLines = fullWorkLines.slice(0, firstPageWorkLineLimit);
   const remainingWorkLines = fullWorkLines.slice(firstPageWorkLineLimit);
@@ -2024,7 +2024,7 @@ function _renderBudgetSingleItemPremiumFlow(doc, cursor, budgetData, settings, s
 }
 
 export function generateBudgetPDF(record, settings = {}) {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const budgetData = prepareBudgetPdfData(record, settings);
   const cursor = { value: 18 };
   drawDocumentHeader(doc, settings, "PROPOSTA COMERCIAL");
@@ -2046,7 +2046,7 @@ export function generateBudgetPDF(record, settings = {}) {
 }
 
 export function generateEventPDF(record, settings = {}) {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const studioName = drawDocumentHeader(doc, settings, "CONFIRMAÇÃO DE AGENDAMENTO");
   const clientName = record.clientName || "Cliente não informado";
   const eventType = record.eventType || record.packageName || "Serviço não informado";
@@ -2204,7 +2204,7 @@ export function generateEventPDF(record, settings = {}) {
 }
 
 export function generateContractPDF(record, settings = {}, previewText = "") {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const studioName = drawDocumentHeader(doc, settings, "CONTRATO DE PRESTAÇÃO DE SERVIÇOS");
   const clientName = record.clientName || "Cliente não informado";
   const contractCity = toContractCityTitleCase(settings.contractCity || settings.studioCity || settings.contractForum);
@@ -2257,7 +2257,7 @@ export function generateContractPDF(record, settings = {}, previewText = "") {
 }
 
 export function generateReceiptPDF(record, settings = {}) {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const studioName = drawDocumentHeader(doc, settings, "RECIBO DE PAGAMENTO");
   const clientName = record.clientName || "Cliente não informado";
   const receiptMethod = hasPdfFieldValue(record.receiptMethod) ? String(record.receiptMethod).trim() : "";

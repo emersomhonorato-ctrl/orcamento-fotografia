@@ -1,4 +1,4 @@
-import jsPDF from "jspdf";
+import { createPdf, pdfSafe } from "./pdfSafeText";
 import { formatCurrency, formatDateBR, getItemsTotal, getTodayLocalISO, normalizeItems } from "./formatters";
 
 // ---------------------------------------------------------------------------
@@ -599,7 +599,7 @@ function buildBudgetItems(record) {
 }
 
 export function generateBudgetPDF(record = {}, settings = {}) {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const subtitle = "Proposta comercial";
   const studioName = drawPdfHeader(doc, settings, subtitle);
   const layout = createLayout(doc, settings, subtitle);
@@ -672,9 +672,18 @@ export function generateBudgetPDF(record = {}, settings = {}) {
     has(record.photoSize) ? `tamanho ${clean(record.photoSize)}` : "",
   ].filter(Boolean).join(" • ");
 
-  // Investimento
+  // Investimento: se a descrição do item já aparece em "O que está incluso", não repete na tabela
+  const comparable = (value) => pdfSafe(clean(value)).toLowerCase().replace(/[^a-z0-9à-ü]+/g, "");
+  const scopeKey = comparable(scope);
+  const descriptionKey = comparable(description);
+  const tableItems = items.map((item) => {
+    const key = comparable(item.description);
+    return key && (key === scopeKey || key === descriptionKey || (scopeKey && scopeKey.includes(key)))
+      ? { ...item, description: "" }
+      : item;
+  });
   sectionTitle(doc, layout, "Investimento");
-  itemsTable(doc, layout, items);
+  itemsTable(doc, layout, tableItems);
 
   // Condições (esquerda) + total (direita), lado a lado para economizar página
   const paymentTerms = clean(record.contractPaymentMethod || settings.paymentTerms);
@@ -689,7 +698,8 @@ export function generateBudgetPDF(record = {}, settings = {}) {
   const zoneTop = layout.state.y;
   const boxHeight = totalBox(doc, layout, "Investimento total", formatCurrency(total), "", { advance: false });
   layout.state.y = zoneTop + boxHeight + 8;
-  signatureBlock(doc, layout, settings, clean(settings.studioResponsible) || studioName, studioName, {
+  const signerName = clean(settings.studioResponsible) || studioName;
+  signatureBlock(doc, layout, settings, signerName, signerName === studioName ? "" : studioName, {
     compact: true,
     x: PAGE.width - PAGE.marginX - 82,
     width: 82,
@@ -722,7 +732,7 @@ export function generateBudgetPDF(record = {}, settings = {}) {
 // ---------------------------------------------------------------------------
 
 export function generateReceiptPDF(record = {}, settings = {}) {
-  const doc = new jsPDF();
+  const doc = createPdf();
   const subtitle = "Recibo de pagamento";
   const studioName = drawPdfHeader(doc, settings, subtitle);
   const layout = createLayout(doc, settings, subtitle);
@@ -795,7 +805,8 @@ export function generateReceiptPDF(record = {}, settings = {}) {
   doc.text(`${city ? `${city}, ` : ""}${formatDateBR(receiptISO)}.`, PAGE.width / 2, layout.state.y, { align: "center" });
   layout.state.y += 8;
   const studioDoc = has(settings.studioDocument) ? `CPF/CNPJ ${formatTaxId(settings.studioDocument)}` : "";
-  signatureBlock(doc, layout, settings, clean(settings.studioResponsible) || studioName, studioName, { documentLine: studioDoc });
+  const signerName = clean(settings.studioResponsible) || studioName;
+  signatureBlock(doc, layout, settings, signerName, signerName === studioName ? "" : studioName, { documentLine: studioDoc });
 
   drawPdfFooters(doc, settings, `Recibo ${number}`);
   doc.save(`recibo-${sanitizeFilePart(clientName, "cliente")}.pdf`);

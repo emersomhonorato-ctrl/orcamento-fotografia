@@ -1,4 +1,4 @@
-import jsPDF from "jspdf";
+import { createPdf } from "./pdfSafeText";
 import { addPdfImageFit } from "./pdfDocuments";
 import { photographerLabel } from "../lib/team";
 
@@ -82,7 +82,7 @@ function footer(doc, page, total) {
 }
 
 export function buildMonthCalendarPdf({ events, year, month, settings = {}, includeValues = false, includePhones = false, forWho = "" }) {
-  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const doc = createPdf({ orientation: "landscape", unit: "mm", format: "a4" });
   const list = eventsOfMonth(events, year, month);
   const title = monthTitle(year, month);
   const subtitle = `${forWho ? `${forWho} • ` : ""}${list.length} compromisso${list.length === 1 ? "" : "s"}`;
