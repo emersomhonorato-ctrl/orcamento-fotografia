@@ -68,6 +68,19 @@ export default function PublicBudgetRequestForm() {
     }
   });
   const [form, setForm] = useState(() => ({ ...emptyForm, how_found: referralCode ? "Indicação" : "" }));
+  const [referrer, setReferrer] = useState(null); // { first_name, discount }
+
+  // Link de indicação: mostra quem indicou e o desconto que a pessoa ganha
+  useEffect(() => {
+    if (!referralCode) return undefined;
+    let active = true;
+    supabase.rpc("referral_lookup", { p_code: referralCode }).then(({ data }) => {
+      if (active && data?.ok) setReferrer(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [referralCode]);
   const [consent, setConsent] = useState({ privacy: false, marketing: false });
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
   const [errorMessage, setErrorMessage] = useState("");
@@ -148,7 +161,7 @@ export default function PublicBudgetRequestForm() {
       people: form.people.trim().slice(0, 60) || null,
       details: form.details.trim().slice(0, 2000) || null,
       how_found: form.how_found || null,
-      referred_by: form.how_found === "Indicação" && !referralCode ? form.referred_by.trim().slice(0, 120) || null : null,
+      referred_by: referralCode ? referrer?.first_name || null : form.how_found === "Indicação" ? form.referred_by.trim().slice(0, 120) || null : null,
       ...(referralCode ? { referral_code: referralCode } : {}),
     };
 
@@ -176,11 +189,22 @@ export default function PublicBudgetRequestForm() {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-2xl">✓</div>
               <h2 className="mt-4 text-xl font-semibold">Pedido enviado!</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Obrigado, {form.name.trim().split(" ")[0] || "tudo certo"}! Recebi suas informações e vou te responder pelo WhatsApp com o orçamento o quanto antes.
+                Obrigado, {form.name.trim().split(" ")[0] || "tudo certo"}! Recebi suas informações e vou te responder pelo WhatsApp com o orçamento o quanto antes.{referrer ? ` Seu desconto de ${referrer.discount || 10}% por indicação já está garantido. 🎁` : ""}
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {referrer ? (
+                <div className="rounded-2xl border border-[#c4a050]/40 bg-[#fbf6ea] px-4 py-4 text-center">
+                  <p className="text-2xl" aria-hidden="true">🎁</p>
+                  <p className="mt-1 text-base font-semibold text-[#171b26]">
+                    {referrer.first_name} te indicou!
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-700">
+                    Por vir com indicação, você ganha <strong>{referrer.discount || 10}% de desconto</strong> no seu ensaio. É só preencher o pedido abaixo: o desconto já vai aplicado no seu orçamento.
+                  </p>
+                </div>
+              ) : null}
               <p className="text-sm leading-6 text-slate-600">
                 Conte um pouco sobre o que você precisa. Leva menos de 2 minutos, e eu te respondo pelo WhatsApp.
               </p>
@@ -253,7 +277,7 @@ export default function PublicBudgetRequestForm() {
                 <textarea className={`${inputClass} min-h-[120px] resize-y`} value={form.details} onChange={update("details")} maxLength={2000} />
               </Field>
 
-              {referralCode ? (
+              {referralCode && !referrer ? (
                 <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">🎁 Você veio por indicação (código <strong>{referralCode}</strong>). Obrigado!</p>
               ) : null}
               <Field label="Como conheceu meu trabalho?">

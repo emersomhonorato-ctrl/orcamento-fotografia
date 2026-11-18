@@ -81,6 +81,7 @@ export default function BudgetItemsEditor({
                     <SelectContent>
                       <SelectItem value="Serviço">Serviço</SelectItem>
                       <SelectItem value="Produto">Produto</SelectItem>
+                      <SelectItem value="Desconto">Desconto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
