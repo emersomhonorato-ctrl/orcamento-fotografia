@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Gift, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
+import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Gift, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp, Menu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,9 @@ import DuesAndBirthdays from "@/components/DuesAndBirthdays";
 import PaymentLinkDialog from "@/components/PaymentLinkDialog";
 import FollowUpsPanel from "@/components/FollowUpsPanel";
 import ReferralLinkDialog from "@/components/ReferralLinkDialog";
+import SideNav, { NAV_LABELS } from "@/components/SideNav";
+import useBudgetRequestStats from "@/hooks/useBudgetRequestStats";
+import { HomeHeader, SalesFunnel, TodayStrip } from "@/components/HomeOverview";
 import RecontactPanel from "@/components/RecontactPanel";
 import RevenueChart from "@/components/RevenueChart";
 import ContractSignPanel from "@/components/ContractSignPanel";
@@ -237,32 +240,6 @@ function getMonthKeyFromDate(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-const MAIN_TABS = [
-  ["dashboard", "Dashboard"],
-  ["agenda", "Agenda"],
-  ["financeiro", "Financeiro"],
-  ["contas", "Contas a pagar"],
-  ["orcamentos", "Orçamentos"],
-  ["clientes", "Clientes"],
-  ["natal", "Ensaios"],
-  ["selecao", "Seleção"],
-  ["entregas", "Entregas"],
-];
-const MORE_TABS = [
-  ["cobrancas", "Cobranças"],
-  ["contratos", "Contratos"],
-  ["whatsapp", "WhatsApp"],
-  ["realizados", "Realizados"],
-  ["hds", "HDs"],
-  ["am", "Planilhas AM"],
-  ["carrossel", "Carrossel Álbum"],
-  ["mensal", "Mês a mês"],
-  ["servicos", "Serviços"],
-  ["configuracoes", "Configurações"],
-  ["cancelados", "Cancelados"],
-  ["ajuda", "Ajuda"],
-];
-
 export default function App() {
   const [appState, setAppState] = useState(readLocalAppState);
   const [session, setSession] = useState(null);
@@ -303,16 +280,25 @@ export default function App() {
       return "dashboard";
     }
   });
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreMenuRef = useRef(null);
-  useEffect(() => {
-    if (!moreOpen) return undefined;
-    const close = (event) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) setMoreOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [moreOpen]);
+  // Menu lateral: recolhido (só ícones) fica lembrado neste computador; no celular abre como gaveta
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("menu-recolhido") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  function toggleNavCollapsed() {
+    setNavCollapsed((current) => {
+      try {
+        localStorage.setItem("menu-recolhido", current ? "0" : "1");
+      } catch {
+        // sem armazenamento: só não lembra
+      }
+      return !current;
+    });
+  }
   const [selectedContractId, setSelectedContractId] = useState("");
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -935,6 +921,41 @@ export default function App() {
   }, [activeBudgets, canceledBudgets.length, onlyEvents, settings.budgetValidityDays]);
 
   // "Para fazer hoje": propostas vencendo (até 2 dias antes ou 3 dias depois) e restante a cobrar até 7 dias antes do ensaio
+  const requestStats = useBudgetRequestStats(hasHydratedRemote && isAuthorized, budgetRequestsVersion);
+
+  // Números do menu: pedidos novos e trabalhos já realizados com saldo em aberto
+  const navBadges = useMemo(() => {
+    const today = getTodayLocalISO();
+    const atrasados = onlyEvents.filter(
+      (record) => record.status !== "Cancelado" && record.eventDate && record.eventDate < today && Number(record.computedAmount || record.amount || 0) - Number(record.amountPaid || 0) >= 1,
+    ).length;
+    const badges = {};
+    if (requestStats.novos) badges.orcamentos = { valor: requestStats.novos };
+    if (atrasados) badges.cobrancas = { valor: atrasados, tom: "alerta" };
+    return badges;
+  }, [onlyEvents, requestStats.novos]);
+
+  // Início: números do quadro "Hoje" e do funil do mês escolhido
+  const homeData = useMemo(() => {
+    const today = getTodayLocalISO();
+    const limit = new Date(`${today}T12:00:00`);
+    limit.setDate(limit.getDate() + 7);
+    const limitISO = `${limit.getFullYear()}-${String(limit.getMonth() + 1).padStart(2, "0")}-${String(limit.getDate()).padStart(2, "0")}`;
+    const ativos = onlyEvents.filter((record) => record.status !== "Cancelado" && record.eventDate);
+    const mesLocal = (iso) => {
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+    const todos = appState.events || [];
+    return {
+      ensaiosHoje: ativos.filter((record) => record.eventDate === today).length,
+      ensaiosSemana: ativos.filter((record) => record.eventDate >= today && record.eventDate <= limitISO).length,
+      pedidosMes: requestStats.datas.filter((iso) => mesLocal(iso) === selectedMonth).length,
+      orcamentosMes: todos.filter((record) => (record.recordType === "orcamento" || record.convertedFromBudget) && mesLocal(record.createdAt) === selectedMonth).length,
+      fechadosMes: todos.filter((record) => record.convertedFromBudget && mesLocal(record.budgetApprovedAt) === selectedMonth).length,
+    };
+  }, [appState.events, onlyEvents, requestStats.datas, selectedMonth]);
+
   const followUps = useMemo(() => {
     const budgets = activeBudgets
       .filter((record) => ["Pendente", "Em negociação"].includes(record.status))
@@ -1067,6 +1088,11 @@ export default function App() {
       .filter((payment) => String(payment.date || record.eventDate || "").slice(0, 7) === selectedMonth)
       .reduce((acc, payment) => acc + Number(payment.amount || 0), 0), 0);
     // Saldo em aberto de todos os trabalhos não cancelados
+    const prevDate = new Date(selectedYear, selectedMonthNumber - 2, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+    const receivedPrev = onlyEvents.reduce((sum, record) => sum + historyOf(record)
+      .filter((payment) => String(payment.date || record.eventDate || "").slice(0, 7) === prevMonth)
+      .reduce((acc, payment) => acc + Number(payment.amount || 0), 0), 0);
     const pending = onlyEvents
       .filter((record) => record.status !== "Cancelado")
       .reduce((sum, record) => sum + Math.max(Number(record.computedAmount || record.amount || 0) - Number(record.amountPaid || 0), 0), 0);
@@ -1091,6 +1117,7 @@ export default function App() {
       confirmedEvents: onlyEvents.filter((record) => ["Confirmado", "Concluído"].includes(record.status)).length,
       totalRevenue,
       received,
+      receivedPrev,
       pending,
       expensesTotal,
       expensesPaid,
@@ -2924,8 +2951,27 @@ export default function App() {
   }
 
   return (
-    <div className="studio-shell min-h-screen text-slate-900" data-theme-color={settings.themeColor || "classico"}>
-      <div className="mx-auto w-full max-w-[1480px] p-4 md:p-8 2xl:px-10">
+    <div className="studio-shell min-h-screen text-slate-900 md:flex" data-theme-color={settings.themeColor || "classico"}>
+      <SideNav
+        active={activeTab}
+        onChange={(value) => {
+          setActiveTab(value);
+          window.scrollTo({ top: 0 });
+        }}
+        badges={navBadges}
+        collapsed={navCollapsed}
+        onToggleCollapsed={toggleNavCollapsed}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+      <div className="mx-auto w-full min-w-0 max-w-[1480px] flex-1 p-4 md:p-8 2xl:px-10">
+        <div className="-mx-4 -mt-4 mb-4 flex items-center gap-3 bg-[#171b26] px-4 py-3 text-white md:hidden print:hidden">
+          <button type="button" onClick={() => setMobileNavOpen(true)} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="Abrir menu">
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="font-semibold">{NAV_LABELS[activeTab] || "Estúdio"}</span>
+          {Object.keys(navBadges).length ? <span className="ml-auto h-2 w-2 rounded-full bg-[#e2556b]" aria-hidden="true" /> : null}
+        </div>
         {syncConflict ? (
           <div className="mb-6 rounded-[28px] border border-red-200 bg-red-50 p-5 shadow-sm">
             <p className="font-semibold text-red-900">⚠️ Os dados foram alterados em outro aparelho</p>
@@ -2966,42 +3012,6 @@ export default function App() {
 
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <div className="relative flex items-end border-b border-stone-200">
-          <TabsList className="studio-nav flex h-auto min-w-0 flex-1 justify-start gap-0 overflow-x-auto rounded-none border-0 bg-transparent p-0 [scrollbar-width:none] [&>button]:shrink-0">
-            {MAIN_TABS.map(([value, label]) => (
-              <TabsTrigger key={value} value={value} className="studio-nav-tab">{label}</TabsTrigger>
-            ))}
-          </TabsList>
-          <div className="relative shrink-0" ref={moreMenuRef}>
-            <button
-              type="button"
-              onClick={() => setMoreOpen((current) => !current)}
-              data-active={MORE_TABS.some(([value]) => value === activeTab) ? "" : undefined}
-              className="studio-nav-tab inline-flex items-center gap-1"
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-            >
-              {MORE_TABS.find(([value]) => value === activeTab)?.[1] || "Mais"}
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-            {moreOpen ? (
-              <div role="menu" className="absolute right-0 top-full z-40 mt-1 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
-                {MORE_TABS.map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setActiveTab(value); setMoreOpen(false); }}
-                    className={`block w-full px-4 py-2 text-left text-sm hover:bg-stone-50 ${activeTab === value ? "font-semibold text-stone-900" : "text-stone-600"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          </div>
-
           {SEARCH_TABS.includes(activeTab) ? (
           <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex h-11 flex-1 items-center gap-3 rounded-xl border border-stone-200 bg-white px-4">
@@ -3066,8 +3076,25 @@ export default function App() {
 
           <TabsContent value="dashboard" className="mt-6">
             <div className="space-y-6">
-          <SafeSection name="Próximos 7 dias">
-            <WeekAgenda events={onlyEvents} onOpen={editEvent} onWhatsApp={(record, dayIndex) => sendWhatsApp(record, dayIndex === 0 ? "lembrete_hoje" : "lembrete")} />
+          <SafeSection name="Início">
+            <HomeHeader
+              nome={userFirstName}
+              ensaiosSemana={homeData.ensaiosSemana}
+              onNewBudget={() => openNewBudgetModal()}
+              onNewEvent={() => openNewEventModal()}
+              onCobrancas={() => setActiveTab("cobrancas")}
+            />
+          </SafeSection>
+          <SafeSection name="Hoje">
+            <TodayStrip
+              ensaiosHoje={homeData.ensaiosHoje}
+              propostas={followUps.budgets.length}
+              restante={followUps.events.reduce((sum, record) => sum + Number(record.balance || 0), 0)}
+              pedidosNovos={requestStats.novos}
+              onAgenda={() => setActiveTab("agenda")}
+              onPedidos={() => setActiveTab("orcamentos")}
+              onParaFazer={() => document.getElementById("para-fazer")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            />
           </SafeSection>
           <section>
             <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -3089,15 +3116,16 @@ export default function App() {
                 className="ml-auto hidden h-9 rounded-lg border border-stone-200 bg-white px-3 text-sm text-stone-600 sm:block"
               />
             </div>
-            <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-stone-200 bg-white md:grid-cols-4 [&>*]:border-stone-100">
-              <MetricCard title="Faturamento do mês" value={formatCurrency(metrics.totalRevenue)} subtitle={`trabalhos de ${monthLabel}`} icon={Wallet} />
-              <MetricCard title="Entrou no mês" value={formatCurrency(metrics.received)} subtitle="pagamentos recebidos" icon={CheckCircle2} />
-              <MetricCard title="Contas do mês" value={formatCurrency(metrics.expensesTotal)} subtitle={`${formatCurrency(metrics.expensesPaid)} já pagas`} icon={Receipt} tone="expense" />
-              <MetricCard title="Lucro do mês" value={formatCurrency(metrics.profit)} subtitle={`entrou − contas pagas • previsto ${formatCurrency(metrics.expectedProfit)}`} icon={TrendingUp} tone={metrics.profit < 0 ? "negative" : "positive"} />
+            <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-stone-200 bg-white lg:grid-cols-4 [&>*]:border-stone-100">
+              <MetricCard title="Faturamento do mês" value={formatCurrency(metrics.totalRevenue)} subtitle={`${metrics.monthEvents} trabalhos • ${metrics.openBudgets} orçamentos abertos`} icon={Wallet} />
+              <MetricCard
+                title="Entrou no mês"
+                value={formatCurrency(metrics.received)}
+                subtitle={metrics.receivedPrev > 0 ? `${metrics.received >= metrics.receivedPrev ? "▲" : "▼"} ${Math.abs(Math.round(((metrics.received - metrics.receivedPrev) / metrics.receivedPrev) * 100))}% vs mês anterior` : "pagamentos recebidos"}
+                icon={CheckCircle2}
+              />
+              <MetricCard title="Lucro do mês" value={formatCurrency(metrics.profit)} subtitle={`contas ${formatCurrency(metrics.expensesTotal)} • previsto ${formatCurrency(metrics.expectedProfit)}`} icon={TrendingUp} tone={metrics.profit < 0 ? "negative" : "positive"} />
               <MetricCard title="A receber" value={formatCurrency(metrics.pending)} subtitle="saldo em aberto (todos os meses)" icon={AlertTriangle} tone="pending" />
-              <MetricCard title="Eventos do mês" value={metrics.monthEvents} subtitle={monthLabel} icon={Clock3} />
-              <MetricCard title="Eventos ativos" value={metrics.totalEvents} subtitle="na agenda" icon={CalendarDays} />
-              <MetricCard title="Orçamentos abertos" value={metrics.openBudgets} subtitle="em andamento" icon={FileText} />
             </div>
             <MonthGoalBar
               monthLabel={monthLabel}
@@ -3106,12 +3134,27 @@ export default function App() {
               onSave={(monthlyGoal) => updateAppState({ settings: { ...settings, monthlyGoal } })}
             />
           </section>
-          <SafeSection name="Para fazer hoje">
-            <FollowUpsPanel budgets={followUps.budgets} events={followUps.events} onOpen={editEvent} onPaymentLink={setPaymentLinkFor} />
-          </SafeSection>
-          <SafeSection name="Cobranças e aniversários">
-            <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} onPaymentLink={setPaymentLinkFor} />
-          </SafeSection>
+          <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+            <SafeSection name="Próximos 7 dias">
+              <WeekAgenda events={onlyEvents} onOpen={editEvent} onWhatsApp={(record, dayIndex) => sendWhatsApp(record, dayIndex === 0 ? "lembrete_hoje" : "lembrete")} />
+            </SafeSection>
+            <div id="para-fazer" className="scroll-mt-6 space-y-6">
+              <SafeSection name="Para fazer hoje">
+                <FollowUpsPanel budgets={followUps.budgets} events={followUps.events} onOpen={editEvent} onPaymentLink={setPaymentLinkFor} />
+              </SafeSection>
+              <SafeSection name="Cobranças e aniversários">
+                <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} onPaymentLink={setPaymentLinkFor} />
+              </SafeSection>
+            </div>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr] xl:items-start">
+            <SafeSection name="Faturamento">
+              <RevenueChart records={enrichedRecords} />
+            </SafeSection>
+            <SafeSection name="Funil de orçamentos">
+              <SalesFunnel monthLabel={monthLabel} pedidos={homeData.pedidosMes} orcamentos={homeData.orcamentosMes} fechados={homeData.fechadosMes} />
+            </SafeSection>
+          </div>
           <SafeSection name="Clientes para chamar de novo">
             <RecontactPanel
               clients={uniqueClientsFromEvents}
@@ -3122,9 +3165,6 @@ export default function App() {
           </SafeSection>
           <SafeSection name="Painel do Natal">
             <ChristmasDashboard onOpenBookings={() => setActiveTab("natal")} />
-          </SafeSection>
-          <SafeSection name="Faturamento">
-            <RevenueChart records={enrichedRecords} />
           </SafeSection>
               <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
                 <div className="overflow-hidden rounded-[34px] border border-rose-200/70 bg-gradient-to-br from-[#fff8fa] via-white to-[#fff4f7] p-6 shadow-[0_28px_70px_rgba(99,32,67,0.14)]">
