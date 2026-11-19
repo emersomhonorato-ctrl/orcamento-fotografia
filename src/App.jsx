@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Gift, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,8 @@ import {
 import { openExternal } from "@/lib/openExternal";
 import HdControlPanel from "@/components/HdControlPanel";
 import AmReportsPanel from "@/components/AmReportsPanel";
+// Carrossel Álbum carrega só quando a aba é aberta (é pesado)
+const CarrosselAlbumPanel = lazy(() => import("@/components/CarrosselAlbumPanel"));
 
 const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
@@ -253,6 +255,7 @@ const MORE_TABS = [
   ["realizados", "Realizados"],
   ["hds", "HDs"],
   ["am", "Planilhas AM"],
+  ["carrossel", "Carrossel Álbum"],
   ["mensal", "Mês a mês"],
   ["servicos", "Serviços"],
   ["configuracoes", "Configurações"],
@@ -3424,6 +3427,14 @@ export default function App() {
                   });
                 }}
               />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="carrossel" className="mt-6">
+            <SafeSection name="Carrossel Álbum">
+              <Suspense fallback={<p className="py-10 text-center text-sm text-stone-500">Abrindo o Carrossel Álbum…</p>}>
+                <CarrosselAlbumPanel />
+              </Suspense>
             </SafeSection>
           </TabsContent>
 
