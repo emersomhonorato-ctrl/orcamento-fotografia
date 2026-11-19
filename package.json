@@ -19,6 +19,7 @@
     "framer-motion": "^12.38.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.7.0",
+    "pica": "^10.0.3",
     "qrcode-generator": "^1.4.4",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
