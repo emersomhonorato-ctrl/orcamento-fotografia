@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Download, FolderOpen, Images, RotateCcw, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ASSINATURA, criarProjeto, criarProjetoCapa, trocarFoto } from "@/lib/carrossel/layout";
+import { ASSINATURA, criarProjeto, criarProjetoCapa, MODELOS, modelosPossiveis, mudarModelo, trocarFoto } from "@/lib/carrossel/layout";
 import { lerFotos, liberarFotos, EXT_MUSICA, EXT_VIDEO } from "@/lib/carrossel/photos";
 import { ALTURA_REELS, baixarZip, renderizar, SEM_SERIFA, SERIFA } from "@/lib/carrossel/render";
 
@@ -88,7 +88,7 @@ function Texto({ k, y, children, serifa, tamanho, espaco = 0, cor = "#262626" })
   );
 }
 
-function Pagina({ p, projeto, porNome, largPag, rotulo, sel, setSel, onMudou }) {
+function Pagina({ p, projeto, porNome, largPag, rotulo, sel, setSel, onMudou, modelos, onModelo }) {
   const M = projeto.medidas;
   const dupla = p.tipo === "panoramica";
   const k = largPag / M.largura;
@@ -114,7 +114,20 @@ function Pagina({ p, projeto, porNome, largPag, rotulo, sel, setSel, onMudou }) 
         ) : null}
         {p.marca ? <Texto k={k} y={M.altura - M.margem / 2 - 8} tamanho={15} espaco={4} cor="#96928c">{ASSINATURA}</Texto> : null}
       </div>
-      <span className="text-[11px] tracking-wide text-stone-500">{rotulo}</span>
+      <div className="flex items-center justify-between gap-2" style={{ width: (dupla ? 2 : 1) * largPag }}>
+        <span className="text-[11px] tracking-wide text-stone-500">{rotulo}</span>
+        {p.tipo === "fotos" && modelos?.length > 1 ? (
+          <select
+            value={p.modelo || ""}
+            onChange={(e) => onModelo(p, e.target.value)}
+            title="Trocar o modelo desta página"
+            className="max-w-[60%] truncate rounded-md border border-stone-300 bg-white px-1.5 py-0.5 text-[11px] text-stone-700"
+          >
+            {!p.modelo ? <option value="">modelo…</option> : null}
+            {modelos.map((m) => <option key={m} value={m}>{MODELOS[m].nome}</option>)}
+          </select>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -306,7 +319,24 @@ export default function CarrosselAlbumPanel() {
         <h3 className="mb-3 text-xs uppercase tracking-[0.16em] text-stone-500">{projeto.modo === "capa" ? "Capa" : "Carrossel"}</h3>
         <div className="flex flex-wrap items-start gap-x-4 gap-y-5">
           {projeto.paginas.map((p, i) => (
-            <Pagina key={i} p={p} projeto={projeto} porNome={porNome} largPag={largPag} rotulo={rotulos[i]} sel={sel} setSel={setSel} onMudou={redesenhar} />
+            <Pagina
+              key={i}
+              p={p}
+              projeto={projeto}
+              porNome={porNome}
+              largPag={largPag}
+              rotulo={rotulos[i]}
+              sel={sel}
+              setSel={setSel}
+              onMudou={redesenhar}
+              modelos={p.tipo === "fotos" ? modelosPossiveis(p, fotos, usadas) : null}
+              onModelo={(pagina, modelo) => {
+                if (mudarModelo(pagina, modelo, fotos, usadas)) {
+                  setSel(null);
+                  redesenhar();
+                }
+              }}
+            />
           ))}
         </div>
         {projeto.paginas[0]?.tipo === "capa" ? (
