@@ -1,5 +1,6 @@
 // Desenho das páginas em alta (1080 px) e o pacote .zip para baixar
 import { zipSync } from "fflate";
+import Pica from "pica";
 import { ASSINATURA, FUNDO, LARGURA, MARGEM, TEXTO, TEXTO_SUAVE } from "./layout";
 
 export const SERIFA = '"Didot", "Bodoni 72", "Bodoni Moda", "Baskerville", Georgia, serif';
@@ -14,6 +15,12 @@ function abrir(url) {
   });
 }
 
+// Redução de alta qualidade (Lanczos, como no programa do Mac) + nitidez leve para tela.
+// Não usa o redutor do navegador ("cib"), que deixa a foto mais mole.
+let pica = null;
+const redutor = () => (pica ||= new Pica({ features: ["js", "wasm", "ww"] }));
+export const NITIDEZ = { filter: "lanczos3", unsharpAmount: 80, unsharpRadius: 0.6, unsharpThreshold: 2 };
+
 // Mesma conta da tela: preenche a moldura, aplica o zoom e posiciona o corte
 export async function desenharSlot(ctx, foto, s, dx = 0) {
   const [x, y, w, h] = s.caixa;
@@ -23,12 +30,21 @@ export async function desenharSlot(ctx, foto, s, dx = 0) {
   const esc = Math.max(w / iw, h / ih) * Math.max(1, s.zoom || 1);
   const dw = Math.max(w, Math.round(iw * esc));
   const dh = Math.max(h, Math.round(ih * esc));
-  // reduz a foto já no tamanho certo (fica mais nítido que reduzir no desenho)
-  const bmp = await createImageBitmap(img, { resizeWidth: dw, resizeHeight: dh, resizeQuality: "high" });
-  const sx = Math.min(1, Math.max(0, s.ox ?? 0.5)) * (dw - w);
-  const sy = Math.min(1, Math.max(0, s.oy ?? 0.5)) * (dh - h);
-  ctx.drawImage(bmp, sx, sy, w, h, x + dx, y, w, h);
-  bmp.close();
+  const sx = Math.round(Math.min(1, Math.max(0, s.ox ?? 0.5)) * (dw - w));
+  const sy = Math.round(Math.min(1, Math.max(0, s.oy ?? 0.5)) * (dh - h));
+  const reduzida = document.createElement("canvas");
+  reduzida.width = dw;
+  reduzida.height = dh;
+  if (esc < 1) {
+    await redutor().resize(img, reduzida, NITIDEZ);
+  } else {
+    // foto menor que a moldura (ou zoom grande): amplia sem inventar nitidez
+    const c = reduzida.getContext("2d");
+    c.imageSmoothingQuality = "high";
+    c.drawImage(img, 0, 0, dw, dh);
+  }
+  ctx.drawImage(reduzida, sx, sy, w, h, x + dx, y, w, h);
+  reduzida.width = 0;
 }
 
 export function escreverEspacado(ctx, centroX, y, texto, fonte, cor, espaco) {
@@ -82,7 +98,7 @@ export function encerramento(ctx, cliente, altura) {
 
 export const ALTURA_REELS = 1920;
 
-const paraJpg = (canvas) => new Promise((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.95));
+const paraJpg = (canvas) => new Promise((r) => canvas.toBlob((b) => r(b), "image/jpeg", 0.97));
 
 // Gera todas as páginas: [{ nome: "01.jpg", blob }]
 export async function renderizar(projeto, fotos, aoProgredir) {
