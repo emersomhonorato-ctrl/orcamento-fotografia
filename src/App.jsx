@@ -35,7 +35,7 @@ import MonthGoalBar from "@/components/MonthGoalBar";
 import WeekAgenda from "@/components/WeekAgenda";
 import HelpGuide from "@/components/HelpGuide";
 import ChristmasDashboard from "@/components/ChristmasDashboard";
-import DuesAndBirthdays from "@/components/DuesAndBirthdays";
+import DuesAndBirthdays, { isAmRecord } from "@/components/DuesAndBirthdays";
 import PaymentLinkDialog from "@/components/PaymentLinkDialog";
 import FollowUpsPanel from "@/components/FollowUpsPanel";
 import ReferralLinkDialog from "@/components/ReferralLinkDialog";
@@ -930,9 +930,8 @@ export default function App() {
   // Números do menu: pedidos novos e trabalhos já realizados com saldo em aberto
   const navBadges = useMemo(() => {
     const today = getTodayLocalISO();
-    const atrasados = onlyEvents.filter(
-      (record) => record.status !== "Cancelado" && record.eventDate && record.eventDate < today && Number(record.computedAmount || record.amount || 0) - Number(record.amountPaid || 0) >= 1,
-    ).length;
+    // mesma conta do quadro de Cobranças: trabalho já feito e saldo em aberto
+    const atrasados = onlyEvents.filter((record) => record.status !== "Cancelado" && !isAmRecord(record) && record.eventDate && record.eventDate < today && Number(record.balance || 0) >= 1).length;
     const badges = {};
     if (requestStats.novos) badges.orcamentos = { valor: requestStats.novos };
     if (atrasados) badges.cobrancas = { valor: atrasados, tom: "alerta" };
@@ -967,7 +966,7 @@ export default function App() {
       .filter(({ info }) => info.daysLeft !== null && info.daysLeft >= -3 && info.daysLeft <= 2)
       .sort((a, b) => a.info.daysLeft - b.info.daysLeft);
     const events = onlyEvents
-      .filter((record) => record.status !== "Cancelado" && Number(record.balance || 0) >= 1 && record.eventDate && record.daysLeft !== null && record.daysLeft >= 0 && record.daysLeft <= 7)
+      .filter((record) => record.status !== "Cancelado" && !isAmRecord(record) && Number(record.balance || 0) >= 1 && record.eventDate && record.daysLeft !== null && record.daysLeft >= 0 && record.daysLeft <= 7)
       .sort((a, b) => a.daysLeft - b.daysLeft);
     return { budgets, events };
   }, [activeBudgets, onlyEvents, settings.budgetValidityDays]);
@@ -3515,9 +3514,14 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="cobrancas" className="mt-6">
-            <SafeSection name="Cobranças">
-              <PaymentsAdmin records={records} />
-            </SafeSection>
+            <div className="space-y-6">
+              <SafeSection name="Quem está devendo">
+                <DuesAndBirthdays events={onlyEvents} clients={appState.clients || []} onOpen={editEvent} onCharge={(record) => sendWhatsApp(record, "cobranca")} onPaymentLink={setPaymentLinkFor} startExpanded />
+              </SafeSection>
+              <SafeSection name="Links de pagamento">
+                <PaymentsAdmin records={records} />
+              </SafeSection>
+            </div>
           </TabsContent>
 
           <TabsContent value="realizados" className="mt-6">
