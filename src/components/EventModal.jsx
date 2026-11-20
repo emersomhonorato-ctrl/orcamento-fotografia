@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/utils/formatters";
 import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
+import ClientPicker from "@/components/ClientPicker";
 
 export default function EventModal({
   open,
@@ -123,19 +124,7 @@ export default function EventModal({
           </div>
           <div className="space-y-2">
             <Label>Cliente cadastrado</Label>
-            <Select value={form.clientId || "__none__"} onValueChange={(value) => onApplyClient(value === "__none__" ? "" : value)}>
-              <SelectTrigger className="rounded-2xl">
-                <SelectValue placeholder="Selecionar cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Selecionar cliente</SelectItem>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ClientPicker clients={clients} value={form.clientId || ""} onChange={onApplyClient} />
             {matchedClient ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 <div className="flex flex-wrap items-center gap-2">
@@ -156,7 +145,9 @@ export default function EventModal({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Selecionar trabalho</SelectItem>
-                {services.map((service) => (
+                {[...services]
+                  .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" }))
+                  .map((service) => (
                   <SelectItem key={service.id} value={service.name}>
                     {service.name}
                   </SelectItem>

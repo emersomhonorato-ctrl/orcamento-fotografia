@@ -257,6 +257,7 @@ export default function App() {
   const [duplicateKeep, setDuplicateKeep] = useState({});
   const [clientService, setClientService] = useState("Todos");
   const [clientSort, setClientSort] = useState("az");
+  const [clientLetter, setClientLetter] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [serviceCategory, setServiceCategory] = useState("Todas");
   const [serviceSort, setServiceSort] = useState("az");
@@ -481,7 +482,7 @@ export default function App() {
     setSyncMessage(result.source === "supabase" ? "Mantidos os dados deste aparelho." : result.message);
   }
 
-  const eventTypes = useMemo(() => services.map((service) => service.name).filter(Boolean), [services]);
+  const eventTypes = useMemo(() => services.map((service) => service.name).filter(Boolean).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })), [services]);
 
   const monthLabel = useMemo(() => {
     return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
@@ -855,7 +856,7 @@ export default function App() {
         (phones.size && (phones.has(digits(record.phone)) || phones.has(digits(record.whatsapp)))) ||
         (name && lower(record.clientName) === name),
       );
-      const services = [...new Set(jobs.map((record) => record.eventType).filter(Boolean))];
+      const services = [...new Set(jobs.map((record) => record.eventType).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
       const lastDate = jobs.map((record) => record.eventDate || "").filter(Boolean).sort().pop() || "";
       map.set(client.id, { services, lastDate, count: jobs.length });
     });
@@ -875,6 +876,7 @@ export default function App() {
     const list = uniqueClientsFromEvents.filter((client) => {
       const info = clientJobs.get(client.id) || { services: [] };
       if (clientService !== "Todos" && !info.services.includes(clientService)) return false;
+      if (clientLetter && strip(client.name).trim().charAt(0).toUpperCase() !== clientLetter) return false;
       if (!term) return true;
       const text = strip([client.name, client.email, client.city, client.instagram, client.cpf, info.services.join(" ")].join(" "));
       if (text.includes(term)) return true;
@@ -886,7 +888,7 @@ export default function App() {
       return list.sort((a, b) => String(clientJobs.get(b.id)?.lastDate || "").localeCompare(String(clientJobs.get(a.id)?.lastDate || "")) || byName(a, b));
     }
     return list.sort(byName);
-  }, [uniqueClientsFromEvents, clientJobs, clientSearch, clientService, clientSort]);
+  }, [uniqueClientsFromEvents, clientJobs, clientSearch, clientService, clientSort, clientLetter]);
 
   // Logo e assinatura reduzidos para os PDFs (evita arquivos de vários MB)
   const [pdfImages, setPdfImages] = useState({ key: "", logoDataUrl: "", signatureDataUrl: "" });
@@ -3832,6 +3834,26 @@ export default function App() {
                         <SelectItem value="recentes">Trabalho mais recente</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                ) : null}
+                {uniqueClientsFromEvents.length ? (
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    {["", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((letter) => {
+                      const tem = !letter || uniqueClientsFromEvents.some((client) => String(client.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().charAt(0).toUpperCase() === letter);
+                      return (
+                        <button
+                          key={letter || "todas"}
+                          type="button"
+                          disabled={!tem}
+                          onClick={() => setClientLetter(letter)}
+                          className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition ${
+                            clientLetter === letter ? "bg-[#7f274f] text-white" : tem ? "bg-white text-stone-700 ring-1 ring-stone-200 hover:bg-stone-50" : "text-stone-300"
+                          }`}
+                        >
+                          {letter || "Todas"}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
                 {uniqueClientsFromEvents.length ? (

@@ -35,7 +35,7 @@ export default function BudgetItemsEditor({
             <SelectValue placeholder="Adicionar da lista de trabalhos" />
           </SelectTrigger>
           <SelectContent>
-            {services.map((service) => (
+            {[...services].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" })).map((service) => (
               <SelectItem key={service.id} value={service.id}>
                 {service.name}
               </SelectItem>
