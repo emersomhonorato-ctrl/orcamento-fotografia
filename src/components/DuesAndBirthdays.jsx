@@ -48,8 +48,10 @@ function birthdayMessage(client) {
 }
 
 // Dashboard: quem está devendo (com botão de cobrar) e aniversariantes da semana
-export default function DuesAndBirthdays({ events = [], clients = [], onCharge, onOpen, onPaymentLink }) {
-  const [showAll, setShowAll] = useState(false);
+export const isAmRecord = (record) => /\bAM\s*formatura/i.test(String(record?.clientName || ""));
+
+export default function DuesAndBirthdays({ events = [], clients = [], onCharge, onOpen, onPaymentLink, startExpanded = false }) {
+  const [showAll, setShowAll] = useState(startExpanded);
   const [inReview, setInReview] = useState({});
   const today = localKey(new Date());
 
@@ -74,7 +76,7 @@ export default function DuesAndBirthdays({ events = [], clients = [], onCharge, 
     };
   }, []);
 
-  const dues = useMemo(
+  const allDues = useMemo(
     () =>
       events
         .filter((record) => record.status !== "Cancelado" && Number(record.balance || 0) >= 1)
@@ -82,6 +84,11 @@ export default function DuesAndBirthdays({ events = [], clients = [], onCharge, 
         .sort((a, b) => Number(b.late) - Number(a.late) || String(a.record.eventDate || "9999").localeCompare(String(b.record.eventDate || "9999"))),
     [events, today],
   );
+  // AM Formaturas paga tudo junto pela planilha do mês: fica numa parte separada, sem alerta
+  const dues = useMemo(() => allDues.filter((item) => !isAmRecord(item.record)), [allDues]);
+  const amDues = useMemo(() => allDues.filter((item) => isAmRecord(item.record)), [allDues]);
+  const [showAm, setShowAm] = useState(false);
+  const amTotal = amDues.reduce((sum, item) => sum + Number(item.record.balance || 0), 0);
   const total = dues.reduce((sum, item) => sum + Number(item.record.balance || 0), 0);
   const lateCount = dues.filter((item) => item.late).length;
   const birthdays = useMemo(() => upcomingBirthdays(clients), [clients]);
@@ -130,6 +137,26 @@ export default function DuesAndBirthdays({ events = [], clients = [], onCharge, 
             ))}
           </ul>
         )}
+        {amDues.length ? (
+          <div className="border-t border-stone-100">
+            <button type="button" className="flex w-full items-center gap-2 px-5 py-2.5 text-left text-xs text-stone-600 hover:bg-stone-50" onClick={() => setShowAm((value) => !value)}>
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-semibold text-sky-800">AM Formaturas</span>
+              <span className="flex-1">pago pela planilha mensal • {amDues.length} trabalho{amDues.length > 1 ? "s" : ""} • {brl(amTotal)}</span>
+              <span className="font-semibold">{showAm ? "Esconder" : "Ver"}</span>
+            </button>
+            {showAm ? (
+              <ul className="divide-y divide-stone-100 bg-stone-50/60">
+                {amDues.map(({ record }) => (
+                  <li key={record.id} className="flex items-center gap-3 px-5 py-2 text-sm">
+                    <span className="w-[52px] shrink-0 text-xs font-semibold tabular-nums text-stone-500">{shortDate(record.eventDate)}</span>
+                    <button type="button" className="min-w-0 flex-1 truncate text-left text-stone-800 hover:underline" onClick={() => onOpen?.(record)}>{record.eventType || "Trabalho"}</button>
+                    <span className="font-semibold tabular-nums text-stone-700">{brl(record.balance)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
         {dues.length > 6 ? (
           <button type="button" className="w-full border-t border-stone-100 px-5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50" onClick={() => setShowAll((value) => !value)}>
             {showAll ? "Mostrar menos" : `Ver todas (${dues.length})`}
