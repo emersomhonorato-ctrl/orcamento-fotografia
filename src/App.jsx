@@ -148,8 +148,10 @@ function buildClientMatchKey(client = {}) {
   const email = String(client.email || "").trim().toLowerCase();
   if (email) return `email:${email}`;
 
+  // telefone + primeiro nome: o mesmo número pode estar em pessoas diferentes (ex.: o seu, em trabalhos de freelancer)
   const phone = String(client.phone || client.whatsapp || "").replace(/\D/g, "");
-  if (phone) return `phone:${phone}`;
+  const first = String(client.name || client.clientName || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/)[0] || "";
+  if (phone) return `phone:${phone}:${first}`;
 
   const name = String(client.name || client.clientName || "").trim().toLowerCase();
   if (name) return `name:${name}`;
@@ -1591,6 +1593,11 @@ export default function App() {
       const clientWhatsapp = normalizePhoneDigits(client.whatsapp || "");
       const clientName = String(client.name || "").trim().toLowerCase();
 
+      // Mesmo telefone/e-mail com nome diferente (ex.: o seu próprio número usado em trabalhos de freelancer)
+      // não é a mesma pessoa: só junta quando o primeiro nome também bate
+      const firstName = (value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/)[0] || "";
+      const namesConflict = Boolean(candidateName && clientName && firstName(candidateName) !== firstName(clientName));
+      if (namesConflict) return false;
       if (candidateEmail && clientEmail && candidateEmail === clientEmail) return true;
       if (candidatePhone && (candidatePhone === clientPhone || candidatePhone === clientWhatsapp)) return true;
       if (candidateWhatsapp && (candidateWhatsapp === clientPhone || candidateWhatsapp === clientWhatsapp)) return true;
