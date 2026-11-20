@@ -13,6 +13,7 @@ import { formatCurrency } from "@/utils/formatters";
 import { formatPhoneLoose } from "@/lib/phone";
 import PhoneHint from "@/components/PhoneHint";
 import ClientPicker from "@/components/ClientPicker";
+import ServicePicker from "@/components/ServicePicker";
 
 export default function EventModal({
   open,
@@ -139,21 +140,7 @@ export default function EventModal({
           </div>
           <div className={`space-y-2 ${form.sessionKind ? "hidden" : ""}`}>
             <Label>Tipo de trabalho</Label>
-            <Select value={form.eventType || "__none__"} onValueChange={(value) => onApplyService(value === "__none__" ? "" : value)}>
-              <SelectTrigger className="rounded-2xl">
-                <SelectValue placeholder="Selecionar trabalho" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Selecionar trabalho</SelectItem>
-                {[...services]
-                  .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" }))
-                  .map((service) => (
-                  <SelectItem key={service.id} value={service.name}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ServicePicker services={services} byName value={form.eventType || ""} onChange={onApplyService} placeholder="Buscar tipo de trabalho" />
           </div>
 
           <div className="space-y-2 md:col-span-2">

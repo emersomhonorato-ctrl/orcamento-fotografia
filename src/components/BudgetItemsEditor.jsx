@@ -1,4 +1,5 @@
 import { Copy, Plus, Trash2 } from "lucide-react";
+import ServicePicker from "@/components/ServicePicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,18 +31,7 @@ export default function BudgetItemsEditor({
           Adicionar produto
         </Button>
 
-        <Select onValueChange={(value) => value && onAddServiceItem(value)}>
-          <SelectTrigger className="w-[260px] rounded-2xl">
-            <SelectValue placeholder="Adicionar da lista de trabalhos" />
-          </SelectTrigger>
-          <SelectContent>
-            {[...services].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", { sensitivity: "base" })).map((service) => (
-              <SelectItem key={service.id} value={service.id}>
-                {service.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ServicePicker services={services} keepEmpty onChange={(id) => id && onAddServiceItem(id)} placeholder="Adicionar da lista de trabalhos" className="w-full sm:w-[300px]" />
       </div>
 
       <div className="space-y-3">
