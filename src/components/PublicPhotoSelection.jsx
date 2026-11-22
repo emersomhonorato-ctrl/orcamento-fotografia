@@ -33,6 +33,44 @@ function watermarkBackground(label) {
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 }
 
+// Marca forte: aparece só enquanto a foto está nítida, para o print sair marcado com o nome do cliente.
+// O desenho se ajusta ao tamanho (o texto sempre cabe inteiro, até nas miniaturas).
+function strongWatermark(label) {
+  const name = String(label || "").split("•").pop().replace(/[<>&"]/g, "").trim().slice(0, 32) || "PROVA";
+  const line = (y, txt, size, opacity) =>
+    `<text x='200' y='${y}' text-anchor='middle' textLength='330' lengthAdjust='spacingAndGlyphs' fill='white' fill-opacity='${opacity}' stroke='black' stroke-opacity='0.3' stroke-width='0.8' font-weight='bold' font-family='Arial, sans-serif' font-size='${size}'>${txt}</text>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 220'><g transform='rotate(-20 200 110)'>${line(100, `PROVA • ${name}`, 30, 0.55)}${line(138, "EMERSON HONORATO RETRATOS • NÃO PUBLICAR", 18, 0.45)}</g></svg>`;
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+}
+
+// Atalhos de print (Mac: Cmd+Shift…, Windows: PrtSc / Win+Shift+S) desfocam tudo por um instante.
+// Também bloqueia clique direito, arrastar, salvar (Ctrl/Cmd+S) e imprimir (Ctrl/Cmd+P).
+let printBlockUntil = 0;
+const printListeners = new Set();
+function blockPrintNow() {
+  printBlockUntil = Date.now() + 2500;
+  printListeners.forEach((fn) => fn());
+  try { navigator.clipboard?.writeText?.(""); } catch { /* sem permissão: tudo bem */ }
+}
+let shieldInstalled = false;
+function installShield() {
+  if (shieldInstalled || typeof window === "undefined") return;
+  shieldInstalled = true;
+  const onKey = (event) => {
+    const key = String(event.key || "");
+    if (key === "PrintScreen" || ((event.metaKey || event.ctrlKey) && event.shiftKey)) blockPrintNow();
+    if ((event.metaKey || event.ctrlKey) && /^[sp]$/i.test(key)) {
+      event.preventDefault();
+      blockPrintNow();
+    }
+  };
+  window.addEventListener("keydown", onKey, true);
+  window.addEventListener("keyup", (event) => { if (event.key === "PrintScreen") blockPrintNow(); }, true);
+  document.addEventListener("contextmenu", (event) => event.preventDefault(), true);
+  document.addEventListener("dragstart", (event) => event.preventDefault(), true);
+  window.addEventListener("beforeprint", blockPrintNow);
+}
+
 const noSave = { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" };
 const blockEvent = (event) => event.preventDefault();
 
@@ -41,12 +79,15 @@ function useHoldToSee(enabled) {
   const [holding, setHolding] = useState(false);
   useEffect(() => {
     if (!enabled) return undefined;
+    installShield();
     const stop = () => setHolding(false);
+    printListeners.add(stop);
     window.addEventListener("blur", stop);
     document.addEventListener("visibilitychange", stop);
     window.addEventListener("pointerup", stop);
     window.addEventListener("pointercancel", stop);
     return () => {
+      printListeners.delete(stop);
       window.removeEventListener("blur", stop);
       document.removeEventListener("visibilitychange", stop);
       window.removeEventListener("pointerup", stop);
@@ -55,7 +96,11 @@ function useHoldToSee(enabled) {
   }, [enabled]);
   const handlers = enabled
     ? {
-        onPointerDown: () => setHolding(true),
+        onPointerDown: (event) => {
+          if (event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
+          if (Date.now() < printBlockUntil) return;
+          setHolding(true);
+        },
         onPointerLeave: () => setHolding(false),
         onPointerUp: () => setHolding(false),
       }
@@ -88,8 +133,20 @@ function Photo({ photo, size, className, alt, watermark = "", framed = false, ho
       </span>
     ) : null;
   if (!watermark && !hold) return image;
+  const strong = hold && !blurred;
   const overlay = watermark ? (
-    <span aria-hidden="true" onContextMenu={blockEvent} className="pointer-events-auto absolute inset-0 select-none" style={{ ...noSave, backgroundImage: watermarkBackground(watermark), backgroundRepeat: "repeat" }} />
+    <span
+      aria-hidden="true"
+      onContextMenu={blockEvent}
+      className="pointer-events-auto absolute inset-0 select-none"
+      style={{
+        ...noSave,
+        backgroundImage: strong ? strongWatermark(watermark) : watermarkBackground(watermark),
+        backgroundRepeat: "repeat",
+        backgroundSize: strong ? (framed ? "440px auto" : "100% auto") : undefined,
+        backgroundPosition: strong ? "center" : undefined,
+      }}
+    />
   ) : null;
   // No visualizador, a marca fica do tamanho exato da foto
   if (framed) {
