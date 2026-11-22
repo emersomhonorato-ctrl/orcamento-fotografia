@@ -7,6 +7,24 @@ import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { LAYOUTS, SIZES, diagramar, mudarLayout, pageH, quantas } from "@/lib/album/layout";
 import { albumThumb, listDrivePhotosWithSize } from "@/lib/album/drive";
+
+// Aceita o link da pasta do Drive, o link da entrega (/entrega/…) ou da seleção (/selecao/…)
+async function resolverPasta(link) {
+  const entrega = link.match(/\/entrega\/([a-z0-9-]{4,80})/i);
+  if (entrega) {
+    const { data } = await supabase.from("photo_deliveries").select("drive_url").eq("slug", entrega[1].toLowerCase()).maybeSingle();
+    if (!data?.drive_url) throw new Error("Não achei essa entrega. Confira o link.");
+    return data.drive_url;
+  }
+  const selecao = link.match(/\/selecao\/([a-z0-9-]{4,80})/i);
+  if (selecao) {
+    const { data } = await supabase.from("photo_selections").select("drive_url, final_drive_url").eq("slug", selecao[1].toLowerCase()).maybeSingle();
+    const url = data?.final_drive_url || data?.drive_url;
+    if (!url) throw new Error("Não achei essa seleção. Confira o link.");
+    return url;
+  }
+  return link;
+}
 import ClientPicker from "@/components/ClientPicker";
 import AlbumSpread from "@/components/album/AlbumSpread";
 
@@ -30,6 +48,22 @@ function Novo({ clients, onCriado, onCancel }) {
   const [busy, setBusy] = useState(false);
   const cliente = clients.find((c) => c.id === clientId);
 
+  // Entregas do cliente escolhido: dá para montar o álbum com as fotos já entregues, sem procurar o link do Drive
+  const [entregas, setEntregas] = useState([]);
+  useEffect(() => {
+    const alvo = (cliente?.name || "").trim();
+    if (!alvo) return;
+    let vivo = true;
+    supabase
+      .from("photo_deliveries")
+      .select("slug, title, client_name, drive_url, created_at")
+      .ilike("client_name", `%${alvo.split(/\s+/)[0]}%`)
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .then(({ data }) => { if (vivo) setEntregas((data || []).filter((e) => e.drive_url)); });
+    return () => { vivo = false; };
+  }, [cliente?.name]);
+
   async function criar() {
     const clientName = (cliente?.name || nome).trim();
     if (!clientName) return setMsg("Escolha o cliente ou escreva o nome.");
@@ -38,7 +72,8 @@ function Novo({ clients, onCriado, onCancel }) {
     setMsg("Lendo as fotos da pasta…");
     try {
       const { data: cfg } = await supabase.from("studio_settings").select("google_api_key").eq("id", 1).maybeSingle();
-      const fotos = await listDrivePhotosWithSize(drive.trim(), cfg?.google_api_key || "");
+      const pasta = await resolverPasta(drive.trim());
+      const fotos = await listDrivePhotosWithSize(pasta, cfg?.google_api_key || "");
       if (!fotos.length) throw new Error("Não achei fotos nessa pasta.");
       setMsg(`Montando ${laminas} lâminas com ${fotos.length} fotos…`);
       const { data, error } = await supabase
@@ -48,7 +83,7 @@ function Novo({ clients, onCriado, onCancel }) {
           title: titulo.trim() || `Álbum ${clientName}`,
           client_name: clientName,
           client_whatsapp: cliente?.whatsapp || cliente?.phone || null,
-          drive_url: drive.trim(),
+          drive_url: pasta,
           photos: fotos,
           size,
           spreads: diagramar(fotos, laminas, size),
@@ -78,8 +113,18 @@ function Novo({ clients, onCriado, onCancel }) {
         <label className="space-y-1.5 text-xs text-stone-500">Título (aparece para o cliente)
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Álbum do casamento Ana & Juan" className="block h-10 w-full rounded-2xl border border-stone-300 px-3 text-sm text-stone-900" />
         </label>
-        <label className="space-y-1.5 text-xs text-stone-500 md:col-span-2">Pasta do Drive com as fotos tratadas (compartilhada com “qualquer pessoa com o link”)
-          <input value={drive} onChange={(e) => setDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" className="block h-10 w-full rounded-2xl border border-stone-300 px-3 text-sm text-stone-900" />
+        <label className="space-y-1.5 text-xs text-stone-500 md:col-span-2">Fotos tratadas — link da pasta do Drive ou da entrega do cliente
+          <input value={drive} onChange={(e) => setDrive(e.target.value)} placeholder="Link da pasta do Drive, da entrega (/entrega/…) ou da seleção (/selecao/…)" className="block h-10 w-full rounded-2xl border border-stone-300 px-3 text-sm text-stone-900" />
+          {clientId && entregas.length ? (
+            <span className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span>Usar as fotos de:</span>
+              {entregas.map((e) => (
+                <button key={e.slug} type="button" onClick={() => setDrive(e.drive_url)} className={`rounded-full border px-2.5 py-1 text-xs ${drive === e.drive_url ? "border-[#7f274f] bg-[#7f274f] text-white" : "border-stone-300 text-stone-700 hover:bg-stone-50"}`}>
+                  📦 {e.title || e.client_name}
+                </button>
+              ))}
+            </span>
+          ) : null}
         </label>
         <label className="space-y-1.5 text-xs text-stone-500">Formato
           <select value={size} onChange={(e) => setSize(e.target.value)} className="block h-10 w-full rounded-2xl border border-stone-300 bg-white px-3 text-sm text-stone-900">
