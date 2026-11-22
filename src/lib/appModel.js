@@ -459,6 +459,35 @@ export function createDefaultAppState() {
     clients: [],
     services: mergeServicesByName([]),
     settings: defaultSettings,
+    crm: { leads: {}, tasks: [], notes: [] },
+  };
+}
+
+// CRM: etapa do funil, etiquetas e origem de cada cliente; tarefas e anotações
+export function normalizeCrm(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const leads = source.leads && typeof source.leads === "object" && !Array.isArray(source.leads) ? source.leads : {};
+  return {
+    leads: Object.fromEntries(
+      Object.entries(leads)
+        .filter(([id, lead]) => id && lead && typeof lead === "object")
+        .map(([id, lead]) => [
+          id,
+          {
+            stage: String(lead.stage || ""),
+            tags: Array.isArray(lead.tags) ? lead.tags.map(String).filter(Boolean).slice(0, 12) : [],
+            source: String(lead.source || ""),
+            lostReason: String(lead.lostReason || ""),
+            updatedAt: lead.updatedAt || "",
+          },
+        ]),
+    ),
+    tasks: (Array.isArray(source.tasks) ? source.tasks : [])
+      .filter((task) => task && task.id && task.title)
+      .map((task) => ({ id: task.id, title: String(task.title), clientId: task.clientId || "", due: task.due || "", done: Boolean(task.done), doneAt: task.doneAt || "", createdAt: task.createdAt || "" })),
+    notes: (Array.isArray(source.notes) ? source.notes : [])
+      .filter((note) => note && note.id && note.text)
+      .map((note) => ({ id: note.id, clientId: note.clientId || "", text: String(note.text), at: note.at || "" })),
   };
 }
 
@@ -627,6 +656,7 @@ export function normalizeAppState(raw) {
     events: Array.isArray(payload.events) ? payload.events.map(normalizeRecord) : base.events,
     expenses: Array.isArray(payload.expenses) ? payload.expenses.filter((item) => item && item.id) : [],
     clients: Array.isArray(payload.clients) ? payload.clients.map(normalizeClient) : base.clients,
+    crm: normalizeCrm(payload.crm),
     services: Array.isArray(payload.services) && payload.services.length > 0
       ? payload.services.map(normalizeService) // os serviços padrão só entram num app novo, sem serviços; não voltam depois de renomeados ou excluídos
       : base.services,

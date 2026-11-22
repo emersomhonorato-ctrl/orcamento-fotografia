@@ -36,8 +36,36 @@ function watermarkBackground(label) {
 const noSave = { WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" };
 const blockEvent = (event) => event.preventDefault();
 
-function Photo({ photo, size, className, alt, watermark = "", framed = false }) {
+// Proteção contra print: a foto fica desfocada e só aparece nítida enquanto o cliente segura (dedo ou clique)
+function useHoldToSee(enabled) {
+  const [holding, setHolding] = useState(false);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const stop = () => setHolding(false);
+    window.addEventListener("blur", stop);
+    document.addEventListener("visibilitychange", stop);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("blur", stop);
+      document.removeEventListener("visibilitychange", stop);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [enabled]);
+  const handlers = enabled
+    ? {
+        onPointerDown: () => setHolding(true),
+        onPointerLeave: () => setHolding(false),
+        onPointerUp: () => setHolding(false),
+      }
+    : {};
+  return [enabled && !holding, handlers];
+}
+
+function Photo({ photo, size, className, alt, watermark = "", framed = false, hold = false, holdHint = false }) {
   const [src, setSrc] = useState(thumbUrl(photo.id, size));
+  const [blurred, holdHandlers] = useHoldToSee(hold);
   const image = (
     <img
       src={src}
@@ -48,29 +76,37 @@ function Photo({ photo, size, className, alt, watermark = "", framed = false }) 
       draggable={false}
       onContextMenu={blockEvent}
       onDragStart={blockEvent}
-      style={noSave}
+      style={{ ...noSave, filter: blurred ? "blur(16px)" : "none", transform: blurred ? "scale(1.06)" : undefined, transition: "filter 120ms ease-out" }}
       onError={() => setSrc((current) => (current.includes("lh3.") ? current : altThumbUrl(photo.id, size)))}
       className={className}
     />
   );
-  if (!watermark) return image;
-  const overlay = (
+  const hint =
+    hold && holdHint && blurred ? (
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="rounded-full bg-black/55 px-4 py-2 text-sm font-semibold text-white shadow-lg">👆 Segure para ver a foto</span>
+      </span>
+    ) : null;
+  if (!watermark && !hold) return image;
+  const overlay = watermark ? (
     <span aria-hidden="true" onContextMenu={blockEvent} className="pointer-events-auto absolute inset-0 select-none" style={{ ...noSave, backgroundImage: watermarkBackground(watermark), backgroundRepeat: "repeat" }} />
-  );
+  ) : null;
   // No visualizador, a marca fica do tamanho exato da foto
   if (framed) {
     return (
-      <span className="relative inline-flex max-h-full max-w-full" onContextMenu={blockEvent}>
+      <span className="relative inline-flex max-h-full max-w-full overflow-hidden" onContextMenu={blockEvent} style={noSave} {...holdHandlers}>
         {image}
         {overlay}
+        {hint}
       </span>
     );
   }
   return (
-    <>
+    <span className="relative block h-full w-full overflow-hidden" onContextMenu={blockEvent} style={noSave} {...holdHandlers}>
       {image}
       {overlay}
-    </>
+      {hint}
+    </span>
   );
 }
 
@@ -293,6 +329,8 @@ export default function PublicPhotoSelection({ slug }) {
 
   const wa = (text) => `https://api.whatsapp.com/send?phone=${STUDIO_WHATSAPP}&text=${encodeURIComponent(text)}`;
   const first = String(data?.client_name || "").trim().split(/\s+/)[0];
+  // Fotos desfocadas até o cliente segurar (dificulta print). Pode ser desligado por galeria
+  const protectPhotos = data?.protect_photos !== false;
   const watermarkText = `EMERSON HONORATO RETRATOS • PRÉVIA • ${String(data?.client_name || "").trim().toUpperCase()}`;
 
   const shell = (children) => (
@@ -348,7 +386,7 @@ export default function PublicPhotoSelection({ slug }) {
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.34em] text-[#e9c77b]">{state === "enviada" ? "Escolha enviada" : "Escolha suas favoritas"}</p>
         <h1 className="mt-2 text-4xl leading-tight sm:text-6xl" style={SERIF}>{data.title}</h1>
         <p className="mt-2 text-sm text-white/70">{data.client_name}{data.event_date ? ` • ${formatDateBR(data.event_date)}` : ""} • {photos.length} fotos</p>
-        <p className="mx-auto mt-3 max-w-xl text-xs leading-5 text-white/55">📸 Estas são prévias em baixa, com marca d'água. As fotos finais, tratadas, em alta e sem marca, chegam na entrega.</p>
+        <p className="mx-auto mt-3 max-w-xl text-xs leading-5 text-white/55">📸 Estas são prévias em baixa, com marca d'água. As fotos finais, tratadas, em alta e sem marca, chegam na entrega.{protectPhotos ? " 👆 Para ver cada foto nítida, toque e segure em cima dela." : ""}</p>
         {state === "enviada" ? (
           <div className="mx-auto mt-6 max-w-lg rounded-[24px] border border-emerald-400/30 bg-emerald-500/10 p-5">
             <p className="text-lg font-semibold">Recebi sua escolha, {first}! 💛</p>
@@ -412,7 +450,7 @@ export default function PublicPhotoSelection({ slug }) {
               return (
                 <div key={photo.id} className={`group relative overflow-hidden rounded-lg bg-white/5 ${isSel ? "ring-2 ring-rose-400" : ""}`}>
                   <button type="button" onClick={() => setViewer(index)} className="block aspect-[4/5] w-full">
-                    <Photo photo={photo} size={360} watermark={watermarkText} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
+                    <Photo photo={photo} size={360} watermark={watermarkText} hold={protectPhotos} className="h-full w-full object-cover" />
                   </button>
                   <button
                     type="button"
@@ -514,7 +552,7 @@ export default function PublicPhotoSelection({ slug }) {
             onTouchCancel={() => { swipe.current = null; setDragX(0); }}
           >
             <div className="flex max-h-full max-w-full items-center justify-center" style={{ transform: `translateX(${dragX}px)`, transition: dragX ? "none" : "transform 200ms ease-out" }}>
-              <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
+              <Photo key={current.id} photo={current} size={1200} watermark={watermarkText} framed hold={protectPhotos} holdHint className="max-h-[calc(100vh-11rem)] max-w-full object-contain" />
             </div>
             {viewer > 0 ? <button type="button" onClick={() => setViewer(viewer - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Anterior">‹</button> : null}
             {viewer < visible.length - 1 ? <button type="button" onClick={() => setViewer(viewer + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-3 text-2xl hover:bg-white/20" aria-label="Próxima">›</button> : null}

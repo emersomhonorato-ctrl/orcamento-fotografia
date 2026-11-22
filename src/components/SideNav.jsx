@@ -25,6 +25,7 @@ import {
   X,
   BadgeDollarSign,
   Package,
+  Kanban,
 } from "lucide-react";
 
 // Menu do estúdio, agrupado por assunto
@@ -33,6 +34,7 @@ export const NAV_GROUPS = [
   {
     titulo: "Vendas",
     itens: [
+      ["crm", "CRM", Kanban],
       ["orcamentos", "Orçamentos", FileText],
       ["clientes", "Clientes", Users],
       ["cobrancas", "Cobranças", BadgeDollarSign],
@@ -53,6 +55,7 @@ export const NAV_GROUPS = [
     itens: [
       ["selecao", "Seleção", FolderCheck],
       ["entregas", "Entregas", Package],
+      ["albuns", "Álbuns", BookOpen],
       ["hds", "HDs", HardDrive],
     ],
   },
