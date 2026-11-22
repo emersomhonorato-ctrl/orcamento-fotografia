@@ -14,6 +14,7 @@ import PublicLegalPage from "./components/PublicLegalPage.jsx";
 import PublicHelpPage from "./components/PublicHelpPage.jsx";
 import PublicHelpFooter from "./components/PublicHelpFooter.jsx";
 import UpdateNotice from "./components/UpdateNotice.jsx";
+import PublicAlbum from "./components/album/PublicAlbum.jsx";
 
 // Formulário público de pedido (fora do login):
 // https://orcamento.emersonhonoratoretratos.com.br/pedido  (ou /?pedido)
@@ -29,6 +30,7 @@ const budgetMatch = window.location.pathname.match(/^\/orcamento\/([a-z0-9-]{4,8
 const selectionMatch = window.location.pathname.match(/^\/selecao\/([a-z0-9-]{4,80})\/?$/i);
 // Pagamento: https://orcamento.emersonhonoratoretratos.com.br/pagar/<codigo>
 const monthlyMatch = window.location.pathname.match(/^\/mensal\/([a-z0-9]{10,64})\/?$/i);
+const albumMatch = window.location.pathname.match(/^\/album\/([a-z0-9-]{4,80})\/?$/i);
 const paymentMatch = window.location.pathname.match(/^\/pagar\/([a-z0-9-]{4,80})\/?$/i);
 // Privacidade e termos (LGPD): /privacidade e /termos
 const legalMatch = window.location.pathname.match(/^\/(privacidade|termos)\/?$/i);
@@ -74,7 +76,7 @@ class PreviewErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <PreviewErrorBoundary>
-      {monthlyMatch ? <PublicMonthlyBooking token={monthlyMatch[1].toLowerCase()} /> : isHelpPage ? <PublicHelpPage /> : legalMatch ? <PublicLegalPage page={legalMatch[1].toLowerCase()} /> : paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
+      {albumMatch ? <PublicAlbum slug={albumMatch[1].toLowerCase()} /> : monthlyMatch ? <PublicMonthlyBooking token={monthlyMatch[1].toLowerCase()} /> : isHelpPage ? <PublicHelpPage /> : legalMatch ? <PublicLegalPage page={legalMatch[1].toLowerCase()} /> : paymentMatch ? <PublicPayment slug={paymentMatch[1].toLowerCase()} /> : selectionMatch ? <PublicPhotoSelection slug={selectionMatch[1].toLowerCase()} /> : deliveryMatch ? <PublicPhotoDelivery slug={deliveryMatch[1].toLowerCase()} /> : contractMatch ? <PublicContractSign slug={contractMatch[1].toLowerCase()} /> : budgetMatch ? <PublicBudgetApproval slug={budgetMatch[1].toLowerCase()} /> : isPublicChristmasBooking ? <PublicChristmasBooking /> : isPublicRequestForm ? <PublicBudgetRequestForm /> : <App />}
       {helpContext ? <PublicHelpFooter context={helpContext} dark={helpContext === "selecao"} /> : null}
       {import.meta.env.PROD ? <UpdateNotice /> : null}
     </PreviewErrorBoundary>

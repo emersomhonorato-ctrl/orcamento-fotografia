@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/album/:codigo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/album/:codigo/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/pedido",
       "destination": "/index.html"
     },

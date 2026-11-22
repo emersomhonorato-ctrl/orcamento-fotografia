@@ -96,6 +96,10 @@ import HdControlPanel from "@/components/HdControlPanel";
 import AmReportsPanel from "@/components/AmReportsPanel";
 // Carrossel Álbum carrega só quando a aba é aberta (é pesado)
 const CarrosselAlbumPanel = lazy(() => import("@/components/CarrosselAlbumPanel"));
+const AlbumsPanel = lazy(() => import("@/components/album/AlbumsPanel"));
+const CrmPanel = lazy(() => import("@/components/crm/CrmPanel"));
+import { TarefasLista } from "@/components/crm/Tasks";
+import { tarefasParaHoje } from "@/lib/crm";
 
 const SEARCH_TABS = ["agenda"];
 const AUTH_ENABLED = String(import.meta.env.VITE_AUTH_ENABLED || "false").trim().toLowerCase() === "true";
@@ -935,8 +939,10 @@ export default function App() {
     const badges = {};
     if (requestStats.novos) badges.orcamentos = { valor: requestStats.novos };
     if (atrasados) badges.cobrancas = { valor: atrasados, tom: "alerta" };
+    const tarefas = tarefasParaHoje(appState.crm).length;
+    if (tarefas) badges.crm = { valor: tarefas, tom: "alerta" };
     return badges;
-  }, [onlyEvents, requestStats.novos]);
+  }, [onlyEvents, requestStats.novos, appState.crm]);
 
   // Início: números do quadro "Hoje" e do funil do mês escolhido
   const homeData = useMemo(() => {
@@ -3147,6 +3153,17 @@ export default function App() {
               <WeekAgenda events={onlyEvents} onOpen={editEvent} onWhatsApp={(record, dayIndex) => sendWhatsApp(record, dayIndex === 0 ? "lembrete_hoje" : "lembrete")} />
             </SafeSection>
             <div id="para-fazer" className="scroll-mt-6 space-y-6">
+              {tarefasParaHoje(appState.crm).length ? (
+                <SafeSection name="Tarefas de hoje">
+                  <section className="rounded-2xl border border-stone-200 bg-white px-5 py-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-stone-900">Tarefas de hoje</h2>
+                      <button type="button" className="text-xs text-[#7f274f] hover:underline" onClick={() => setActiveTab("crm")}>abrir CRM</button>
+                    </div>
+                    <TarefasLista crm={appState.crm} clients={appState.clients || []} onChangeCrm={(crm) => updateAppState({ crm })} onAbrirCliente={() => setActiveTab("crm")} ateHoje />
+                  </section>
+                </SafeSection>
+              ) : null}
               <SafeSection name="Para fazer hoje">
                 <FollowUpsPanel budgets={followUps.budgets} events={followUps.events} onOpen={editEvent} onPaymentLink={setPaymentLinkFor} />
               </SafeSection>
@@ -3475,6 +3492,29 @@ export default function App() {
                   });
                 }}
               />
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="crm" className="mt-6">
+            <SafeSection name="CRM">
+              <Suspense fallback={<p className="py-10 text-center text-sm text-stone-500">Abrindo o CRM…</p>}>
+                <CrmPanel
+                  clients={appState.clients || []}
+                  records={enrichedRecords}
+                  crm={appState.crm}
+                  onChangeCrm={(crm) => updateAppState({ crm })}
+                  onOpenRecord={editEvent}
+                  onNewBudget={(client) => openNewBudgetModal({ clientId: client.id, clientName: client.name, whatsapp: client.whatsapp || "", phone: client.phone || "", email: client.email || "" })}
+                />
+              </Suspense>
+            </SafeSection>
+          </TabsContent>
+
+          <TabsContent value="albuns" className="mt-6">
+            <SafeSection name="Álbuns">
+              <Suspense fallback={<p className="py-10 text-center text-sm text-stone-500">Abrindo os álbuns…</p>}>
+                <AlbumsPanel clients={appState.clients || []} />
+              </Suspense>
             </SafeSection>
           </TabsContent>
 
