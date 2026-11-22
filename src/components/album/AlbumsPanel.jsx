@@ -146,7 +146,7 @@ function Novo({ clients, onCriado, onCancel }) {
   );
 }
 
-function Editor({ album: inicial, onVoltar, onSalvo }) {
+function Editor({ album: inicial, onVoltar, onSalvo, onApagar }) {
   const [album] = useState(() => structuredClone(inicial));
   const [, redesenhar] = useReducer((n) => n + 1, 0);
   const [alterado, setAlterado] = useState(false);
@@ -235,6 +235,7 @@ function Editor({ album: inicial, onVoltar, onSalvo }) {
         {album.status !== "rascunho" ? (
           <Button variant="outline" className="rounded-xl" onClick={() => navigator.clipboard?.writeText(link).then(() => setAviso("Link copiado."))}><Copy className="mr-2 h-4 w-4" />Link</Button>
         ) : null}
+        <Button variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50" disabled={Boolean(busy)} onClick={() => onApagar(album)}><Trash2 className="mr-2 h-4 w-4" />Apagar</Button>
       </div>
 
       {album.status !== "rascunho" ? (
@@ -363,8 +364,19 @@ export default function AlbumsPanel({ clients = [] }) {
     };
   }, []);
 
+  async function apagar(album) {
+    const aviso = album.status === "rascunho"
+      ? `Apagar o álbum "${album.title}"?`
+      : `Apagar o álbum "${album.title}"?\n\nO link que a cliente recebeu vai parar de funcionar e as aprovações dela serão perdidas.`;
+    if (!confirm(`${aviso}\n\nIsso não pode ser desfeito. As fotos no Drive não são apagadas.`)) return;
+    const { error } = await supabase.from("photo_albums").delete().eq("id", album.id);
+    if (error) return alert(`Não consegui apagar: ${error.message}`);
+    setLista((l) => l.filter((x) => x.id !== album.id));
+    setAberto(null);
+  }
+
   if (aberto) {
-    return <Editor album={aberto} onVoltar={() => { setAberto(null); carregar(); }} onSalvo={(a) => setLista((l) => l.map((x) => (x.id === a.id ? a : x)))} />;
+    return <Editor album={aberto} onApagar={apagar} onVoltar={() => { setAberto(null); carregar(); }} onSalvo={(a) => setLista((l) => l.map((x) => (x.id === a.id ? a : x)))} />;
   }
 
   return (
@@ -390,7 +402,17 @@ export default function AlbumsPanel({ clients = [] }) {
           const pedidos = Object.values(fb).filter((v) => v?.ok === false).length;
           const capa = a.spreads?.[0]?.slots?.find((s) => s.photo)?.photo;
           return (
-            <button key={a.id} type="button" onClick={() => setAberto(a)} className="overflow-hidden rounded-2xl border border-stone-200 bg-white text-left transition hover:shadow-md">
+            <div key={a.id} className="group relative">
+            <button
+              type="button"
+              onClick={() => apagar(a)}
+              title="Apagar álbum"
+              aria-label={`Apagar o álbum ${a.title}`}
+              className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-2 text-red-700 shadow-sm transition hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => setAberto(a)} className="w-full overflow-hidden rounded-2xl border border-stone-200 bg-white text-left transition hover:shadow-md">
               <div className="aspect-[2/1] bg-stone-200">
                 {capa ? <img src={albumThumb(capa, 600)} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" /> : null}
               </div>
@@ -411,6 +433,7 @@ export default function AlbumsPanel({ clients = [] }) {
                 ) : null}
               </div>
             </button>
+            </div>
           );
         })}
       </div>
