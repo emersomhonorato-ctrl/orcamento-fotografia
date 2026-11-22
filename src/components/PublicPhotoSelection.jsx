@@ -176,7 +176,20 @@ function Heart({ filled, className = "h-5 w-5" }) {
 }
 
 // Página pública: o cliente vê as fotos em baixa (do Google Drive) e marca as favoritas
+// Quantas colunas a galeria tem (igual aos tamanhos de tela de antes: 2 / 3 / 4)
+function useColumnCount() {
+  const calc = () => (typeof window === "undefined" ? 2 : window.innerWidth >= 1024 ? 4 : window.innerWidth >= 640 ? 3 : 2);
+  const [count, setCount] = useState(calc);
+  useEffect(() => {
+    const onResize = () => setCount(calc());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return count;
+}
+
 export default function PublicPhotoSelection({ slug }) {
+  const columnCount = useColumnCount();
   useSerifFont();
   const [state, setState] = useState("loading");
   const [data, setData] = useState(null);
@@ -500,14 +513,18 @@ export default function PublicPhotoSelection({ slug }) {
         {visible.length === 0 ? (
           <p className="py-16 text-center text-white/60">{filter === "escolhidas" ? "Você ainda não escolheu nenhuma foto." : filter === "revelacao" ? "Nenhuma foto para revelar ainda. Abra uma foto e escolha o tamanho." : "Nenhuma foto nesta galeria."}</p>
         ) : (
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-4">
-            {visible.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE).map((photo, pageIndex) => {
+          // Fotos no formato original (em pé ou deitada), em colunas; a ordem segue da esquerda para a direita
+          <div className="flex items-start gap-1.5 sm:gap-2">
+            {Array.from({ length: columnCount }, (_, column) => (
+              <div key={column} className="min-w-0 flex-1">
+                {visible.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE).map((photo, pageIndex) => {
+              if (pageIndex % columnCount !== column) return null;
               const index = safePage * PAGE_SIZE + pageIndex;
               const isSel = selectedSet.has(photo.name);
               return (
-                <div key={photo.id} className={`group relative overflow-hidden rounded-lg bg-white/5 ${isSel ? "ring-2 ring-rose-400" : ""}`}>
-                  <button type="button" onClick={() => setViewer(index)} className="block aspect-[4/5] w-full">
-                    <Photo photo={photo} size={360} watermark={watermarkText} hold={protectPhotos} className="h-full w-full object-cover" />
+                <div key={photo.id} className={`group relative mb-1.5 overflow-hidden rounded-lg bg-white/5 sm:mb-2 ${isSel ? "ring-2 ring-rose-400" : ""}`}>
+                  <button type="button" onClick={() => setViewer(index)} className="block w-full">
+                    <Photo photo={photo} size={360} watermark={watermarkText} hold={protectPhotos} className="block h-auto min-h-24 w-full" />
                   </button>
                   <button
                     type="button"
@@ -526,7 +543,9 @@ export default function PublicPhotoSelection({ slug }) {
                   ) : null}
                 </div>
               );
-            })}
+                })}
+              </div>
+            ))}
           </div>
         )}
         {pageCount > 1 ? <div className="mt-3">{pager}</div> : null}
