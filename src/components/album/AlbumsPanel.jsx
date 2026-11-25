@@ -175,7 +175,7 @@ function Editor({ album: inicial, onVoltar, onSalvo, onApagar }) {
     setBusy("Salvando…");
     const { data, error } = await supabase
       .from("photo_albums")
-      .update({ spreads: album.spreads, title: album.title, message: album.message, updated_at: new Date().toISOString(), ...extra })
+      .update({ spreads: album.spreads, title: album.title, message: album.message, protect_photos: album.protect_photos !== false, updated_at: new Date().toISOString(), ...extra })
       .eq("id", album.id)
       .select()
       .single();
@@ -248,6 +248,11 @@ function Editor({ album: inicial, onVoltar, onSalvo, onApagar }) {
 
       <label className="block max-w-2xl space-y-1 text-xs text-stone-500">Recado para o cliente (aparece no topo da página)
         <textarea value={album.message || ""} onChange={(e) => editar((a) => { a.message = e.target.value; })} rows={2} className="block w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900" placeholder="Ex.: Escolhi as fotos que contam melhor a história do dia. Qualquer troca é só pedir!" />
+      </label>
+
+      <label className="flex max-w-2xl items-start gap-2 text-sm text-stone-700">
+        <input type="checkbox" className="mt-1" checked={album.protect_photos !== false} onChange={(e) => editar((a) => { a.protect_photos = e.target.checked; })} />
+        <span><b>Proteger contra print</b> — lâminas desfocadas até o cliente segurar o dedo em cima. Desmarque para mostrar nítido direto (fica só a marca d'água "PROVA"). Clique em Salvar depois de mudar.</span>
       </label>
 
       <div className="space-y-6">

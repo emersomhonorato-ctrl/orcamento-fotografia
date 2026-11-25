@@ -72,7 +72,7 @@ export default function PublicAlbum({ slug }) {
           <p className="mx-auto mt-5 max-w-md rounded-2xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">Recebi seus pedidos de troca. Assim que eu ajustar, te mando a nova versão por aqui mesmo.</p>
         ) : (
           <p className="mx-auto mt-5 max-w-md text-xs leading-5 text-white/55">
-            👆 Toque e segure em cada lâmina para ver nítido. Depois marque <b>Aprovar</b> ou <b>Pedir troca</b> (contando o que quer mudar). No final, toque em <b>Enviar resposta</b>.
+            {data.protect !== false ? "👆 Toque e segure em cada lâmina para ver nítido. " : ""}Marque <b>Aprovar</b> ou <b>Pedir troca</b> (contando o que quer mudar). No final, toque em <b>Enviar resposta</b>.
           </p>
         )}
       </header>
@@ -83,7 +83,7 @@ export default function PublicAlbum({ slug }) {
           return (
             <section key={i} className="flex w-full flex-col items-center gap-3">
               <p className="text-xs uppercase tracking-[0.25em] text-white/50">Lâmina {i + 1} de {total}</p>
-              <AlbumSpread lamina={lamina} size={data.size} fotosPorId={fotosPorId} largura={largura} protegido marca={marca} />
+              <AlbumSpread lamina={lamina} size={data.size} fotosPorId={fotosPorId} largura={largura} protegido={data.protect !== false} marca={marca} />
               {!travado ? (
                 <div className="flex w-full max-w-xl flex-col items-center gap-2">
                   <div className="flex gap-2">
