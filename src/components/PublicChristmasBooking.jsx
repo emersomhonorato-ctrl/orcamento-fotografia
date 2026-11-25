@@ -47,6 +47,22 @@ export default function PublicChristmasBooking() {
   const [dayKey, setDayKey] = useState("");
   const [slotId, setSlotId] = useState("");
   const [doubleSession, setDoubleSession] = useState(false);
+  // Black Friday: o link chega como ?promo=BLACK (vale só no dia 27/11 — o servidor confere a data)
+  const [promoCode] = useState(() => {
+    try {
+      return String(new URLSearchParams(window.location.search).get("promo") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+    } catch {
+      return "";
+    }
+  });
+  const [promo, setPromo] = useState(null); // { active, bonus_photos, extra_photo_discount, valid_on }
+  useEffect(() => {
+    if (!promoCode) return;
+    supabase.rpc("promo_status", { p_code: promoCode }).then(({ data, error }) => {
+      if (!error && data) setPromo(data);
+    });
+  }, [promoCode]);
+  const promoActive = Boolean(promo?.active);
   // Indicação: o link do cliente chega como ?indicacao=CODIGO
   const [referralFromLink] = useState(() => {
     try {
@@ -270,7 +286,12 @@ export default function PublicChristmasBooking() {
       }
       return;
     }
-    setResult(data);
+    let finalResult = data;
+    if (promoActive && data?.id) {
+      const { data: applied } = await supabase.rpc("apply_booking_promo", { p_booking_id: data.id, p_code: promoCode });
+      if (applied?.photos) finalResult = { ...data, photos: applied.photos, promo: true };
+    }
+    setResult(finalResult);
     // eslint-disable-next-line react-hooks/purity -- hora da reserva, dentro do envio do formulário
     setBookedAt(Date.now());
     setStatus("done");
@@ -322,6 +343,7 @@ export default function PublicChristmasBooking() {
       `*Data:* ${dateKey ? fullDateLabel(dateKey) : ""}`,
       `*Horário:* ${selectedSlot ? localTime(selectedSlot.starts_at) : ""}`,
       `*Pacote:* ${result.photos} fotos — ${formatBRL(result.package_price ?? result.price)}`,
+      result.promo ? `🖤 *Black Friday:* +5 fotos e 30% off na foto extra` : "",
       Number(result.extra_people) ? `*Pessoas extras:* ${result.extra_people} — ${formatBRL(result.extra_amount)}` : "",
       `*Total:* ${formatBRL(result.price)}`,
       depositAmount ? (paidInFull ? `*Pagamento:* valor total ${formatBRL(depositAmount)}` : `*Sinal (${depositPercent}%):* ${formatBRL(depositAmount)}`) : "",
@@ -360,6 +382,7 @@ export default function PublicChristmasBooking() {
                   <p><strong>Data:</strong> {selectedDay ? fullDateLabel(selectedDay.key) : ""}</p>
                   <p><strong>Horário:</strong> {selectedSlot ? `${localTime(selectedSlot.starts_at)} às ${addMinutesToTime(localTime(selectedSlot.starts_at), slotMinutes * (result.double ? 2 : 1))}` : ""}{result.double ? " (ensaio de 1 hora)" : ""}</p>
                   <p><strong>Pacote:</strong> {result.photos} fotos — {formatBRL(result.package_price ?? result.price)}</p>
+                  {result.promo ? <p className="font-semibold text-black">🖤 Black Friday: +5 fotos de presente e 30% off na foto extra</p> : null}
                   {Number(result.extra_people) ? <p><strong>Pessoas extras:</strong> {result.extra_people} — {formatBRL(result.extra_amount)}</p> : null}
                   <p><strong>Total:</strong> {formatBRL(result.price)}</p>
                   {depositAmount && remainingAmount > 0 ? <p><strong>Restante no dia:</strong> {formatBRL(remainingAmount)}</p> : null}
@@ -446,6 +469,19 @@ export default function PublicChristmasBooking() {
 
           {loadState === "ready" && status !== "done" && lead ? (
             <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+              {promoActive ? (
+                <div className="rounded-3xl bg-black px-5 py-4 text-center text-white shadow-lg">
+                  <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Só hoje • 27/11</p>
+                  <p className="mt-1 text-xl font-bold">🖤 Black Friday do Ensaio de Natal</p>
+                  <p className="mt-1 text-sm text-white/85">
+                    <strong>+{promo.bonus_photos || 5} fotos de presente</strong> em qualquer pacote e <strong>{promo.extra_photo_discount || 30}% de desconto</strong> na foto extra.
+                  </p>
+                </div>
+              ) : promoCode && promo ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm text-slate-600">
+                  A promoção Black Friday vale só no dia <strong>27/11</strong>. Os valores abaixo são os normais.
+                </div>
+              ) : null}
               {campaign?.instructions_pdf_url ? (
                 <a href={campaign.instructions_pdf_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-[#7a1712]/20 bg-[#fff5f3] px-4 py-3 text-sm font-semibold text-[#7a1712] hover:bg-[#ffece8]">
                   📄 Ver instruções do ensaio (PDF)
@@ -463,15 +499,29 @@ export default function PublicChristmasBooking() {
                         packageName === item.name ? "border-[#7a1712] bg-[#fff5f3]" : "border-slate-200 hover:border-[#c2483d]"
                       }`}
                     >
-                      <p className="text-2xl font-bold text-[#7a1712]">{item.photos}</p>
-                      <p className="text-sm text-slate-500">fotos tratadas</p>
+                      {promoActive ? (
+                        <>
+                          <p className="text-2xl font-bold text-[#7a1712]">{Number(item.photos) + Number(promo.bonus_photos || 5)}</p>
+                          <p className="text-sm text-slate-500">fotos tratadas</p>
+                          <p className="mt-1 inline-block rounded-full bg-black px-2 py-0.5 text-[11px] font-bold text-white">🖤 +{promo.bonus_photos || 5} de presente</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-2xl font-bold text-[#7a1712]">{item.photos}</p>
+                          <p className="text-sm text-slate-500">fotos tratadas</p>
+                        </>
+                      )}
                       <p className="mt-3 text-lg font-semibold text-slate-900">{formatBRL(item.price)}</p>
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-slate-500">
                   Ensaio de {slotMinutes} minutos. Reserva confirmada com sinal de {Number(campaign?.deposit_percent || 50)}% via Pix{allowFullPayment ? " (ou o valor total, se preferir)" : ""}.
-                  {Number(campaign?.extra_photo_price) ? ` Fotos extras: ${formatBRL(campaign.extra_photo_price)} cada.` : ""}
+                  {Number(campaign?.extra_photo_price)
+                    ? promoActive
+                      ? ` Fotos extras na Black Friday: ${formatBRL(Math.round(Number(campaign.extra_photo_price) * (100 - Number(promo.extra_photo_discount || 30))) / 100)} cada (de ${formatBRL(campaign.extra_photo_price)}, ${promo.extra_photo_discount || 30}% off).`
+                      : ` Fotos extras: ${formatBRL(campaign.extra_photo_price)} cada.`
+                    : ""}
                 </p>
                 {extraPersonPrice > 0 && maxExtraPeople > 0 ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4">
@@ -602,7 +652,7 @@ export default function PublicChristmasBooking() {
                 <div className="rounded-2xl border border-[#f1d3cf] bg-[#fff8f6] p-4 text-sm leading-6 text-slate-700">
                   <p className="font-semibold text-[#7a1712]">Resumo</p>
                   <p>{fullDateLabel(selectedDay.key)} • {localTime(selectedSlot.starts_at)} às {addMinutesToTime(localTime(selectedSlot.starts_at), sessionMinutes)}{isDouble ? " (ensaio de 1 hora)" : ""}</p>
-                  <p>{packagePhotos} fotos tratadas • {formatBRL(packagePrice)}</p>
+                  <p>{packagePhotos + (promoActive && selectedPackage ? Number(promo.bonus_photos || 5) * (isDouble ? 2 : 1) : 0)} fotos tratadas{promoActive ? " (com o presente da Black Friday)" : ""} • {formatBRL(packagePrice)}</p>
                   {extraPeople > 0 ? <p>{extraPeople} pessoa{extraPeople > 1 ? "s" : ""} extra{extraPeople > 1 ? "s" : ""} • {formatBRL(extraPeople * extraPersonPrice)}</p> : null}
                   <p className="mt-1 font-semibold text-slate-900">Total: {formatBRL(previewTotal)}</p>
                 </div>
