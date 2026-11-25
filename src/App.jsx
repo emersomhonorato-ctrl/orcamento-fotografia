@@ -1,4 +1,5 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazyComRecarga } from "@/lib/lazyComRecarga";
 import { AlertTriangle, Ban, Bell, Briefcase, CalendarClock, CalendarDays, Camera, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, Copy, Gift, Clock3, FileText, Image as ImageIcon, Mail, MapPin, Pencil, Phone, Plus, RotateCcw, Save, Search, Send, Trash2, User, Wallet, X, Receipt, TrendingUp, Menu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,9 +96,9 @@ import { openExternal } from "@/lib/openExternal";
 import HdControlPanel from "@/components/HdControlPanel";
 import AmReportsPanel from "@/components/AmReportsPanel";
 // Carrossel Álbum carrega só quando a aba é aberta (é pesado)
-const CarrosselAlbumPanel = lazy(() => import("@/components/CarrosselAlbumPanel"));
-const AlbumsPanel = lazy(() => import("@/components/album/AlbumsPanel"));
-const CrmPanel = lazy(() => import("@/components/crm/CrmPanel"));
+const CarrosselAlbumPanel = lazyComRecarga(() => import("@/components/CarrosselAlbumPanel"));
+const AlbumsPanel = lazyComRecarga(() => import("@/components/album/AlbumsPanel"));
+const CrmPanel = lazyComRecarga(() => import("@/components/crm/CrmPanel"));
 import { TarefasLista } from "@/components/crm/Tasks";
 import { tarefasParaHoje } from "@/lib/crm";
 
