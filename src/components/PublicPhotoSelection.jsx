@@ -400,7 +400,15 @@ export default function PublicPhotoSelection({ slug }) {
   const wa = (text) => `https://api.whatsapp.com/send?phone=${STUDIO_WHATSAPP}&text=${encodeURIComponent(text)}`;
   const first = String(data?.client_name || "").trim().split(/\s+/)[0];
   // Fotos desfocadas até o cliente segurar (dificulta print). Pode ser desligado por galeria
-  const protectPhotos = data?.protect_photos !== false;
+  const [protectSetting, setProtectSetting] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    supabase.rpc("selection_protect", { p_slug: slug }).then(({ data: value, error }) => {
+      if (alive && !error && value === false) setProtectSetting(false);
+    });
+    return () => { alive = false; };
+  }, [slug]);
+  const protectPhotos = data?.protect_photos === false ? false : protectSetting;
   const watermarkText = `EMERSON HONORATO RETRATOS • PRÉVIA • ${String(data?.client_name || "").trim().toUpperCase()}`;
 
   const shell = (children) => (

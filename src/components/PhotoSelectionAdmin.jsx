@@ -90,6 +90,7 @@ const EMPTY = {
   pin: "",
   expires_at: "",
   message: "",
+  protect_photos: true,
 };
 
 export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) {
@@ -193,6 +194,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       prints_included: item.prints_included ? String(item.prints_included) : "",
       save_default_sizes: false,
       final_drive_url: item.final_drive_url || "",
+      protect_photos: item.protect_photos !== false,
     });
   }
 
@@ -256,6 +258,7 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
       print_sizes: printSizes,
       prints_included: form.prints_enabled ? Math.max(0, Math.round(num(form.prints_included))) : 0,
       final_drive_url: clean(form.final_drive_url) || null,
+      protect_photos: form.protect_photos !== false,
       updated_at: new Date().toISOString(),
     };
     if (form.prints_enabled && form.save_default_sizes && printSizes.length) {
@@ -569,6 +572,13 @@ export default function PhotoSelectionAdmin({ records = [], onOpenDeliveries }) 
                 </div>
               </div>
             </div>
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <input type="checkbox" className="mt-1" checked={form.protect_photos !== false} onChange={(e) => setForm({ ...form, protect_photos: e.target.checked })} />
+              <span>
+                <strong>Proteger as fotos contra print</strong> (recomendado)
+                <span className="block text-xs text-slate-500">Ligado: as fotos ficam desfocadas e o cliente segura o dedo em cima para ver, com o nome dele marcado na foto. Desligado: as fotos aparecem nítidas direto, só com a marca d'água leve.</span>
+              </span>
+            </label>
             <div className="flex gap-2">
               <Button className="rounded-2xl" disabled={busy} onClick={save}>{busy ? "Lendo o Drive…" : "Salvar seleção"}</Button>
               <Button variant="ghost" className="rounded-2xl" onClick={() => setForm(null)}>Cancelar</Button>
