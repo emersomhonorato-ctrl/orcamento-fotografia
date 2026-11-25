@@ -445,33 +445,64 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
     openExternal(buildWhatsAppShareLink(text));
   }
 
-  function confirmOnWhatsApp(booking) {
+  // Mensagem de próximos passos (com o pagamento do sinal): abre um painel para revisar/editar antes de mandar
+  const [passos, setPassos] = useState(null); // { booking, text, loading }
+
+  function nextStepsMessage(booking, cardUrl = "") {
+    const first = String(booking.name).split(" ")[0];
     const date = fullDateLabel(localDateKey(booking.starts_at));
     const awaiting = booking.status === "aguardando_sinal";
+    const total = bookingTotal(booking);
+    const paid = Number(booking.deposit_amount || 0);
+    const remaining = Math.max(0, total - paid);
     const pix = awaiting ? pixFor(booking) : "";
+    const deadline = awaiting ? paymentDeadline(booking, campaign) : null;
+    const deadlineLabel = deadline ? deadline.toLocaleString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    const what = booking.payment_choice === "total" ? "o valor total" : "o sinal";
     const lines = [
-      "🤖 _Mensagem automática do sistema de agendamentos — Emerson Honorato Retratos_",
-      "",
       awaiting
-        ? `Olá, ${String(booking.name).split(" ")[0]}! Seu horário do ensaio (${campaign?.title || "ensaio"}) está pré-reservado ${themeEmoji(campaign?.title)}`
-        : `Olá, ${String(booking.name).split(" ")[0]}! Seu ensaio (${campaign?.title || "ensaio"}) está confirmado ${themeEmoji(campaign?.title)}`,
+        ? `Olá, ${first}! Que alegria ter você no ${campaign?.title || "ensaio"} ${themeEmoji(campaign?.title)} Seu horário está *pré-reservado*.`
+        : `Olá, ${first}! Seu ensaio (${campaign?.title || "ensaio"}) está *confirmado* ${themeEmoji(campaign?.title)}`,
       "",
       `📅 *Data:* ${date}`,
       `⏰ *Horário:* ${localTime(booking.starts_at)}${booking.is_double ? ` às ${addMinutesToTime(localTime(booking.starts_at), Number(campaign?.slot_minutes || 30) * 2)} (ensaio de 1 hora)` : ""}`,
-      `📸 *Pacote:* ${booking.package_photos} fotos — ${formatBRL(booking.package_price)}`,
-      Number(booking.extra_people) ? `👥 *Pessoas extras:* ${booking.extra_people} — ${formatBRL(booking.extra_people_amount)}` : "",
-      `💵 *Total:* ${formatBRL(bookingTotal(booking))}`,
-      awaiting
-        ? `💰 *${booking.payment_choice === "total" ? "Valor para confirmar" : "Sinal para confirmar"}:* ${formatBRL(booking.deposit_amount)}`
-        : Number(booking.deposit_amount || 0) >= bookingTotal(booking)
-          ? `✅ *Pagamento recebido:* ${formatBRL(booking.deposit_amount)} — tudo pago!`
-          : `✅ *Sinal recebido:* ${formatBRL(booking.deposit_amount)} • restante no dia: ${formatBRL(bookingTotal(booking) - Number(booking.deposit_amount || 0))}`,
-    ].filter((line) => line !== "");
-    if (campaign?.instructions_pdf_url) lines.push("", "📄 Instruções para o ensaio:", campaign.instructions_pdf_url);
-    if (pix) lines.push("", "Pix copia e cola (já com o valor):", pix, "", "Depois de pagar, me envie o comprovante por aqui. 🙏");
-    else lines.push("", "Qualquer dúvida, é só responder esta mensagem.");
-    const text = lines.join("\n");
-    openExternal(buildWhatsAppLink(booking.whatsapp, text));
+      `📸 *Pacote:* ${booking.package_photos} fotos${Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa(s) extra(s)` : ""} — total ${formatBRL(total)}`,
+      "",
+      "*Próximos passos:*",
+    ];
+    let step = 1;
+    const n = () => `${step++}️⃣`;
+    if (awaiting) {
+      lines.push(`${n()} *Confirmar a reserva:* pagar ${what} de *${formatBRL(paid)}*${deadlineLabel ? ` até ${deadlineLabel}` : ""}. Depois desse prazo o horário pode ser liberado para outra pessoa.`);
+      if (cardUrl) lines.push("", "💳 *Cartão (até 12x)* — confirma na hora, sem precisar de comprovante:", cardUrl);
+      if (pix) lines.push("", "💠 *Pix copia e cola* (já com o valor):", pix);
+      if (pix) lines.push("", `${n()} Se pagar pelo Pix, me envie o comprovante por aqui. ✅`);
+    } else {
+      lines.push(`${n()} ✅ ${paid >= total ? "Pagamento completo recebido — está tudo pago!" : `Sinal de ${formatBRL(paid)} recebido.`}`);
+    }
+    if (campaign?.instructions_pdf_url) lines.push(`${n()} Leia as dicas para o ensaio (roupas, acessórios, o que levar):`, campaign.instructions_pdf_url);
+    lines.push(`${n()} No dia, chegue uns 10 minutos antes para ficar tranquila(o) e aproveitar todo o tempo. 😊`);
+    if (remaining > 0) lines.push(`${n()} O restante (*${formatBRL(remaining)}*) pode ser pago no dia, no Pix ou no cartão.`);
+    lines.push(`${n()} Depois do ensaio você recebe o link para escolher as fotos preferidas. 📸`);
+    lines.push("", "Qualquer dúvida, é só responder esta mensagem. Até lá! 🤍");
+    return lines.join("\n");
+  }
+
+  async function openNextSteps(booking) {
+    setPassos({ booking, text: nextStepsMessage(booking), loading: booking.status === "aguardando_sinal" });
+    if (booking.status !== "aguardando_sinal" || !Number(booking.deposit_amount)) return setPassos((c) => (c ? { ...c, loading: false } : c));
+    // Link do cartão (Mercado Pago), quando o pagamento com cartão está ligado
+    let cardUrl = "";
+    try {
+      const { data: enabled } = await supabase.rpc("card_payments_enabled");
+      if (enabled) {
+        const { data, error } = await supabase.rpc("booking_card_checkout", { p_booking_id: booking.id });
+        if (!error && data?.slug) cardUrl = `${PAY_PUBLIC_BASE}${data.slug}`;
+      }
+    } catch {
+      // sem cartão: a mensagem vai só com Pix
+    }
+    setPassos((c) => (c && c.booking.id === booking.id ? { ...c, text: nextStepsMessage(booking, cardUrl), loading: false } : c));
   }
 
   const toggleWeekday = (value) =>
@@ -712,6 +743,37 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
         </div>
       ) : null}
 
+      {passos ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={() => setPassos(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Próximos passos — {String(passos.booking.name).split(" ")[0]}</h3>
+                <p className="text-xs text-slate-500">
+                  {passos.loading ? "Gerando o link do cartão…" : "Revise e, se quiser, mude o texto antes de mandar."}
+                </p>
+              </div>
+              <button type="button" className="rounded-full px-2 text-xl leading-none text-slate-400 hover:text-slate-700" onClick={() => setPassos(null)} aria-label="Fechar">×</button>
+            </div>
+            <textarea
+              value={passos.text}
+              onChange={(event) => setPassos((c) => ({ ...c, text: event.target.value }))}
+              className="mt-3 h-80 w-full rounded-2xl border border-slate-200 p-3 font-mono text-xs leading-5 text-slate-700"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={passos.loading}
+                onClick={() => { openExternal(buildWhatsAppLink(passos.booking.whatsapp, passos.text)); setPassos(null); }}
+              >
+                <Send className="mr-2 h-4 w-4" />Enviar pelo WhatsApp
+              </Button>
+              <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard?.writeText(passos.text)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <BookingLeadsPanel campaignId={BOOKING_CAMPAIGN_ID} campaignTitle={campaign?.title} bookings={bookings} publicUrl={CHRISTMAS_PUBLIC_URL} />
 
       <div className="flex items-center justify-between">
@@ -779,7 +841,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                             {booking.status === "aguardando_sinal" ? (
                               <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" disabled={busy} onClick={() => markDepositReceived(booking)}><BadgeCheck className="h-3.5 w-3.5" />{booking.payment_choice === "total" ? "Pagamento recebido" : "Sinal recebido"}</button>
                             ) : null}
-                            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700" onClick={() => confirmOnWhatsApp(booking)}><Send className="h-3.5 w-3.5" />{booking.status === "aguardando_sinal" ? "Cobrar sinal" : "Confirmar"}</button>
+                            <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700" onClick={() => openNextSteps(booking)}><Send className="h-3.5 w-3.5" />Próximos passos{booking.status === "aguardando_sinal" ? " + sinal" : ""}</button>
                             {!booking.is_double ? (
                               <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-[#7a1712]" disabled={busy} onClick={() => upgradeToDouble(booking)}><Clock3 className="h-3.5 w-3.5" />Transformar em 1 hora</button>
                             ) : null}
