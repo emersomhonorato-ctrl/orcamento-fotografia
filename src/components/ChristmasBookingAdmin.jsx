@@ -447,6 +447,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
 
   // Mensagem de próximos passos (com o pagamento do sinal): abre um painel para revisar/editar antes de mandar
   const [passos, setPassos] = useState(null); // { booking, text, loading }
+  const [blackCopied, setBlackCopied] = useState(false);
 
   function nextStepsMessage(booking, cardUrl = "") {
     const first = String(booking.name).split(" ")[0];
@@ -467,9 +468,10 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
       `📅 *Data:* ${date}`,
       `⏰ *Horário:* ${localTime(booking.starts_at)}${booking.is_double ? ` às ${addMinutesToTime(localTime(booking.starts_at), Number(campaign?.slot_minutes || 30) * 2)} (ensaio de 1 hora)` : ""}`,
       `📸 *Pacote:* ${booking.package_photos} fotos${Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa(s) extra(s)` : ""} — total ${formatBRL(total)}`,
+      booking.promo ? `🖤 *Black Friday:* +5 fotos de presente já incluídas e 30% de desconto na foto extra${Number(campaign?.extra_photo_price) ? ` (${formatBRL(Math.round(Number(campaign.extra_photo_price) * 70) / 100)} cada)` : ""}` : "",
       "",
       "*Próximos passos:*",
-    ];
+    ].filter((line, index, list) => line !== "" || list[index - 1] !== "");
     let step = 1;
     const n = () => `${step++}️⃣`;
     if (awaiting) {
@@ -548,6 +550,17 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
             <Button className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700" onClick={shareLink}><Send className="mr-2 h-4 w-4" />Divulgar no WhatsApp</Button>
             <Button variant="outline" className="rounded-2xl" onClick={copyLink}><Copy className="mr-2 h-4 w-4" />{copied ? "Copiado!" : "Copiar link"}</Button>
             <Button variant="outline" className="rounded-2xl" onClick={() => openExternal(`${window.location.origin}/ensaio`)}><ExternalLink className="mr-2 h-4 w-4" />Ver página</Button>
+            <Button
+              variant="outline"
+              className="rounded-2xl border-black text-black"
+              title="Link da Black Friday: vale só em 27/11 (+5 fotos por pacote e 30% off na foto extra)"
+              onClick={async () => {
+                const url = `${CHRISTMAS_PUBLIC_URL}?promo=BLACK`;
+                try { await navigator.clipboard.writeText(url); setBlackCopied(true); setTimeout(() => setBlackCopied(false), 2500); } catch { window.prompt("Copie o link da Black Friday:", url); }
+              }}
+            >
+              🖤 {blackCopied ? "Copiado!" : "Link Black Friday (27/11)"}
+            </Button>
             <Button variant="outline" className="rounded-2xl" disabled={busy} onClick={toggleCampaign}>{campaign?.active ? "Fechar reservas" : "Abrir reservas"}</Button>
           </div>
         </div>
@@ -819,7 +832,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                       ) : booking ? (
                         <div className="mt-1 space-y-1">
                           <p className="font-medium text-slate-900">{booking.name}{booking.is_double ? <span className="ml-1.5 rounded-full bg-[#7a1712] px-2 py-0.5 text-[10px] font-semibold text-white">1 hora</span> : null}</p>
-                          <p className="text-xs text-slate-600">{booking.package_photos} fotos{Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa${booking.extra_people > 1 ? "s" : ""}` : ""} • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</p>
+                          <p className="text-xs text-slate-600">{booking.promo ? <span className="mr-1 rounded-full bg-black px-1.5 py-0.5 text-[10px] font-bold text-white">🖤 Black Friday</span> : null}{booking.package_photos} fotos{Number(booking.extra_people) ? ` + ${booking.extra_people} pessoa${booking.extra_people > 1 ? "s" : ""}` : ""} • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</p>
                           {booking.status === "aguardando_sinal" ? (
                             <>
                             <p className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{booking.payment_choice === "total" ? "Aguardando pagamento total" : "Aguardando sinal"} {formatBRL(booking.deposit_amount)}</p>
@@ -890,7 +903,7 @@ export default function ChristmasBookingAdmin({ onBookingsLoaded, onBookingCance
                           <li key={slot.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
                             <span className="w-12 font-semibold tabular-nums text-slate-700">{localTime(slot.starts_at)}</span>
                             <span className="min-w-[9rem] flex-1 font-medium text-slate-900">{booking.name}{booking.is_double ? " (1 hora)" : ""}</span>
-                            <span className="text-xs text-slate-500">{booking.package_photos} fotos • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</span>
+                            <span className="text-xs text-slate-500">{booking.promo ? "🖤 Black Friday • " : ""}{booking.package_photos} fotos • {formatBRL(bookingTotal(booking))} • {booking.whatsapp}</span>
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${booking.status === "aguardando_sinal" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
                               {booking.status === "aguardando_sinal" ? `sinal pendente ${formatBRL(booking.deposit_amount)}` : Number(booking.deposit_amount || 0) >= bookingTotal(booking) ? "pago completo" : `sinal ${formatBRL(booking.deposit_amount)}`}
                             </span>
