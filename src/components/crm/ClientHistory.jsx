@@ -7,6 +7,7 @@ import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR } from "@/utils/formatters";
 import { NovaTarefa, TarefasLista } from "@/components/crm/Tasks";
+import MensagensProntas from "@/components/crm/MensagensProntas";
 import { SOURCES, STAGES, TAG_SUGESTOES } from "@/lib/crm";
 
 // Tudo de um cliente numa tela: etapa, origem, etiquetas, tarefas, anotações e a linha do tempo
@@ -134,6 +135,11 @@ export default function ClientHistory({ cliente, registros = [], crm, onChangeCr
           ))}
         </div>
       </div>
+
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
+        <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold"><MessageCircle className="h-4 w-4 text-emerald-700" />Mensagens prontas</h4>
+        <MensagensProntas cliente={cliente} registros={registros} etapa={lead.stage || etapaAuto} crm={crm} onChangeCrm={onChangeCrm} />
+      </section>
 
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <h4 className="mb-2 text-sm font-semibold">Tarefas</h4>

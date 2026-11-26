@@ -5,6 +5,7 @@ import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR } from "@/utils/formatters";
 import ClientHistory from "@/components/crm/ClientHistory";
 import CrmResultados from "@/components/crm/CrmResultados";
+import { mensagemSugerida, preencherMensagem, textoDaMensagem } from "@/lib/crmMensagens";
 import { NovaTarefa, TarefasLista } from "@/components/crm/Tasks";
 import { SOURCES, STAGES, etapaAutomatica, hojeISO, semAcento } from "@/lib/crm";
 
@@ -126,7 +127,7 @@ export default function CrmPanel({ clients = [], records = [], crm, onChangeCrm,
                   <span className="rounded-full bg-stone-100 px-2 text-xs font-semibold text-stone-600">{lista.length}</span>
                 </div>
                 <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto px-2 pb-2">
-                  {lista.slice(0, limite).map(({ cliente, lead, aberto: emAberto, fechado, proxima, qtd }) => (
+                  {lista.slice(0, limite).map(({ cliente, lead, etapa, aberto: emAberto, fechado, proxima, qtd }) => (
                     <div
                       key={cliente.id}
                       draggable
@@ -139,10 +140,14 @@ export default function CrmPanel({ clients = [], records = [], crm, onChangeCrm,
                         {cliente.whatsapp ? (
                           <button
                             type="button"
-                            title="WhatsApp"
+                            title="WhatsApp com a mensagem pronta da etapa"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openExternal(buildWhatsAppLink(cliente.whatsapp, `Oi, ${String(cliente.name).split(" ")[0]}! Tudo bem? 😊`));
+                              {
+                                const regs = registrosPorCliente.get(cliente.id) || [];
+                                const id = mensagemSugerida(etapa, regs);
+                                openExternal(buildWhatsAppLink(cliente.whatsapp, preencherMensagem(textoDaMensagem(id, crm), cliente, regs)));
+                              }
                             }}
                             className="rounded-md p-0.5 text-emerald-600 hover:bg-emerald-50"
                           >
