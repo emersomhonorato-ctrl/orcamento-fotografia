@@ -4,6 +4,7 @@ import { openExternal } from "@/lib/openExternal";
 import { buildWhatsAppLink } from "@/utils/whatsappMessages";
 import { formatDateBR } from "@/utils/formatters";
 import ClientHistory from "@/components/crm/ClientHistory";
+import CrmResultados from "@/components/crm/CrmResultados";
 import { NovaTarefa, TarefasLista } from "@/components/crm/Tasks";
 import { SOURCES, STAGES, etapaAutomatica, hojeISO, semAcento } from "@/lib/crm";
 
@@ -61,6 +62,17 @@ export default function CrmPanel({ clients = [], records = [], crm, onChangeCrm,
     const lead = crm.leads[clienteId] || {};
     onChangeCrm({ ...crm, leads: { ...crm.leads, [clienteId]: { ...lead, stage: etapa, updatedAt: new Date().toISOString() } } });
   }
+
+  // origem (Instagram, indicação…) de cada trabalho, pelo cliente dele
+  const origemPorRegistro = useMemo(() => {
+    const mapa = new Map();
+    registrosPorCliente.forEach((regs, clienteId) => {
+      const origem = crm.leads[clienteId]?.source || "";
+      regs.forEach((r) => mapa.set(r.id, origem));
+    });
+    return mapa;
+  }, [registrosPorCliente, crm.leads]);
+  const origemDoCliente = (r) => origemPorRegistro.get(r.id) || "";
 
   const tarefasHoje = crm.tasks.filter((t) => !t.done && t.due && t.due <= hoje).length;
   const totais = Object.fromEntries(STAGES.map(([v]) => [v, cartoes.filter((c) => c.etapa === v)]));
@@ -176,6 +188,9 @@ export default function CrmPanel({ clients = [], records = [], crm, onChangeCrm,
           })}
         </div>
       </div>
+
+      {/* Resultados: meta do mês, fechamento, motivos de perda e origem x faturamento */}
+      <CrmResultados records={records} crm={crm} onChangeCrm={onChangeCrm} origemDoCliente={origemDoCliente} />
 
       {/* Tarefas */}
       <section className="rounded-2xl border border-stone-200 bg-white p-5">

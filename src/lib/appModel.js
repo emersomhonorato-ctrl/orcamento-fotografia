@@ -459,7 +459,7 @@ export function createDefaultAppState() {
     clients: [],
     services: mergeServicesByName([]),
     settings: defaultSettings,
-    crm: { leads: {}, tasks: [], notes: [] },
+    crm: { leads: {}, tasks: [], notes: [], goals: {} },
   };
 }
 
@@ -488,6 +488,12 @@ export function normalizeCrm(raw) {
     notes: (Array.isArray(source.notes) ? source.notes : [])
       .filter((note) => note && note.id && note.text)
       .map((note) => ({ id: note.id, clientId: note.clientId || "", text: String(note.text), at: note.at || "" })),
+    // Meta de faturamento por mês: { "2026-11": 15000 }
+    goals: Object.fromEntries(
+      Object.entries(source.goals && typeof source.goals === "object" && !Array.isArray(source.goals) ? source.goals : {})
+        .filter(([mes, valor]) => /^\d{4}-\d{2}$/.test(mes) && Number(valor) > 0)
+        .map(([mes, valor]) => [mes, Number(valor)]),
+    ),
   };
 }
 
@@ -604,6 +610,7 @@ export function normalizeRecord(record = {}) {
     photoSize: source.photoSize || source.photoFormat || source.printSize || "",
     digitalPhotosCount: Number(source.digitalPhotosCount || source.onlinePhotosCount || 0),
     printedPhotosCount: Number(source.printedPhotosCount || source.editedPhotosCount || 0),
+    lostReason: String(source.lostReason || "").slice(0, 120),
     createdAt: source.createdAt || new Date().toISOString(),
     updatedAt: source.updatedAt || new Date().toISOString(),
   };
