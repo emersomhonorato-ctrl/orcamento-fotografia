@@ -459,7 +459,7 @@ export function createDefaultAppState() {
     clients: [],
     services: mergeServicesByName([]),
     settings: defaultSettings,
-    crm: { leads: {}, tasks: [], notes: [], goals: {} },
+    crm: { leads: {}, tasks: [], notes: [], goals: {}, templates: {} },
   };
 }
 
@@ -488,6 +488,12 @@ export function normalizeCrm(raw) {
     notes: (Array.isArray(source.notes) ? source.notes : [])
       .filter((note) => note && note.id && note.text)
       .map((note) => ({ id: note.id, clientId: note.clientId || "", text: String(note.text), at: note.at || "" })),
+    // Mensagens prontas que você editou: { primeiro: "Oi, {nome}…" }
+    templates: Object.fromEntries(
+      Object.entries(source.templates && typeof source.templates === "object" && !Array.isArray(source.templates) ? source.templates : {})
+        .filter(([id, texto]) => id && typeof texto === "string" && texto.trim())
+        .map(([id, texto]) => [id, texto.slice(0, 2000)]),
+    ),
     // Meta de faturamento por mês: { "2026-11": 15000 }
     goals: Object.fromEntries(
       Object.entries(source.goals && typeof source.goals === "object" && !Array.isArray(source.goals) ? source.goals : {})
