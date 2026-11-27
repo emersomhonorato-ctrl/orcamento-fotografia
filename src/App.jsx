@@ -249,6 +249,7 @@ function getMonthKeyFromDate(value) {
 
 export default function App() {
   const [appState, setAppState] = useState(readLocalAppState);
+  const [approvalLinkPanel, setApprovalLinkPanel] = useState(null); // { name, url, link, text } ou { loading: true }
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(AUTH_ENABLED);
   const [authError, setAuthError] = useState("");
@@ -2353,6 +2354,8 @@ export default function App() {
   }
 
   // ---------- Aprovação de orçamento pelo link ----------
+  // O link é criado no servidor e depois abre um painel com o botão do WhatsApp:
+  // no celular o WhatsApp só abre com um toque direto (abrir sozinho depois de esperar o servidor é bloqueado).
   async function sendApprovalLink(record) {
     const phone = record.whatsapp || record.phone || "";
     const validityDays = Number(record.budgetValidityDays || settings.budgetValidityDays || 7);
@@ -2366,10 +2369,15 @@ export default function App() {
       return;
     }
     const slug = existing?.slug || makeDeliverySlug(record.clientName || "orcamento");
-    const { error } = await supabase
-      .from("budget_shares")
-      .upsert({ event_id: String(record.id), slug, snapshot, expires_at: expiresISO, updated_at: new Date().toISOString() }, { onConflict: "event_id" });
+    setApprovalLinkPanel({ loading: true, name: record.clientName || "" });
+    const { error } = await Promise.race([
+      supabase
+        .from("budget_shares")
+        .upsert({ event_id: String(record.id), slug, snapshot, expires_at: expiresISO, updated_at: new Date().toISOString() }, { onConflict: "event_id" }),
+      new Promise((resolve) => setTimeout(() => resolve({ error: { message: "o servidor demorou para responder. Feche e abra o app e tente de novo." } }), 20000)),
+    ]);
     if (error) {
+      setApprovalLinkPanel(null);
       alert(`Não foi possível criar o link: ${error.message}`);
       return;
     }
@@ -2386,7 +2394,7 @@ export default function App() {
       `A proposta vale até ${formatDateBR(expiresISO)}. Qualquer dúvida, é só me chamar! 💛`,
       settings.studioName || "Emerson Honorato Retratos",
     ].join("\n");
-    openExternal(phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`);
+    setApprovalLinkPanel({ name: record.clientName || "", link, text, url: phone ? buildWhatsAppLink(phone, text) : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}` });
     if (!record.budgetSentAt) updateRecordFields(record.id, { budgetSentAt: new Date().toISOString() });
     loadBudgetShares();
   }
@@ -2967,6 +2975,29 @@ export default function App() {
 
   return (
     <div className="studio-shell min-h-screen text-slate-900 md:flex" data-theme-color={settings.themeColor || "classico"}>
+      {approvalLinkPanel ? (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={() => !approvalLinkPanel.loading && setApprovalLinkPanel(null)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 text-center shadow-xl" onClick={(event) => event.stopPropagation()}>
+            {approvalLinkPanel.loading ? (
+              <p className="py-6 text-sm text-slate-600">Criando o link de aprovação{approvalLinkPanel.name ? ` de ${approvalLinkPanel.name}` : ""}…</p>
+            ) : (
+              <>
+                <p className="text-lg font-semibold text-slate-900">✅ Link de aprovação pronto</p>
+                <p className="mt-1 text-sm text-slate-500">{approvalLinkPanel.name}</p>
+                <div className="mt-4 grid gap-2">
+                  <Button className="h-12 rounded-2xl bg-emerald-600 text-base text-white hover:bg-emerald-700" onClick={() => { openExternal(approvalLinkPanel.url); setApprovalLinkPanel(null); }}>
+                    <Send className="mr-2 h-5 w-5" />Enviar pelo WhatsApp
+                  </Button>
+                  <Button variant="outline" className="rounded-2xl" onClick={() => navigator.clipboard?.writeText(approvalLinkPanel.text).then(() => alert("Mensagem com o link copiada."))}>
+                    <Copy className="mr-2 h-4 w-4" />Copiar mensagem com o link
+                  </Button>
+                  <button type="button" className="text-sm text-slate-500 underline" onClick={() => setApprovalLinkPanel(null)}>Fechar</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
       <SideNav
         active={activeTab}
         onChange={(value) => {
